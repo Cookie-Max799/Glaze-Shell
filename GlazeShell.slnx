@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/GlazeShell.App/GlazeShell.App.csproj">
+      <Platform Project="x64" />
+    </Project>
+    <Project Path="src/GlazeShell.Core/GlazeShell.Core.csproj" />
+    <Project Path="src/GlazeShell.Data/GlazeShell.Data.csproj" />
+    <Project Path="src/GlazeShell.Infrastructure/GlazeShell.Infrastructure.csproj" />
+    <Project Path="src/GlazeShell.Windows/GlazeShell.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/GlazeShell.Core.Tests/GlazeShell.Core.Tests.csproj" />
+  </Folder>
+</Solution>
