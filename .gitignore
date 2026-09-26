@@ -16,3 +16,16 @@ UserData/
 *.dbmdl
 *.jfm
 *.log
+
+# Secrets and credentials must never be committed
+.env
+.env.*
+*.pfx
+*.p12
+*.snk
+*.key
+*.pem
+*.crt
+*.cer
+*.secret
+secrets.json

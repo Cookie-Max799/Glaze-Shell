@@ -21,6 +21,11 @@ GlazeShell/
 ├── src/
 │   ├── GlazeShell.App/
 │   ├── GlazeShell.Core/
+│   │   ├── Configuration/
+│   │   ├── Events/
+│   │   ├── Interfaces/
+│   │   ├── Models/
+│   │   └── Services/
 │   ├── GlazeShell.Windows/
 │   ├── GlazeShell.Data/
 │   └── GlazeShell.Infrastructure/
@@ -53,27 +58,44 @@ Core не должен содержать P/Invoke, `HWND`, `HMONITOR`, `HANDLE`
 
 ### GlazeShell.App
 
-WinUI 3 executable и composition root приложения. На Stage 0 содержит только минимальное окно без визуального дизайна, инициализирует конфигурацию и базовый logger.
+WinUI 3 executable и composition root приложения. Содержит окно с явно заданным размером и центрированием на экране, а также стартовый экран со статусом этапов. Инициализирует конфигурацию и базовый logger. Stage 1 не подключает Core-сервисы к UI.
 
 ### GlazeShell.Core
 
-Независимый от UI и Win32 слой. На Stage 0 содержит базовую конфигурацию со `schemaVersion`; доменные модели, интерфейсы, services и events будут добавлены на Stage 1.
+Независимый от UI и Win32 слой. На Stage 1 содержит доменные модели, контракты интерфейсов, события и базовые сервисы.
+
+Модели:
+
+- `Application`, `ApplicationCategory`, `DesktopItem`, `DesktopTab`, `DesktopLayout`;
+- `UserSettings`;
+- `WindowInfo`, `WindowType`, `WindowState`;
+- `MonitorInfo`, `MonitorBounds`, `MonitorOrientation`;
+- `Theme` с metadata, colors, fonts, dimensions, icons и анимацией;
+- `ModelValidation` — единая валидация входных данных моделей.
+
+Интерфейсы: `IApplicationManager`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IThemeManager`, `IEventManager`, `IMonitorManager`.
+
+События: `WindowOpened`, `WindowClosed`, `ForegroundWindowChanged`, `ProcessStarted`, `ProcessExited`, `DisplayChanged`, `DesktopChanged`, `SettingsChanged`, `ApplicationChanged`.
+
+Сервисы: `EventManager` — типизированная подписка и публикация с возвратом `IDisposable` для отписки; `InMemorySettingsManager` — хранение настроек в памяти без публикации дублирующих событий.
+
+Идентификаторы окон, мониторов и приложений представлены строками, чтобы Core не зависел от `HWND`/`HMONITOR`. Соответствие строк и native handles устанавливается на уровне Windows Integration.
 
 ### GlazeShell.Windows
 
-Слой Windows Integration. На Stage 0 содержит только проект с Windows target framework. P/Invoke и Shell API будут изолированы в `Win32`, `Shell`, `Windows` и `Interop` на соответствующих этапах.
+Слой Windows Integration. Содержит только проект с Windows target framework. P/Invoke и Shell API будут изолированы в `Win32`, `Shell`, `Windows` и `Interop` на соответствующих этапах.
 
 ### GlazeShell.Data
 
-Слой хранения и сериализации. На Stage 0 структура подготовлена, но JSON persistence, layout и SQLite намеренно не реализованы до Stage 7.
+Слой хранения и сериализации. Структура подготовлена, но JSON persistence, layout и SQLite намеренно не реализованы до Stage 7.
 
 ### GlazeShell.Infrastructure
 
-Реализации, которые зависят от ОС и внешней среды: логирование, user-data paths, diagnostics и startup. Stage 0 содержит минимальный файловый logger и безопасное вычисление путей в `%LOCALAPPDATA%`.
+Реализации, которые зависят от ОС и внешней среды: логирование, user-data paths, diagnostics и startup. Содержит минимальный файловый logger и безопасное вычисление путей в `%LOCALAPPDATA%`.
 
 ### GlazeShell.Core.Tests
 
-MSTest smoke test foundation. Проверяет базовую конфигурацию и будет расширяться по мере добавления Core behavior.
+MSTest test project. Проверяет foundation configuration, инварианты моделей, семантику `EventManager` и публикацию `SettingsChanged` в `InMemorySettingsManager`.
 
 ## Решения Stage 0
 
@@ -84,10 +106,24 @@ MSTest smoke test foundation. Проверяет базовую конфигур
 - Версии NuGet-пакетов фиксируются через `Directory.Packages.props` и не используют floating versions.
 - `Core/Configuration` добавлен как объективное исключение из базовой структуры: базовая схема конфигурации должна быть доступна UI и Infrastructure без Win32-зависимостей.
 
+## Решения Stage 1
+
+- Отдельный `GlazeShell.Application` проект не создаётся: на этом этапе достаточно `GlazeShell.Core/Services`, а новый слой появится только вместе с реальными use cases.
+- Идентификаторы сущностей (`WindowInfo.Id`, `MonitorInfo.Id`, `Application.Id`) — строки, а не native handles; это сохраняет Core framework-free.
+- Модели валидируются в конструкторах через `ModelValidation`, чтобы некорректное состояние не могло покинуть границу Core.
+- Модели объявлены `record`, что даёт value-семантику: `InMemorySettingsManager` может отсекать публикацию `SettingsChanged` для эквивалентных значений без ручного сравнения полей.
+- События наследуются от `GlazeEvent` и публикуются только через `IEventManager`, чтобы UI и будущие Windows-реализации имели единый event-driven контракт.
+- `EventManager` возвращает `IDisposable` из `Subscribe`, чтобы подписки гарантированно освобождались и не удерживали UI-объекты.
+- Ошибка подписчика изолируется: при заданном `exceptionHandler` она логируется вызывающей стороной, а не прерывает доставку остальным подписчикам.
+- Темы и обои только описываются моделями; загрузка и исполнение контента тем остаётся за пределами Core.
+- Окно задаёт размер и позицию через `AppWindow`, а не полагается на поведение XAML по умолчанию: без явного `Resize` окно WinUI может получить нулевой размер.
+- Платформа сборки App фиксируется как `x64`; значение `AnyCPU`, которое `dotnet run` передаёт по умолчанию, принудительно заменяется на `x64` в `.csproj`.
+- Stage 1 не реализует discovery, launcher, Win32 interop, persistence, tabs/categories behavior и Windows event hooks.
+
 ## Границы UI
 
-UI может использовать модели, интерфейсы Application Services, events и state, не зная о native handles и Win32. Визуальный дизайн, XAML-композиция и UX не являются частью Stage 0.
+UI может использовать модели, интерфейсы Application Services, events и state, не зная о native handles и Win32. Визуальный дизайн, XAML-композиция и UX не являются частью Stage 0 и Stage 1.
 
 ## Следующие архитектурные изменения
 
-Stage 1 добавит доменные модели и интерфейсы. Stages 2–5 добавят конкретные Windows implementations. Перед добавлением каждого P/Invoke будет проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.
+Stages 2–5 добавят конкретные Windows implementations. Перед добавлением каждого P/Invoke будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.

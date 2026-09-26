@@ -8,7 +8,7 @@
 - Для полноценной WinUI 3 разработки: Visual Studio с Windows App SDK tooling и Windows 10 SDK.
 - Git.
 
-Текущий проект собирает App в unpackaged режиме. Stage 0 использует self-contained Windows App SDK; при изменении deployment strategy нужно проверить размер, startup и runtime requirements.
+Текущий проект собирает App в unpackaged режиме. Приложение использует self-contained Windows App SDK; при изменении deployment strategy нужно проверить размер, startup и runtime requirements.
 
 ## Restore and build
 
@@ -33,7 +33,7 @@ dotnet test
 dotnet test --configuration Release
 ```
 
-На текущем этапе тестируется foundation configuration. Windows integration tests появятся после появления Windows implementations.
+На текущем этапе тестируются foundation configuration, инварианты Core-моделей и базовые сервисы `EventManager` и `InMemorySettingsManager`. Windows integration tests появятся после появления Windows implementations.
 
 ## Запуск
 
@@ -41,7 +41,9 @@ dotnet test --configuration Release
 dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 ```
 
-Приложение использует `%LOCALAPPDATA%\GlazeShell\logs\glaze-shell.log` для startup log. Stage 0 не создаёт config.json автоматически; persistence будет реализован на Stage 7.
+Приложение использует `%LOCALAPPDATA%\GlazeShell\logs\glaze-shell.log` для startup log. Приложение пока не создаёт config.json автоматически; persistence будет реализован на Stage 7.
+
+App project собирается только под `x64`. Если передать платформу явно, используйте `--arch x64`; значение `AnyCPU` в `.csproj` заменяется на `x64` автоматически.
 
 ## Debugging
 
@@ -49,13 +51,15 @@ dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 - Для диагностики startup проверьте лог и Output window.
 - Не изменяйте generated `bin` и `obj` файлы вручную.
 - При добавлении P/Invoke сначала проверьте ownership и lifetime native handles.
+- Core-модели и события добавляются в `src/GlazeShell.Core`; не помещайте туда UI, Win32 или инфраструктурные зависимости.
+- Новые сервисы Core возвращают `IDisposable`, если удерживают подписки или ресурсы.
 
 ## Package policy
 
 - Package versions задаются centrally в `Directory.Packages.props`.
 - Не добавляйте floating versions.
 - Перед добавлением dependency запишите назначение, лицензию, размер, влияние на startup и альтернативу BCL/Windows API.
-- Stage 0 использует MSTest только для автоматического тестирования.
+- MSTest используется только для автоматического тестирования.
 
 ## Git workflow
 

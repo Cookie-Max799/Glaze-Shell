@@ -4,6 +4,15 @@ namespace GlazeShell.Infrastructure.System;
 
 public static class UserDataPaths
 {
+    private const int MaxDirectoryNameLength = 64;
+
+    private static readonly string[] ReservedDeviceNames =
+    [
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+    ];
+
     public static string GetRootDirectory(GlazeShellConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -14,15 +23,7 @@ public static class UserDataPaths
             throw new InvalidOperationException("The local application data directory is unavailable.");
         }
 
-        var directoryName = configuration.DataDirectoryName;
-        if (string.IsNullOrWhiteSpace(directoryName) ||
-            directoryName is "." or ".." ||
-            directoryName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
-        {
-            throw new ArgumentException("The data directory name is invalid.", nameof(configuration));
-        }
-
-        return Path.Combine(localAppData, directoryName);
+        return Path.Combine(localAppData, ValidateDirectoryName(configuration.DataDirectoryName));
     }
 
     public static string GetConfigurationFilePath(GlazeShellConfiguration configuration) =>
@@ -33,4 +34,28 @@ public static class UserDataPaths
 
     public static string GetLogFilePath(GlazeShellConfiguration configuration) =>
         Path.Combine(GetLogDirectory(configuration), "glaze-shell.log");
+
+    private static string ValidateDirectoryName(string directoryName)
+    {
+        if (string.IsNullOrWhiteSpace(directoryName) ||
+            directoryName is "." or ".." ||
+            directoryName.Length > MaxDirectoryNameLength ||
+            directoryName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            throw new ArgumentException("The data directory name is invalid.", nameof(directoryName));
+        }
+
+        if (directoryName.EndsWith('.') || directoryName.EndsWith(' '))
+        {
+            throw new ArgumentException("The data directory name cannot end with a dot or a space.", nameof(directoryName));
+        }
+
+        var deviceStem = directoryName.Split('.')[0];
+        if (ReservedDeviceNames.Contains(deviceStem, StringComparer.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException("The data directory name is a reserved device name.", nameof(directoryName));
+        }
+
+        return directoryName;
+    }
 }
