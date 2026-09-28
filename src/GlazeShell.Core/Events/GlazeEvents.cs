@@ -34,6 +34,16 @@ public sealed record ForegroundWindowChanged : GlazeEvent
     public WindowInfo? Window { get; }
 }
 
+public sealed record WindowStateChanged : GlazeEvent
+{
+    public WindowStateChanged(WindowInfo window)
+    {
+        Window = window ?? throw new ArgumentNullException(nameof(window));
+    }
+
+    public WindowInfo Window { get; }
+}
+
 public sealed record ProcessStarted : GlazeEvent
 {
     public ProcessStarted(int processId, string processName, string? executablePath = null)

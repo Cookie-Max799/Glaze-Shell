@@ -44,10 +44,12 @@ public sealed class EventManager : IEventManager
     {
         ArgumentNullException.ThrowIfNull(glazeEvent);
 
+        var eventType = glazeEvent.GetType();
         Subscription[] subscriptions;
+
         lock (_sync)
         {
-            if (!_subscriptions.TryGetValue(typeof(TEvent), out var registeredSubscriptions))
+            if (!_subscriptions.TryGetValue(eventType, out var registeredSubscriptions))
             {
                 return;
             }

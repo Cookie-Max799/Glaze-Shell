@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
 using Microsoft.UI.Dispatching;
@@ -13,6 +14,7 @@ public sealed class ApplicationListViewModel : INotifyPropertyChanged
     private string _description = string.Empty;
     private string _typeBadge = string.Empty;
     private bool _isRunning;
+    private bool _hasWindows;
 
     public ApplicationListViewModel(Application application)
     {
@@ -23,6 +25,8 @@ public sealed class ApplicationListViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public Application Application { get; }
+
+    public ObservableCollection<WindowListItemViewModel> Windows { get; } = new();
 
     public string Id => Application.Id;
 
@@ -61,7 +65,27 @@ public sealed class ApplicationListViewModel : INotifyPropertyChanged
 
     public string RunningGlyph => _isRunning ? "●" : "○";
 
+    public bool HasWindows
+    {
+        get => _hasWindows;
+        private set => Set(ref _hasWindows, value);
+    }
+
     public void Set(bool isRunning) => IsRunning = isRunning;
+
+    public void SetWindows(IReadOnlyList<WindowInfo> windows, IWindowManager windowManager)
+    {
+        ArgumentNullException.ThrowIfNull(windowManager);
+
+        Windows.Clear();
+
+        foreach (var window in windows)
+        {
+            Windows.Add(new WindowListItemViewModel(window, windowManager));
+        }
+
+        HasWindows = Windows.Count > 0;
+    }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
     {
@@ -85,10 +109,16 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private readonly IApplicationManager _applications;
     private readonly IApplicationLauncher _launcher;
+    private readonly IWindowManager _windows;
     private readonly DispatcherQueue _dispatcher;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly CancellationTokenSource _runningProbe = new();
     private readonly Timer _runningTimer;
+    private readonly object _windowsRefreshGate = new();
+    private readonly IDisposable _windowOpened;
+    private readonly IDisposable _windowClosed;
+    private readonly IDisposable _foregroundChanged;
+    private readonly IDisposable _windowStateChanged;
 
     private IReadOnlyList<ApplicationListViewModel> _visible = Array.Empty<ApplicationListViewModel>();
     private IReadOnlyList<ApplicationListViewModel> _all = Array.Empty<ApplicationListViewModel>();
@@ -97,12 +127,26 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _statusText = "Готово к загрузке";
     private bool _isBusy;
     private bool _isLoaded;
+    private bool _windowsRefreshQueued;
 
-    public MainViewModel(IApplicationManager applications, IApplicationLauncher launcher, DispatcherQueue dispatcher)
+    public MainViewModel(
+        IApplicationManager applications,
+        IApplicationLauncher launcher,
+        IWindowManager windows,
+        IEventManager events,
+        DispatcherQueue dispatcher)
     {
         _applications = applications ?? throw new ArgumentNullException(nameof(applications));
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
+        _windows = windows ?? throw new ArgumentNullException(nameof(windows));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+
+        ArgumentNullException.ThrowIfNull(events);
+        _windowOpened = events.Subscribe<WindowOpened>(_ => QueueWindowsRefresh());
+        _windowClosed = events.Subscribe<WindowClosed>(_ => QueueWindowsRefresh());
+        _foregroundChanged = events.Subscribe<ForegroundWindowChanged>(_ => QueueWindowsRefresh());
+        _windowStateChanged = events.Subscribe<WindowStateChanged>(_ => QueueWindowsRefresh());
+
         _runningTimer = new Timer(_ => _ = ProbeRunningStateAsync(_runningProbe.Token), null, Timeout.Infinite, Timeout.Infinite);
 
         RefreshCommand = new AsyncCommand(() => RefreshAsync());
@@ -479,8 +523,69 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void SetStatus(string text) => StatusText = text;
 
+    private void QueueWindowsRefresh()
+    {
+        lock (_windowsRefreshGate)
+        {
+            if (_windowsRefreshQueued)
+            {
+                return;
+            }
+
+            _windowsRefreshQueued = true;
+        }
+
+        _ = _dispatcher.EnqueueAsync(() =>
+        {
+            try
+            {
+                RefreshWindows();
+            }
+            finally
+            {
+                lock (_windowsRefreshGate)
+                {
+                    _windowsRefreshQueued = false;
+                }
+            }
+        });
+    }
+
+    private void RefreshWindows()
+    {
+        IReadOnlyList<WindowInfo> windows;
+
+        try
+        {
+            windows = _windows.GetWindows();
+        }
+        catch (Exception exception)
+        {
+            SetStatus($"Не удалось обновить список окон: {exception.Message}");
+            return;
+        }
+
+        foreach (var application in _all)
+        {
+            var path = application.Application.ExecutablePath;
+            var matching = path is null
+                ? Array.Empty<WindowInfo>()
+                : windows.Where(window => IsSamePath(path, window.ExecutablePath)).ToArray();
+
+            application.SetWindows(matching, _windows);
+        }
+    }
+
+    private static bool IsSamePath(string expected, string? actual) =>
+        !string.IsNullOrWhiteSpace(actual) &&
+        string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
+
     public void Dispose()
     {
+        _windowOpened.Dispose();
+        _windowClosed.Dispose();
+        _foregroundChanged.Dispose();
+        _windowStateChanged.Dispose();
         _runningProbe.Cancel();
         _runningTimer.Dispose();
         _runningProbe.Dispose();

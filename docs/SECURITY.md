@@ -57,6 +57,15 @@ API keys, credentials и secrets не хранятся в source control, themes
 - Закрытие выполняется только через `CloseMainWindow`; принудительный `Kill` не применяется.
 - `ProcessInspector` не раскрывает пути и не отвечает на управляющие входные данные: он принимает только уже провалидированные пути приложений.
 
+## Window management
+
+Window Manager оперирует только HWND, полученными через официальное перечисление `EnumWindows` с фильтрацией (видимые, не cloak-нутые, не tool-windows). Core получает строковые id; native handles не покидают Windows Integration.
+
+- Фокус окна — best-effort через `SetForegroundWindow` с fallback `AttachThreadInput`; ключевое слово `SendInput` и синтетические события ввода не используются.
+- Состояние изменяется только `ShowWindowAsync`; закрытие — только вежливый `WM_CLOSE` через `PostMessage`. Принудительное завершение процесса (`TerminateProcess`) не применяется никогда.
+- Window Manager не исполняет код в чужих процессах: `SetWinEventHook` работает в OUTOFCONTEXT-режиме (callback в своём процессе), опция `WINEVENT_SKIPOWNPROCESS` исключает события собственного процесса.
+- Пользователь управляет только окнами, которые система считает перечисляемыми top-level окнами; недоступность окна (например, foreground lock) возвращает `false`, а не работает в обход Windows.
+
 ## Themes and extensions
 
 Theme data и extensions не должны содержать или автоматически выполнять `.exe`, `.bat`, `.cmd`, `.ps1` или `.dll`. Загрузка themes, IPC и plugins остаётся disabled до отдельного design и security review.

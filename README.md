@@ -12,6 +12,8 @@ Stage 2 — Application Discovery завершён. Реализовано об�
 
 Stage 3 — Application Launcher завершён. Реализованы запуск, проверка состояния и закрытие приложений (Win32 + MSIX), а также простой UI лаунчера с поиском и горячими клавишами.
 
+Stage 4 — Window Manager завершён. Реализовано перечисление видимых top-level окон, события окон (открытие, закрытие, foreground, изменение состояния), фокус, свернуть/развернуть/восстановить через `ShowWindowAsync` и закрытие через `WM_CLOSE`; в карточках запущенных приложений отображается инлайн-панель их окон.
+
 ## Возможности
 
 Реализовано на текущем этапе:
@@ -22,6 +24,9 @@ Stage 3 — Application Launcher завершён. Реализованы зап
 - запуск: MSIX через `IApplicationActivationManager`, Win32 через `ProcessStartInfo`;
 - проверка состояния и закрытие через `CloseMainWindow` (без принудительного kill);
 - UI лаунчера: поиск, список с virtualization, статус выполнения, клавиатурная навигация (↑/↓, Enter, Space, F5, Esc), периодическая проверка фоновых процессов;
+- window manager: перечисление видимых top-level окон, события `WindowOpened`/`WindowClosed`/`ForegroundWindowChanged`/`WindowStateChanged` через `SetWinEventHook`, фокус с best-effort и fallback через `AttachThreadInput`, `ShowWindowAsync` (свернуть/развернуть/восстановить) и вежливое закрытие через `WM_CLOSE`;
+- инлайн-панель окон в карточке запущенного приложения: заголовок, состояние, активное окно и кнопки «Фокус/Свернуть/Развернуть/Закрыть»;
+- фильтрация окон: только видимые, не cloak-нутые (DWM `DWMWA_CLOAKED`) и не tool-windows;
 - файловое логирование в `%LOCALAPPDATA%\GlazeShell\logs`.
 
 Планируемые возможности:
@@ -29,7 +34,6 @@ Stage 3 — Application Launcher завершён. Реализованы зап
 - кастомизация рабочего стола;
 - пользовательские вкладки рабочего пространства;
 - категории и размещение приложений;
-- управление окнами;
 - поддержка нескольких мониторов и DPI;
 - пользовательские темы и обои;
 - системные события Windows;
@@ -42,7 +46,7 @@ Stage 3 — Application Launcher завершён. Реализованы зап
 2. Core — доменные модели, интерфейсы и события. ✅
 3. Application Discovery — обнаружение установленных приложений. ✅
 4. Application Launcher — запуск, проверка состояния и закрытие приложений. ✅
-5. Window Manager — управление окнами и события окон.
+5. Window Manager — управление окнами и события окон. ✅
 6. Desktop Integration — мониторы, DPI и display configuration.
 7. Tabs and Categories — вкладки, категории и порядок элементов.
 8. Persistence — JSON, layout, settings, schema migrations и recovery.
@@ -105,6 +109,8 @@ dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 - В текущей среде `CLSID_ShellLink` зарегистрирован не в `shell32.dll`, поэтому `IShellLinkW.Load` реальных `.lnk` возвращает `0x00000001`, а `Save` — `0x80070002`. Классические `.lnk` резолвятся managed-парсером `ShellLinkData` (LinkInfo/relative path); через property store и `IShellLinkW` — в зависимости от здоровья среды.
 - `IShellItemArray` AppsFolder в текущей среде возвращает `0x800401E5`, поэтому MSIX-источник может сообщить warning вместо списка приложений. Это environment-specific limitation и не считается ошибкой продукта.
 - `InMemorySettingsManager` не сохраняет настройки между запусками; persistence запланирован на Stage 7.
+- Окна MSIX-приложений не привязываются к карточкам приложений: у MSIX-приложения `ExecutablePath` не заполнен, поэтому его окна не попадают в инлайн-панель. Окна остальных (Win32) приложений привязываются по пути исполняемого файла.
+- Фокусировка окна — best-effort: при отказе `SetForegroundWindow` (foreground lock) используется fallback через `AttachThreadInput`; в окружениях с жёстким foreground lock команда может не сработать.
 - Используется системный title bar, поэтому его оформление не следует тёмной палитре контента; кастомный title bar запланирован вместе с Theme System.
 - Лицензия проекта ещё не выбрана владельцем проекта; файл `LICENSE` не предоставляет юридических прав до утверждения лицензии.
 

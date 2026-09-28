@@ -1,4 +1,5 @@
 using GlazeShell.App.Presentation;
+using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -17,9 +18,11 @@ public sealed partial class MainWindow : Window
     public MainWindow(
         string title,
         IApplicationManager applications,
-        IApplicationLauncher launcher)
+        IApplicationLauncher launcher,
+        IWindowManager windows,
+        IEventManager events)
     {
-        ViewModel = new MainViewModel(applications, launcher, DispatcherQueue);
+        ViewModel = new MainViewModel(applications, launcher, windows, events, DispatcherQueue);
         InitializeComponent();
         Title = title;
 

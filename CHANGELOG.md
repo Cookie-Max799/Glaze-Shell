@@ -24,6 +24,15 @@
 - Исправлен vtable `IApplicationActivationManager`: `GetApplicationUserModelId` принимает process handle, для PID используется `GetApplicationUserModelIdFromProcessId`.
 - `ComApartment` балансирует `CoInitializeEx`/`CoUninitialize` на dedicated STA.
 
+#### Stage 4 — Window Manager
+
+- Исправлен `EventManager`: публикация диспетчеризуется по runtime-типу события (`GetType()`), поэтому подписчики на конкретный тип получают производные события, публикуемые через базовый `GlazeEvent`.
+- Добавлен `NativeWindowEnumerator`: перечисление видимых top-level окон через `EnumWindows` с фильтрацией cloak-нутых (`DWMWA_CLOAKED`) и tool-window, чтение состояния, заголовка, процесса и пути exe по HWND.
+- Добавлен `WindowEventMonitor`: `SetWinEventHook` (OUTOFCONTEXT, два диапазона: 0x0003–0x0017 системные события и 0x8000–0x8017 объектные) на dedicated-потоке с `GetMessage`-pump; публикует `WindowOpened`/`WindowClosed`/`ForegroundWindowChanged`/`WindowStateChanged` через `IEventManager`; опция `skipOwnProcess`.
+- Реализован `WindowManager` (`IWindowManager`): `GetWindows`, `GetWindow`, `GetForegroundWindow`, фокус (best-effort с fallback через `AttachThreadInput`), свернуть/развернуть/восстановить через `ShowWindowAsync`, закрытие только через `WM_CLOSE`.
+- Добавлены `Win32/User32.cs`, `Win32/Dwmapi.cs`, `Win32/Kernel32.cs`; P/Invoke user32 используют `CharSet.Unicode` без `ExactSpelling` для корректного разрешения W-суффиксов.
+- UI: добавлен `AsyncCommand<T>`, `WindowListItemViewModel` и инлайн-панель окон в карточке приложения (заголовок, состояние, активное окно, кнопки «Фокус/Свернуть/Развернуть/Закрыть`); `MainViewModel` подписан на события окон и обновляет панель на UI-потоке через коалесированный refresh.
+
 #### UI
 
 - Добавлен простой лаунчер UI: поиск, список приложений с virtualization, статусная строка, кнопки «Запустить/Закрыть/Перезапустить/Обновить».
@@ -35,7 +44,8 @@
 
 - Управляемый writer `.lnk`-фикстур `ShellLinkBuilder` и `TestShortcutFactory` (без COM `IShellLinkW.Save`, который сломан в текущей среде).
 - Добавлены `ShellLinkResolverTests`, `WindowsApplicationLauncherTests`, обновлены `AppsFolderSourceTests` (environment-tolerant) и `StartMenuShortcutSourceTests`.
-- Результат: 56/56 tests green (`GlazeShell.Core.Tests` 32/32, `GlazeShell.Windows.Tests` 24/24), Debug и Release build — 0 warnings / 0 errors.
+- Добавлены window manager тесты: `Win32TestWindow` (окно-фикстура на pumping-потоке) и `WindowManagerTests` — перечисление, поиск, свернуть/развернуть/восстановить, закрытие, события открытия/закрытия и изменения состояния.
+- Результат: 64/64 tests green либо `Inconclusive` по environment-зависимым приборам (`GlazeShell.Core.Tests` 32/32, `GlazeShell.Windows.Tests` 32/32: 31 passed, 1 environment-tolerant), Debug и Release build — 0 warnings / 0 errors.
 
 - Создана Stage 0 Foundation: solution, слоистые проекты и минимальный WinUI 3 executable.
 - Добавлены фиксированные настройки .NET SDK и NuGet package versions.
@@ -64,8 +74,9 @@
 ### Known limitations
 
 - Persistence layer и migrations ещё не реализованы.
-- Window management, monitor/DPI integration и Windows event hooks ещё не реализованы.
+- Monitor/DPI integration и Windows event hooks (вне окон) ещё не реализованы.
 - AppsFolder MSIX discovery на текущей машине ограничен `0x800401E5`; на штатных системах возвращает список пакетов.
-- Core Stage 2/3 подключены к UI; настройки пока не сохраняются между запусками.
+- Окна MSIX-приложений не привязываются к карточкам: у MSIX `ExecutablePath` не заполнен, и его окна не отображаются в инлайн-панели.
+- Core Stage 2/3/4 подключены к UI; настройки пока не сохраняются между запусками.
 - Installer и release packaging ещё не подготовлены.
 - Шифрование at rest не применяется: приложение пока не хранит секреты.

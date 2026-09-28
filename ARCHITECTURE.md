@@ -59,7 +59,7 @@ Core не должен содержать P/Invoke, `HWND`, `HMONITOR`, `HANDLE`
 
 ### GlazeShell.App
 
-WinUI 3 executable и composition root приложения. Содержит окно с явно заданным размером и центрированием на экране. На Stage 3 подключает `ApplicationDiscoveryService` и `WindowsApplicationLauncher`: создаёт реальный лаунчер-UI с поиском, списком приложений, статусной строкой и клавиатурной навигацией. UI-слой (`Presentation/MainViewModel`, `AsyncCommand`, `DispatcherQueueExtensions`) общается только с Core-интерфейсами.
+WinUI 3 executable и composition root приложения. Содержит окно с явно заданным размером и центрированием на экране. На Stage 3 подключает `ApplicationDiscoveryService` и `WindowsApplicationLauncher`: создаёт реальный лаунчер-UI с поиском, списком приложений, статусной строкой и клавиатурной навигацией. На Stage 4 подключает `WindowManager` и события окон: UI-слой (`Presentation/MainViewModel`, `ApplicationListViewModel`, `WindowListItemViewModel`, `AsyncCommand`, `DispatcherQueueExtensions`) общается только с Core-интерфейсами.
 
 ### GlazeShell.Core
 
@@ -78,7 +78,7 @@ Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `Applica
 
 Интерфейсы: `IApplicationManager`, `IApplicationLauncher`, `IApplicationDiscoverySource`, `IProcessInspector`, `IPackageLocationResolver`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IThemeManager`, `IEventManager`, `IMonitorManager`.
 
-События: `WindowOpened`, `WindowClosed`, `ForegroundWindowChanged`, `ProcessStarted`, `ProcessExited`, `DisplayChanged`, `DesktopChanged`, `SettingsChanged`, `ApplicationChanged`.
+События: `WindowOpened`, `WindowClosed`, `ForegroundWindowChanged`, `WindowStateChanged`, `ProcessStarted`, `ProcessExited`, `DisplayChanged`, `DesktopChanged`, `SettingsChanged`, `ApplicationChanged`.
 
 Сервисы: `EventManager` — типизированная подписка и публикация с возвратом `IDisposable` для отписки; `InMemorySettingsManager` — хранение настроек в памяти без публикации дублирующих событий; `ApplicationDiscoveryService` — агрегация источников, dedup, cache и single-flight.
 
@@ -98,6 +98,15 @@ Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `Applica
 - `Applications/WindowsApplicationLauncher.cs`, `ProcessInspector.cs`, `PackageInstallLocationResolver.cs` — Stage 3 launcher;
 - `Win32/Ole32.cs`, `Shell32.cs` — P/Invoke объявления.
 
+На Stage 4 добавляет:
+
+- `Win32/User32.cs` — P/Invoke user32 (окна, сообщения, hooks, threads) с `CharSet.Unicode` без `ExactSpelling`;
+- `Win32/Dwmapi.cs` — `DwmGetWindowAttribute`/`DWMWA_CLOAKED` для отбрасывания cloak-нутых окон;
+- `Win32/Kernel32.cs` — `GetCurrentThreadId`;
+- `WindowManagement/NativeWindowEnumerator.cs` — перечисление и чтение окон по HWND (id = HEX-представление handle);
+- `WindowManagement/WindowEventMonitor.cs` — `SetWinEventHook` на dedicated-потоке с `GetMessage`-pump, публикация оконных событий в `IEventManager`;
+- `WindowManagement/WindowManager.cs` — реализация `IWindowManager`: фокус (best-effort + `AttachThreadInput` fallback), `ShowWindowAsync` и `WM_CLOSE`.
+
 ### GlazeShell.Data
 
 Слой хранения и сериализации. Структура подготовлена, но JSON persistence, layout и SQLite намеренно не реализованы до Stage 7.
@@ -112,7 +121,7 @@ MSTest test project. Проверяет foundation configuration, инвариа
 
 ### GlazeShell.Windows.Tests
 
-MSTest test project. Проверяет managed резолвер `.lnk` (`ShellLinkResolverTests`), источники Start Menu и AppsFolder, `WindowsApplicationLauncher`. Использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо сломанного в окружении COM `IShellLinkW.Save`.
+MSTest test project. Проверяет managed резолвер `.lnk` (`ShellLinkResolverTests`), источники Start Menu и AppsFolder, `WindowsApplicationLauncher`, а также window manager (`WindowManagerTests` с окном-фикстурой `Win32TestWindow` на pumping-потоке). Использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо сломанного в окружении COM `IShellLinkW.Save`; environment-зависимые проверки (foreground lock) завершаются `Inconclusive`, а не падают.
 
 ## Решения Stage 0
 
@@ -156,10 +165,21 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - `PackageInstallLocationResolver` строит immutable cache реестра один раз и не держит открытый `RegistryKey` после инициализации.
 - `ComApartment` выполняет COM в STA и балансирует `CoInitializeEx`/`CoUninitialize`; результат исключения пробрасывается в вызывающий поток через `ExceptionDispatchInfo`.
 
+## Решения Stage 4 — Window Manager
+
+- `WindowInfo.Id` — HEX-представление HWND: Core остаётся framework-free, а native handle восстанавливается `TryParseId` только на уровне Windows Integration.
+- Окна перечисляются через `EnumWindows` и фильтруются: только видимые (`WS_VISIBLE`), не cloak-нутые (DWM `DWMWA_CLOAKED`) и не tool-windows; окна своего процесса не исключаются, чтобы панель показывала окна Glaze Shell тоже.
+- События окон получаются через `SetWinEventHook` (OUTOFCONTEXT) на выделенном потоке с `GetMessage`-pump: опция `skipOwnProcess` включает `WINEVENT_SKIPOWNPROCESS`; hook-диапазоны разбиты на два (системный 0x0003–0x0017 и объектный 0x8000–0x8017) для предсказуемой доставки.
+- Любое событие окон публикуется в `IEventManager` как `WindowOpened`/`WindowClosed`/`ForegroundWindowChanged`/`WindowStateChanged`; `EventManager` диспетчеризует по runtime-типу, поэтому подписка на конкретный тип не зависит от статического типа публикатора.
+- Фокус окна — best-effort: `ShowWindowAsync(SW_RESTORE)` + `SetWindowPos` + `SetForegroundWindow`, при отказе (foreground lock) применяется `AttachThreadInput` к foreground/target threads; `SendInput` не используется.
+- Управление состоянием — только `ShowWindowAsync` (не блокирует вызывающий поток), закрытие — только вежливый `WM_CLOSE` через `PostMessage`; принудительное завершение процесса не применяется.
+- Инлайн-панель окон привязана к карточке приложения по пути исполняемого файла (ordinal-ignore-case); у MSIX `ExecutablePath` не заполнен, поэтому их окна не попадают в панель — задокументированное ограничение.
+- UI получает события окон через `IEventManager` и выполняет единый коалесированный refresh на UI-потоке (`DispatcherQueue`), чтобы пачки событий не порождали лавину перестроений.
+
 ## Границы UI
 
 UI может использовать модели, интерфейсы Application Services, events и state, не зная о native handles и Win32. Визуальный дизайн согласован: палитра (`#12151B`, `#1B1F27`, `#F4F6FA`, `#98A2B3`, `#6E7A8A`, `#4E5866`), шрифты и layout сохраняются без явного согласования изменений.
 
 ## Следующие архитектурные изменения
 
-Stages 5–6 добавят window management, monitor/DPI integration и Windows event hooks. Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.
+Stages 5–6 добавят monitor/DPI integration и desktop integration. Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.
