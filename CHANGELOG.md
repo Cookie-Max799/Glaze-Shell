@@ -6,6 +6,37 @@
 
 ### Added
 
+#### Stage 2 — Application Discovery
+
+- Добавлен managed-парсер бинарных shortcut-файлов `ShellLinkData` (MS-SHLLINK): header, LinkInfo, StringData, relative path, byte-safe и exception-free API.
+- Добавлен `ShellLinkResolver` с трёхуровневой стратегией: managed fast path → shell property store → `IShellLinkW`. Каждый `.lnk` с отсутствующим target пропускается с диагностикой.
+- Исправлен interop: `IShellLinkW` наследует `IPersistFile`, удалены generic COM-методы, добавлены `out nint` handlers, добавлен `IShellItemArray`.
+- `AppsFolderSource` переписан на `IShellItemArray` с P/Invoke (IID), STA-апартментом и корректным lifetimes COM-объектов.
+- `StartMenuShortcutSource` переписан: bounded parallel scan (max CPU 1–8), детерминированная сортировка, рекурсивный обход, фильтрация reparse points, `.url`, `explorer.exe` и отсутствующих target.
+- Добавлены `Ole32` (`CoInitializeEx`, `CoUninitialize`, `CoTaskMemFree`), `Shell32` (`SHCreateItemFromParsingName`) и `ComApartment` для STA COM.
+- `ApplicationDiscoveryService` дополнен слиянием кандидатов, dedup по launch identity и лимитом предупреждений на источник.
+
+#### Stage 3 — Application Launcher
+
+- Реализован `WindowsApplicationLauncher`: MSIX через `IApplicationActivationManager`, Win32 через `ProcessStartInfo` (`UseShellExecute=false`), закрытие через `CloseMainWindow` без принудительного kill.
+- Реализован `ProcessInspector` — поиск процессов по пути и каталогу установки с освобождением `Process` handles.
+- Реализован `PackageInstallLocationResolver` — поиск установки MSIX через реестр AppxAllUserStore с immutable cache.
+- Исправлен vtable `IApplicationActivationManager`: `GetApplicationUserModelId` принимает process handle, для PID используется `GetApplicationUserModelIdFromProcessId`.
+- `ComApartment` балансирует `CoInitializeEx`/`CoUninitialize` на dedicated STA.
+
+#### UI
+
+- Добавлен простой лаунчер UI: поиск, список приложений с virtualization, статусная строка, кнопки «Запустить/Закрыть/Перезапустить/Обновить».
+- Добавлен `MainViewModel` с async обновлением, фильтрацией по названию/пути/AUMID и периодической проверкой запущенных процессов.
+- Добавлена клавиатурная навигация: ↑/↓, Enter, Space, F5, Esc.
+- Приложение теперь подключает `GlazeShell.Windows` и использует реальный composition root в `App.xaml.cs`.
+
+#### Tests
+
+- Управляемый writer `.lnk`-фикстур `ShellLinkBuilder` и `TestShortcutFactory` (без COM `IShellLinkW.Save`, который сломан в текущей среде).
+- Добавлены `ShellLinkResolverTests`, `WindowsApplicationLauncherTests`, обновлены `AppsFolderSourceTests` (environment-tolerant) и `StartMenuShortcutSourceTests`.
+- Результат: 56/56 tests green (`GlazeShell.Core.Tests` 32/32, `GlazeShell.Windows.Tests` 24/24), Debug и Release build — 0 warnings / 0 errors.
+
 - Создана Stage 0 Foundation: solution, слоистые проекты и минимальный WinUI 3 executable.
 - Добавлены фиксированные настройки .NET SDK и NuGet package versions.
 - Добавлена базовая конфигурация `schemaVersion: 1`.
@@ -33,8 +64,8 @@
 ### Known limitations
 
 - Persistence layer и migrations ещё не реализованы.
-- Win32 API, application discovery и window management ещё не реализованы.
-- Стартовый экран — заглушка; функциональный UI не реализован.
-- Core Stage 1 не подключён к UI; настройки не сохраняются между запусками.
+- Window management, monitor/DPI integration и Windows event hooks ещё не реализованы.
+- AppsFolder MSIX discovery на текущей машине ограничен `0x800401E5`; на штатных системах возвращает список пакетов.
+- Core Stage 2/3 подключены к UI; настройки пока не сохраняются между запусками.
 - Installer и release packaging ещё не подготовлены.
 - Шифрование at rest не применяется: приложение пока не хранит секреты.

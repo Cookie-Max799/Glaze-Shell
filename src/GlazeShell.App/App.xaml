@@ -2,5 +2,14 @@
     x:Class="GlazeShell.App.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Application.Resources />
+    <Application.Resources>
+        <Style x:Key="ApplicationCardStyle" TargetType="ListViewItem">
+            <Setter Property="Background" Value="#1B1F27" />
+            <Setter Property="CornerRadius" Value="12" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="UseSystemFocusVisuals" Value="True" />
+        </Style>
+    </Application.Resources>
 </Application>

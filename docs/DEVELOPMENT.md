@@ -33,7 +33,16 @@ dotnet test
 dotnet test --configuration Release
 ```
 
-На текущем этапе тестируются foundation configuration, инварианты Core-моделей и базовые сервисы `EventManager` и `InMemorySettingsManager`. Windows integration tests появятся после появления Windows implementations.
+Тестовые проекты:
+
+- `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service.
+- `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`.
+
+`Windows.Tests` использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо COM `IShellLinkW.Save`, который в текущем окружении возвращает `0x80070002`.
+
+`AppsFolderSourceTests` являются environment-tolerant: на машинах, где `IShellItemArray` недоступен, тест проверяет наличие объясняющего warning, а не падает на списке приложений.
+
+Текущий статус: 56/56 tests green, Debug и Release build — 0 warnings / 0 errors.
 
 ## Запуск
 

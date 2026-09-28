@@ -49,7 +49,13 @@ API keys, credentials и secrets не хранятся в source control, themes
 
 ## Process execution
 
-Process launching ещё не реализован. Будущий launcher должен использовать разрешённые пользователем application references, проверять пути и не запускать произвольные команды из конфигурации без явного действия пользователя.
+Запуск выполняется только для разрешённых пользователем application references из discovery (Start Menu `.lnk` и установленные MSIX-пакеты). Launcher не выполняет произвольные команды из конфигурации и не принимает команды из IPC.
+
+- Win32-приложения запускаются через `ProcessStartInfo` с `UseShellExecute=false` и явным `FileName`: не используется SHELLEXECUTE-инъекция командной строки.
+- MSIX-приложения запускаются через `IApplicationActivationManager.ActivateApplication` исключительно по `ApplicationUserModelId`, полученному из AppsFolder.
+- Путь к target проверяется `File.Exists` до запуска; для отсутствующих файлов запуск не выполняется.
+- Закрытие выполняется только через `CloseMainWindow`; принудительный `Kill` не применяется.
+- `ProcessInspector` не раскрывает пути и не отвечает на управляющие входные данные: он принимает только уже провалидированные пути приложений.
 
 ## Themes and extensions
 

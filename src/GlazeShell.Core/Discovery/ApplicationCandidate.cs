@@ -1,10 +1,12 @@
-namespace GlazeShell.Core.Models;
+using GlazeShell.Core.Models;
 
-public sealed record Application
+namespace GlazeShell.Core.Discovery;
+
+public sealed record ApplicationCandidate
 {
-    public Application(
-        string id,
+    public ApplicationCandidate(
         string name,
+        string source,
         ApplicationType type = ApplicationType.None,
         string? executablePath = null,
         string? packageFamilyName = null,
@@ -16,11 +18,10 @@ public sealed record Application
         bool isSystemApplication = false,
         string? arguments = null,
         string? workingDirectory = null,
-        int? iconIndex = null,
-        string? source = null)
+        int? iconIndex = null)
     {
-        Id = ModelValidation.Required(id, nameof(id));
         Name = ModelValidation.Required(name, nameof(name));
+        Source = ModelValidation.Required(source, nameof(source));
         Type = type;
         ExecutablePath = ModelValidation.Optional(executablePath, nameof(executablePath));
         PackageFamilyName = ModelValidation.Optional(packageFamilyName, nameof(packageFamilyName));
@@ -33,17 +34,11 @@ public sealed record Application
         Arguments = ModelValidation.Optional(arguments, nameof(arguments));
         WorkingDirectory = ModelValidation.Optional(workingDirectory, nameof(workingDirectory));
         IconIndex = ModelValidation.NonNegative(iconIndex, nameof(iconIndex));
-        Source = ModelValidation.Optional(source, nameof(source));
-
-        if (!IsLaunchable)
-        {
-            throw new ArgumentException("An application launch identity is required.", nameof(id));
-        }
     }
 
-    public string Id { get; }
-
     public string Name { get; }
+
+    public string Source { get; }
 
     public ApplicationType Type { get; }
 
@@ -69,37 +64,11 @@ public sealed record Application
 
     public int? IconIndex { get; }
 
-    public string? Source { get; }
-
-    public bool IsLaunchable =>
+    public bool HasLaunchIdentity =>
         !string.IsNullOrWhiteSpace(ExecutablePath) ||
         !string.IsNullOrWhiteSpace(PackageFamilyName) ||
         !string.IsNullOrWhiteSpace(ApplicationUserModelId);
 
-    public Application WithMetadata(
-        string? description = null,
-        string? publisher = null,
-        string? version = null,
-        string? iconPath = null,
-        int? iconIndex = null,
-        string? arguments = null,
-        string? workingDirectory = null)
-    {
-        return new Application(
-            Id,
-            Name,
-            Type,
-            ExecutablePath,
-            PackageFamilyName,
-            ApplicationUserModelId,
-            IconPath ?? this.IconPath,
-            description ?? Description,
-            publisher ?? Publisher,
-            version ?? Version,
-            IsSystemApplication,
-            arguments ?? Arguments,
-            workingDirectory ?? WorkingDirectory,
-            iconIndex ?? IconIndex,
-            Source);
-    }
+    public bool IsShell32Executable =>
+        string.Equals(Path.GetFileName(ExecutablePath), "explorer.exe", StringComparison.OrdinalIgnoreCase);
 }

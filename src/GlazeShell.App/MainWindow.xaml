@@ -5,129 +5,177 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:p="using:GlazeShell.App.Presentation"
     mc:Ignorable="d">
 
-    <Grid Background="#12151B">
+    <Grid x:Name="Root" Background="#12151B" RowSpacing="0">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <Border
-            Padding="36,30,36,26"
+            Padding="36,30,36,22"
             Background="#1B1F27">
-            <StackPanel Spacing="8">
-                <TextBlock
-                    FontSize="30"
-                    FontWeight="SemiBold"
-                    Foreground="#F4F6FA"
-                    Text="Glaze Shell" />
-                <TextBlock
-                    FontSize="14"
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Spacing="8">
+                    <TextBlock
+                        FontSize="30"
+                        FontWeight="SemiBold"
+                        Foreground="#F4F6FA"
+                        Text="Glaze Shell" />
+                    <TextBlock
+                        FontSize="14"
+                        Foreground="#98A2B3"
+                        Text="Запуск установленных приложений: меню «Пуск» и пакеты MSIX."
+                        TextWrapping="Wrap" />
+                </StackPanel>
+
+                <ProgressRing
+                    Grid.Column="1"
+                    Width="26"
+                    Height="26"
                     Foreground="#98A2B3"
-                    Text="Оболочка рабочего окружения поверх штатных возможностей Windows"
-                    TextWrapping="Wrap" />
-            </StackPanel>
+                    IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+            </Grid>
         </Border>
 
         <Grid
             Grid.Row="1"
-            Margin="36,28,36,28"
-            ColumnSpacing="20">
+            Padding="36,18,36,10"
+            ColumnSpacing="12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <Border
-                Grid.Column="0"
-                Padding="22"
-                Background="#1B1F27"
-                CornerRadius="12">
-                <StackPanel Spacing="10">
-                    <TextBlock
-                        FontSize="12"
-                        Foreground="#6E7A8A"
-                        Text="ОБОЛОЧКА" />
-                    <TextBlock
-                        FontSize="17"
-                        FontWeight="SemiBold"
-                        Foreground="#F4F6FA"
-                        Text="Stage 0 · Foundation"
-                        TextWrapping="Wrap" />
-                    <TextBlock
-                        FontSize="13"
-                        Foreground="#98A2B3"
-                        Text="WinUI 3 приложение, сборка решения, конфигурация и файловое логирование."
-                        TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+            <AutoSuggestBox
+                x:Name="SearchBox"
+                PlaceholderText="Поиск по названию, пути или AUMID"
+                QueryIcon="Find"
+                Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-            <Border
+            <Button
                 Grid.Column="1"
-                Padding="22"
-                Background="#1B1F27"
-                CornerRadius="12">
-                <StackPanel Spacing="10">
-                    <TextBlock
-                        FontSize="12"
-                        Foreground="#6E7A8A"
-                        Text="ЯДРО" />
-                    <TextBlock
-                        FontSize="17"
-                        FontWeight="SemiBold"
-                        Foreground="#F4F6FA"
-                        Text="Stage 1 · Core"
-                        TextWrapping="Wrap" />
-                    <TextBlock
-                        FontSize="13"
-                        Foreground="#98A2B3"
-                        Text="Доменные модели, контракты интерфейсов, события и базовые сервисы."
-                        TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+                MinWidth="120"
+                Click="OnRefreshClick"
+                Content="Обновить" />
+        </Grid>
 
-            <Border
-                Grid.Column="2"
-                Padding="22"
-                Background="#1B1F27"
-                CornerRadius="12">
-                <StackPanel Spacing="10">
-                    <TextBlock
-                        FontSize="12"
-                        Foreground="#6E7A8A"
-                        Text="СЛЕДУЮЩИЙ ЭТАП" />
-                    <TextBlock
-                        FontSize="17"
-                        FontWeight="SemiBold"
-                        Foreground="#F4F6FA"
-                        Text="Stage 2 · Discovery"
-                        TextWrapping="Wrap" />
-                    <TextBlock
-                        FontSize="13"
-                        Foreground="#98A2B3"
-                        Text="Обнаружение установленных приложений и запуск процесса оболочки."
-                        TextWrapping="Wrap" />
-                </StackPanel>
-            </Border>
+        <Grid Grid.Row="2" Margin="36,0,36,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <ListView
+                x:Name="ApplicationList"
+                Background="Transparent"
+                ItemContainerStyle="{StaticResource ApplicationCardStyle}"
+                ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
+                SelectedItem="{x:Bind ViewModel.Selected, Mode=TwoWay}"
+                SelectionMode="Single">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="p:ApplicationListViewModel">
+                        <Grid Padding="20,16" ColumnSpacing="14">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="18"
+                                Foreground="#4E5866"
+                                Text="{x:Bind RunningGlyph, Mode=OneWay}" />
+
+                            <StackPanel Grid.Column="1" Spacing="3">
+                                <TextBlock
+                                    FontSize="15"
+                                    FontWeight="SemiBold"
+                                    Foreground="#F4F6FA"
+                                    Text="{x:Bind Name, Mode=OneWay}"
+                                    TextTrimming="CharacterEllipsis" />
+                                <TextBlock
+                                    FontSize="12"
+                                    Foreground="#98A2B3"
+                                    Text="{x:Bind Description, Mode=OneWay}"
+                                    TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+
+                            <Border
+                                Grid.Column="2"
+                                Padding="10,3"
+                                VerticalAlignment="Center"
+                                Background="#232833"
+                                CornerRadius="6">
+                                <TextBlock
+                                    FontSize="11"
+                                    Foreground="#6E7A8A"
+                                    Text="{x:Bind TypeBadge, Mode=OneWay}" />
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+
+            <TextBlock
+                Margin="0,40,0,0"
+                HorizontalAlignment="Center"
+                FontSize="14"
+                Foreground="#6E7A8A"
+                Text="Приложения не найдены"
+                Visibility="{x:Bind ViewModel.IsEmpty, Mode=OneWay}" />
+
+            <ProgressBar
+                Grid.Row="1"
+                Padding="0,8,0,0"
+                IsIndeterminate="True"
+                Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+
+            <StackPanel
+                Grid.Row="1"
+                Padding="0,14,0,0"
+                HorizontalAlignment="Right"
+                Orientation="Horizontal"
+                Spacing="10">
+                <Button
+                    MinWidth="104"
+                    Click="OnLaunchClick"
+                    Content="Запустить" />
+                <Button
+                    MinWidth="104"
+                    Click="OnCloseClick"
+                    Content="Закрыть" />
+                <Button
+                    MinWidth="104"
+                    Click="OnRestartClick"
+                    Content="Перезапустить" />
+            </StackPanel>
         </Grid>
 
         <Border
-            Grid.Row="2"
+            Grid.Row="3"
             Padding="36,18,36,20"
             Background="#1B1F27">
             <StackPanel Spacing="4">
                 <TextBlock
                     FontSize="12"
-                    Foreground="#6E7A8A"
-                    Text="Данные приложения и логи: %LOCALAPPDATA%\GlazeShell" />
+                    Foreground="#98A2B3"
+                    Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis" />
                 <TextBlock
                     FontSize="12"
                     Foreground="#4E5866"
-                    Text="Интерфейс и оформление появятся на следующих этапах roadmap."
-                    TextWrapping="Wrap" />
+                    Text="Логи и данные: %LOCALAPPDATA%\GlazeShell" />
             </StackPanel>
         </Border>
     </Grid>

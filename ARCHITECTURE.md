@@ -30,7 +30,8 @@ GlazeShell/
 │   ├── GlazeShell.Data/
 │   └── GlazeShell.Infrastructure/
 ├── tests/
-│   └── GlazeShell.Core.Tests/
+│   ├── GlazeShell.Core.Tests/
+│   └── GlazeShell.Windows.Tests/
 └── assets/
 ```
 
@@ -58,11 +59,11 @@ Core не должен содержать P/Invoke, `HWND`, `HMONITOR`, `HANDLE`
 
 ### GlazeShell.App
 
-WinUI 3 executable и composition root приложения. Содержит окно с явно заданным размером и центрированием на экране, а также стартовый экран со статусом этапов. Инициализирует конфигурацию и базовый logger. Stage 1 не подключает Core-сервисы к UI.
+WinUI 3 executable и composition root приложения. Содержит окно с явно заданным размером и центрированием на экране. На Stage 3 подключает `ApplicationDiscoveryService` и `WindowsApplicationLauncher`: создаёт реальный лаунчер-UI с поиском, списком приложений, статусной строкой и клавиатурной навигацией. UI-слой (`Presentation/MainViewModel`, `AsyncCommand`, `DispatcherQueueExtensions`) общается только с Core-интерфейсами.
 
 ### GlazeShell.Core
 
-Независимый от UI и Win32 слой. На Stage 1 содержит доменные модели, контракты интерфейсов, события и базовые сервисы.
+Независимый от UI и Win32 слой. Содержит доменные модели, контракты интерфейсов, события и базовые сервисы.
 
 Модели:
 
@@ -73,17 +74,29 @@ WinUI 3 executable и composition root приложения. Содержит о
 - `Theme` с metadata, colors, fonts, dimensions, icons и анимацией;
 - `ModelValidation` — единая валидация входных данных моделей.
 
-Интерфейсы: `IApplicationManager`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IThemeManager`, `IEventManager`, `IMonitorManager`.
+Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `ApplicationDiscoveryOptions`, `ApplicationIdentity`, `ApplicationLaunchResult`.
+
+Интерфейсы: `IApplicationManager`, `IApplicationLauncher`, `IApplicationDiscoverySource`, `IProcessInspector`, `IPackageLocationResolver`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IThemeManager`, `IEventManager`, `IMonitorManager`.
 
 События: `WindowOpened`, `WindowClosed`, `ForegroundWindowChanged`, `ProcessStarted`, `ProcessExited`, `DisplayChanged`, `DesktopChanged`, `SettingsChanged`, `ApplicationChanged`.
 
-Сервисы: `EventManager` — типизированная подписка и публикация с возвратом `IDisposable` для отписки; `InMemorySettingsManager` — хранение настроек в памяти без публикации дублирующих событий.
+Сервисы: `EventManager` — типизированная подписка и публикация с возвратом `IDisposable` для отписки; `InMemorySettingsManager` — хранение настроек в памяти без публикации дублирующих событий; `ApplicationDiscoveryService` — агрегация источников, dedup, cache и single-flight.
 
 Идентификаторы окон, мониторов и приложений представлены строками, чтобы Core не зависел от `HWND`/`HMONITOR`. Соответствие строк и native handles устанавливается на уровне Windows Integration.
 
 ### GlazeShell.Windows
 
-Слой Windows Integration. Содержит только проект с Windows target framework. P/Invoke и Shell API будут изолированы в `Win32`, `Shell`, `Windows` и `Interop` на соответствующих этапах.
+Слой Windows Integration. На Stage 2/3 содержит:
+
+- `Shell/ShellLinkData.cs` — byte-safe managed парсер MS-SHLLINK (header, LinkInfo, StringData, relative path);
+- `Shell/ShellLinkResolver.cs` — трёхуровневый резолвер: managed fast path → property store → `IShellLinkW`;
+- `Shell/AppsFolderSource.cs` — обнаружение MSIX через `IShellItemArray`;
+- `Shell/StartMenuShortcutSource.cs` — параллельное сканирование Start Menu;
+- `Shell/IShellItem*.cs`, `IShellFolder.cs`, `IShellLinkW.cs`, `IPersistFile.cs` — официальные COM-интерфейсы;
+- `Interop/ComApartment.cs` — STA-исполнение COM с балансом `CoInitializeEx`/`CoUninitialize`;
+- `Interop/IApplicationActivationManager.cs` — активация MSIX;
+- `Applications/WindowsApplicationLauncher.cs`, `ProcessInspector.cs`, `PackageInstallLocationResolver.cs` — Stage 3 launcher;
+- `Win32/Ole32.cs`, `Shell32.cs` — P/Invoke объявления.
 
 ### GlazeShell.Data
 
@@ -95,7 +108,11 @@ WinUI 3 executable и composition root приложения. Содержит о
 
 ### GlazeShell.Core.Tests
 
-MSTest test project. Проверяет foundation configuration, инварианты моделей, семантику `EventManager` и публикацию `SettingsChanged` в `InMemorySettingsManager`.
+MSTest test project. Проверяет foundation configuration, инварианты моделей, семантику `EventManager`, публикацию `SettingsChanged` в `InMemorySettingsManager` и discovery service.
+
+### GlazeShell.Windows.Tests
+
+MSTest test project. Проверяет managed резолвер `.lnk` (`ShellLinkResolverTests`), источники Start Menu и AppsFolder, `WindowsApplicationLauncher`. Использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо сломанного в окружении COM `IShellLinkW.Save`.
 
 ## Решения Stage 0
 
@@ -120,10 +137,29 @@ MSTest test project. Проверяет foundation configuration, инвариа
 - Платформа сборки App фиксируется как `x64`; значение `AnyCPU`, которое `dotnet run` передаёт по умолчанию, принудительно заменяется на `x64` в `.csproj`.
 - Stage 1 не реализует discovery, launcher, Win32 interop, persistence, tabs/categories behavior и Windows event hooks.
 
+## Решения Stage 2 — Discovery
+
+- Managed парсер `ShellLinkData` является первичным путём для `.lnk`: он не требует COM и работает в повреждённом окружении, где `CLSID_ShellLink` зарегистрирован не в `shell32.dll`.
+- `ShellLinkResolver` возвращает enum-стратегию резолва; failure возвращает описание для диагностики, а не исключение.
+- CORP-отказ от сообщений: неразрешённые `.lnk` пропускаются с warning в `ApplicationDiscoveryResult`, discovery не падает целиком.
+- Nodes/reparse points, `.url`, `explorer.exe` и targets без `RequireExistingTarget`-проверки отфильтровываются на уровне источника.
+- `StartMenuShortcutSource` сканирует параллельно с bound `degreeOfParallelism = min(max(1, CPU), 8)` и выдерживает детерминированную сортировку результата.
+- COM-интерфейсы не используют generic методы и создаются через `CoCreateInstance` с явными IIDs; веществами освобождаются в `finally`.
+- AppsFolder на текущей машине возвращает `0x800401E5`; на штатных системах источник возвращает пакеты MSIX, иначе — объясняющий warning.
+
+## Решения Stage 3 — Launcher
+
+- `IApplicationActivationManager` реализует корректную vtable: `GetApplicationUserModelId` принимает process handle, а для PID используется `GetApplicationUserModelIdFromProcessId`.
+- Win32 запуск использует `ProcessStartInfo` с `UseShellExecute=false` и не полагается на SHELLEXECUTE-командную строку.
+- Закрытие выполняется только через `CloseMainWindow`; принудительный `Kill` не применяется.
+- `ProcessInspector` освобождает каждый `Process` через `using` и проверяет границу каталога (а не `StartsWith` без разделителя).
+- `PackageInstallLocationResolver` строит immutable cache реестра один раз и не держит открытый `RegistryKey` после инициализации.
+- `ComApartment` выполняет COM в STA и балансирует `CoInitializeEx`/`CoUninitialize`; результат исключения пробрасывается в вызывающий поток через `ExceptionDispatchInfo`.
+
 ## Границы UI
 
-UI может использовать модели, интерфейсы Application Services, events и state, не зная о native handles и Win32. Визуальный дизайн, XAML-композиция и UX не являются частью Stage 0 и Stage 1.
+UI может использовать модели, интерфейсы Application Services, events и state, не зная о native handles и Win32. Визуальный дизайн согласован: палитра (`#12151B`, `#1B1F27`, `#F4F6FA`, `#98A2B3`, `#6E7A8A`, `#4E5866`), шрифты и layout сохраняются без явного согласования изменений.
 
 ## Следующие архитектурные изменения
 
-Stages 2–5 добавят конкретные Windows implementations. Перед добавлением каждого P/Invoke будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.
+Stages 5–6 добавят window management, monitor/DPI integration и Windows event hooks. Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.

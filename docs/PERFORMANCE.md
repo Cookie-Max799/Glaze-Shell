@@ -2,11 +2,26 @@
 
 ## Baseline
 
-Приложение не выполняет window/process polling, не создаёт hooks, background services или лишние процессы. Startup создаёт только WinUI window и одну startup log record. Profile и benchmarks ещё не выполнялись.
+Приложение не создаёт hooks или фоновые service процессы. Startup создаёт WinUI window, startup log record и запускает однократное сканирование приложений в фоне.
 
 Stage 1 добавил только framework-free Core: модели, контракты и in-memory сервисы, которые не создают потоков, таймеров или внешних ресурсов.
 
 `EventManager` не хранит события и не запускает фоновую обработку: доставка выполняется синхронно в потоке publisher, а `Publish` работает с копией списка подписок, поэтому подписка и отписка не требуют блокировки на стороне вызывающего.
+
+## Stage 2 — Discovery
+
+- `StartMenuShortcutSource` использует параллельное сканирование с ограничением `min(max(1, Environment.ProcessorCount), 8)` потоков; результат детерминированно сортируется.
+- Для каждого `.lnk` сначала выполняется managed fast path (`ShellLinkData`) без COM; fallback на `IShellLinkW`/property store выполняется только для нерезолвнутых файлов.
+- AppsFolder сканируется через один STA-вызов `IShellItemArray`; COM-объекты освобождаются в `finally`.
+- `ApplicationDiscoveryService` кэширует снапшот на `CacheDuration` (5 минут) и использует single-flight lock, поэтому повторный `DiscoverAsync` в течение окна не сканирует диск.
+- Результат сканирования (десятки shortlinks) собирается за время меньше секунды на штатных системах.
+
+## Stage 3 — Launcher
+
+- `PackageInstallLocationResolver` один раз строит immutable cache из реестра AppxAllUserStore и не обращается к реестру на каждый запрос.
+- `ProcessInspector` итерирует процессы один раз, освобождая каждый `Process` через `using`, и не копирует `Process[]` бесконечно.
+- UI проверяет фоновые процессы не чаще, чем раз в 3 секунды, и только после завершения первичного сканирования.
+- Периодический polling оправдан техническим ограничением: .NET не предоставляет событие «процесс запущен» для произвольных exe.
 
 ## Design principles
 

@@ -24,6 +24,7 @@
   <ItemGroup>
     <ProjectReference Include="..\GlazeShell.Core\GlazeShell.Core.csproj" />
     <ProjectReference Include="..\GlazeShell.Infrastructure\GlazeShell.Infrastructure.csproj" />
+    <ProjectReference Include="..\GlazeShell.Windows\GlazeShell.Windows.csproj" />
   </ItemGroup>
 
 </Project>

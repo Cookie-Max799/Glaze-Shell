@@ -35,6 +35,26 @@ internal static class ModelValidation
         }
     }
 
+    public static int? NonNegative(int? value, string parameterName)
+    {
+        if (value is < 0)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, value, "The value cannot be negative.");
+        }
+
+        return value;
+    }
+
+    public static TimeSpan NonNegative(TimeSpan value, string parameterName)
+    {
+        if (value < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(parameterName, value, "The value cannot be negative.");
+        }
+
+        return value;
+    }
+
     public static void NonNegative(double value, string parameterName)
     {
         if (!double.IsFinite(value) || value < 0)
