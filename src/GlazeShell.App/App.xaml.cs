@@ -5,6 +5,7 @@ using GlazeShell.Core.Services;
 using GlazeShell.Infrastructure.Logging;
 using GlazeShell.Infrastructure.System;
 using GlazeShell.Windows.Applications;
+using GlazeShell.Windows.DisplayManagement;
 using GlazeShell.Windows.Shell;
 using GlazeShell.Windows.WindowManagement;
 using Microsoft.UI.Xaml;
@@ -48,11 +49,22 @@ public partial class App : Application
             _logger.Write(GlazeLogLevel.Warning, "WindowManager", "Window events monitor could not be started.");
         }
 
+        var monitorManager = new MonitorManager(eventManager);
+
+        if (!monitorManager.Start())
+        {
+            _logger.Write(GlazeLogLevel.Warning, "MonitorManager", "Display events monitor could not be started.");
+        }
+
+        var desktopManager = new DesktopManager(eventManager);
+
         _window = new MainWindow(
             _configuration.ApplicationName,
             discovery,
             launcher,
             windowManager,
+            monitorManager,
+            desktopManager,
             eventManager);
         _window.Activate();
     }

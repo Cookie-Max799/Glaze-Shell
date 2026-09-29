@@ -110,7 +110,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly IApplicationManager _applications;
     private readonly IApplicationLauncher _launcher;
     private readonly IWindowManager _windows;
+    private readonly IDesktopManager _desktop;
     private readonly DispatcherQueue _dispatcher;
+    private readonly IDisposable _displayChanged;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly CancellationTokenSource _runningProbe = new();
     private readonly Timer _runningTimer;
@@ -125,6 +127,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private ApplicationListViewModel? _selected;
     private string _searchText = string.Empty;
     private string _statusText = "Готово к загрузке";
+    private string _monitorSummary = "Мониторы не определены";
     private bool _isBusy;
     private bool _isLoaded;
     private bool _windowsRefreshQueued;
@@ -133,19 +136,24 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         IApplicationManager applications,
         IApplicationLauncher launcher,
         IWindowManager windows,
+        IMonitorManager monitors,
+        IDesktopManager desktop,
         IEventManager events,
         DispatcherQueue dispatcher)
     {
         _applications = applications ?? throw new ArgumentNullException(nameof(applications));
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _windows = windows ?? throw new ArgumentNullException(nameof(windows));
+        _desktop = desktop ?? throw new ArgumentNullException(nameof(desktop));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
 
         ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(monitors);
         _windowOpened = events.Subscribe<WindowOpened>(_ => QueueWindowsRefresh());
         _windowClosed = events.Subscribe<WindowClosed>(_ => QueueWindowsRefresh());
         _foregroundChanged = events.Subscribe<ForegroundWindowChanged>(_ => QueueWindowsRefresh());
         _windowStateChanged = events.Subscribe<WindowStateChanged>(_ => QueueWindowsRefresh());
+        _displayChanged = events.Subscribe<DisplayChanged>(changed => ApplyMonitors(changed.Monitors));
 
         _runningTimer = new Timer(_ => _ = ProbeRunningStateAsync(_runningProbe.Token), null, Timeout.Infinite, Timeout.Infinite);
 
@@ -157,7 +165,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
+    public IDesktopManager Desktop => _desktop;
+
     public ObservableCollection<ApplicationListViewModel> Items { get; } = new();
+
+    public ObservableCollection<MonitorListItemViewModel> Monitors { get; } = new();
 
     public AsyncCommand RefreshCommand { get; }
 
@@ -195,6 +207,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         get => _statusText;
         private set => Set(ref _statusText, value);
+    }
+
+    public string MonitorSummary
+    {
+        get => _monitorSummary;
+        private set => Set(ref _monitorSummary, value);
     }
 
     public bool IsBusy
@@ -523,6 +541,46 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void SetStatus(string text) => StatusText = text;
 
+    private void ApplyMonitors(IReadOnlyList<MonitorInfo> monitors)
+    {
+        ArgumentNullException.ThrowIfNull(monitors);
+
+        _ = _dispatcher.EnqueueAsync(() =>
+        {
+            MonitorSummary = BuildMonitorSummary(monitors);
+
+            var previous = Monitors.ToDictionary(static item => item.Id, StringComparer.OrdinalIgnoreCase);
+            Monitors.Clear();
+
+            foreach (var monitor in monitors)
+            {
+                if (previous.TryGetValue(monitor.Id, out var existing))
+                {
+                    existing.Update(monitor);
+                    Monitors.Add(existing);
+                }
+                else
+                {
+                    Monitors.Add(new MonitorListItemViewModel(monitor));
+                }
+            }
+        });
+    }
+
+    private static string BuildMonitorSummary(IReadOnlyList<MonitorInfo> monitors)
+    {
+        if (monitors.Count == 0)
+        {
+            return "Мониторы не определены";
+        }
+
+        var primary = monitors.FirstOrDefault(monitor => monitor.IsPrimary);
+        var primaryText = primary is null ? "нет основного" : $"{primary.Bounds.Width}×{primary.Bounds.Height}";
+        var suffix = monitors.Count == 1 ? "монитор" : $"монитора: {monitors.Count}";
+
+        return $"{suffix}, основной {primaryText}";
+    }
+
     private void QueueWindowsRefresh()
     {
         lock (_windowsRefreshGate)
@@ -586,6 +644,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _windowClosed.Dispose();
         _foregroundChanged.Dispose();
         _windowStateChanged.Dispose();
+        _displayChanged.Dispose();
         _runningProbe.Cancel();
         _runningTimer.Dispose();
         _runningProbe.Dispose();

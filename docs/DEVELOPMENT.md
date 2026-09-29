@@ -35,14 +35,14 @@ dotnet test --configuration Release
 
 Тестовые проекты:
 
-- `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service.
-- `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`.
+- `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service, `DesktopManager`.
+- `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`, `WindowManagerTests`, `MonitorManagerTests`.
 
 `Windows.Tests` использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо COM `IShellLinkW.Save`, который в текущем окружении возвращает `0x80070002`.
 
-`AppsFolderSourceTests` являются environment-tolerant: на машинах, где `IShellItemArray` недоступен, тест проверяет наличие объясняющего warning, а не падает на списке приложений.
+`AppsFolderSourceTests` и `MonitorManagerTests` являются environment-tolerant: на машинах, где API недоступен, тест проверяет наличие объясняющего warning или завершается `Inconclusive`, а не падает на списке приложений/мониторов.
 
-Текущий статус: 56/56 tests green, Debug и Release build — 0 warnings / 0 errors.
+Текущий статус: 84/85 tests green (`Core.Tests` 49/49, `Windows.Tests` 35 passed + 1 environment-tolerant skip), Debug и Release build — 0 warnings / 0 errors.
 
 ## Запуск
 

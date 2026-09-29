@@ -9,4 +9,8 @@ public interface IMonitorManager
     MonitorInfo? GetMonitor(string monitorId);
 
     MonitorInfo? GetPrimaryMonitor();
+
+    MonitorInfo? GetMonitorForWindow(string windowId);
+
+    MonitorInfo? GetMonitorForPoint(int x, int y);
 }

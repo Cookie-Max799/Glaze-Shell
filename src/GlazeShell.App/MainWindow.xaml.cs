@@ -20,9 +20,11 @@ public sealed partial class MainWindow : Window
         IApplicationManager applications,
         IApplicationLauncher launcher,
         IWindowManager windows,
+        IMonitorManager monitors,
+        IDesktopManager desktop,
         IEventManager events)
     {
-        ViewModel = new MainViewModel(applications, launcher, windows, events, DispatcherQueue);
+        ViewModel = new MainViewModel(applications, launcher, windows, monitors, desktop, events, DispatcherQueue);
         InitializeComponent();
         Title = title;
 

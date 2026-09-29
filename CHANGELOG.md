@@ -33,6 +33,18 @@
 - Добавлены `Win32/User32.cs`, `Win32/Dwmapi.cs`, `Win32/Kernel32.cs`; P/Invoke user32 используют `CharSet.Unicode` без `ExactSpelling` для корректного разрешения W-суффиксов.
 - UI: добавлен `AsyncCommand<T>`, `WindowListItemViewModel` и инлайн-панель окон в карточке приложения (заголовок, состояние, активное окно, кнопки «Фокус/Свернуть/Развернуть/Закрыть`); `MainViewModel` подписан на события окон и обновляет панель на UI-потоке через коалесированный refresh.
 
+#### Stage 5 — Desktop Integration
+
+- Расширен `IMonitorManager`: `GetMonitorForWindow`, `GetMonitorForPoint`, поиск по id и primary; расширен `IDesktopManager` операциями вкладок и элементов (`CreateTab`, `RemoveTab`, `ActivateTab`, `AddItem`, `RemoveItem`, `MoveItem`).
+- Реализован `DesktopManager` (Core): framework-free in-memory манипуляции с `DesktopLayout` — вкладки, «Основная» категория, порядок элементов; публикует `DesktopChanged` через `IEventManager` при каждом мутирующем вызове.
+- Добавлены display P/Invoke: `EnumDisplayMonitors`, `GetMonitorInfoW` (`MONITORINFOEXW`), `MonitorFromWindow`, `MonitorFromPoint`, `EnumDisplaySettingsW` (`DEVMODEW` с union через explicit layout), `GetDpiForSystem`/`GetDpiForWindow` (User32) и `GetDpiForMonitor` (`MDT_EFFECTIVE_DPI`, Shcore).
+- Добавлен `NativeMonitorEnumerator`: перечисляет мониторы (id = HEX-представление `HMONITOR`), читает bounds, working area, primary-флаг, DPI scale factor, refresh rate (`dmDisplayFrequency`) и ориентацию (`dmDisplayOrientation`).
+- Добавлен `MonitorEventMonitor`: hidden window на dedicated-потоке (`CreateWindowExW` + `GetMessage`-pump) перехватывает `WM_DISPLAYCHANGE` и уведомляет `MonitorManager`.
+- Реализован `MonitorManager` (`IMonitorManager`): `Start`/`Dispose` по паттерну `WindowManager`, публикует `DisplayChanged` со свежим снимком мониторов.
+- UI: панель «Мониторы» в футере — список (device name, ориентация, refresh rate, DPI, рабочие площади), badge «Основной/Дополнительный» и сводка `MonitorSummary`; `MainViewModel` подписан на `DisplayChanged` и обновляет панель на UI-потоке.
+- Тесты: `DesktopManagerTests` (вкладки, активация, добавление/удаление/перемещение элементов, events) и `MonitorManagerTests` (environment-tolerant: перечисление, primary, геометрия, событие `DisplayChanged` через `HWND_BROADCAST`).
+- Результат: 84/85 tests green (`GlazeShell.Core.Tests` 49/49, `GlazeShell.Windows.Tests` 35 passed, 1 environment-tolerant skip), Debug и Release build — 0 warnings / 0 errors.
+
 #### UI
 
 - Добавлен простой лаунчер UI: поиск, список приложений с virtualization, статусная строка, кнопки «Запустить/Закрыть/Перезапустить/Обновить».
@@ -74,7 +86,7 @@
 ### Known limitations
 
 - Persistence layer и migrations ещё не реализованы.
-- Monitor/DPI integration и Windows event hooks (вне окон) ещё не реализованы.
+- Desktop layout ещё не привязан к мониторам: `DesktopManager` оперирует in-memory состоянием, а выбранная раскладка не сохраняется между запусками.
 - AppsFolder MSIX discovery на текущей машине ограничен `0x800401E5`; на штатных системах возвращает список пакетов.
 - Окна MSIX-приложений не привязываются к карточкам: у MSIX `ExecutablePath` не заполнен, и его окна не отображаются в инлайн-панели.
 - Core Stage 2/3/4 подключены к UI; настройки пока не сохраняются между запусками.

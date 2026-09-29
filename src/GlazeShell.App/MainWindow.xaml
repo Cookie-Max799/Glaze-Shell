@@ -240,7 +240,7 @@
             Grid.Row="3"
             Padding="36,18,36,20"
             Background="#1B1F27">
-            <StackPanel Spacing="4">
+            <StackPanel Spacing="8">
                 <TextBlock
                     FontSize="12"
                     Foreground="#98A2B3"
@@ -250,6 +250,71 @@
                     FontSize="12"
                     Foreground="#4E5866"
                     Text="Логи и данные: %LOCALAPPDATA%\GlazeShell" />
+
+                <Border
+                    Margin="0,4,0,0"
+                    Padding="14,10"
+                    Background="#232833"
+                    CornerRadius="6">
+                    <StackPanel Spacing="6">
+                        <TextBlock
+                            FontSize="12"
+                            FontWeight="SemiBold"
+                            Foreground="#F4F6FA"
+                            Text="Мониторы" />
+                        <TextBlock
+                            FontSize="14"
+                            FontWeight="SemiBold"
+                            Foreground="#F4F6FA"
+                            Text="{x:Bind ViewModel.MonitorSummary, Mode=OneWay}" />
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.Monitors, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="p:MonitorListItemViewModel">
+                                    <Grid ColumnSpacing="12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock
+                                            FontSize="15"
+                                            Foreground="#4A5A73"
+                                            Text="◆" />
+                                        <TextBlock
+                                            Grid.Column="1"
+                                            FontSize="15"
+                                            FontWeight="SemiBold"
+                                            Foreground="#F4F6FA"
+                                            Text="{x:Bind DeviceName, Mode=OneWay}" />
+                                        <StackPanel Grid.Column="2" Spacing="2">
+                                            <TextBlock
+                                                FontSize="12"
+                                                Foreground="#C7D0DC"
+                                                Text="{x:Bind Label, Mode=OneWay}" />
+                                            <TextBlock
+                                                FontSize="12"
+                                                Foreground="#7A869A"
+                                                Text="{x:Bind Summary, Mode=OneWay}" />
+                                        </StackPanel>
+                                        <Border
+                                            Grid.Column="3"
+                                            Padding="8,2"
+                                            VerticalAlignment="Center"
+                                            Background="#1B1F27"
+                                            CornerRadius="4">
+                                            <TextBlock
+                                                FontSize="11"
+                                                Foreground="#98A2B3"
+                                                Text="{x:Bind Badge, Mode=OneWay}" />
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
             </StackPanel>
         </Border>
     </Grid>

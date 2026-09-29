@@ -80,7 +80,7 @@ Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `Applica
 
 События: `WindowOpened`, `WindowClosed`, `ForegroundWindowChanged`, `WindowStateChanged`, `ProcessStarted`, `ProcessExited`, `DisplayChanged`, `DesktopChanged`, `SettingsChanged`, `ApplicationChanged`.
 
-Сервисы: `EventManager` — типизированная подписка и публикация с возвратом `IDisposable` для отписки; `InMemorySettingsManager` — хранение настроек в памяти без публикации дублирующих событий; `ApplicationDiscoveryService` — агрегация источников, dedup, cache и single-flight.
+Сервисы: `EventManager` — типизированная подписка и публикация с возвратом `IDisposable` для отписки; `InMemorySettingsManager` — хранение настроек в памяти без публикации дублирующих событий; `ApplicationDiscoveryService` — агрегация источников, dedup, cache и single-flight; `DesktopManager` — in-memory манипуляции с `DesktopLayout` (вкладки, категории, порядок элементов) с публикацией `DesktopChanged`.
 
 Идентификаторы окон, мониторов и приложений представлены строками, чтобы Core не зависел от `HWND`/`HMONITOR`. Соответствие строк и native handles устанавливается на уровне Windows Integration.
 
@@ -107,6 +107,13 @@ Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `Applica
 - `WindowManagement/WindowEventMonitor.cs` — `SetWinEventHook` на dedicated-потоке с `GetMessage`-pump, публикация оконных событий в `IEventManager`;
 - `WindowManagement/WindowManager.cs` — реализация `IWindowManager`: фокус (best-effort + `AttachThreadInput` fallback), `ShowWindowAsync` и `WM_CLOSE`.
 
+На Stage 5 добавляет:
+
+- `DisplayManagement/NativeMonitorEnumerator.cs` — перечисление мониторов через `EnumDisplayMonitors`, чтение `MONITORINFOEXW`/`DEVMODEW`, DPI через `GetDpiForMonitor`/`GetDpiForSystem`; id = HEX-представление `HMONITOR`;
+- `DisplayManagement/MonitorEventMonitor.cs` — hidden message window на dedicated-потоке, перехват `WM_DISPLAYCHANGE`;
+- `DisplayManagement/MonitorManager.cs` — реализация `IMonitorManager` (`Start`/`Dispose` по паттерну `WindowManager`), публикация `DisplayChanged`;
+- `Win32/Shcore.cs` — `GetDpiForMonitor`; display P/Invoke добавлены в `Win32/User32.cs` (`EnumDisplayMonitors`, `GetMonitorInfoW`, `MonitorFrom*`, `EnumDisplaySettingsW`, `RegisterClassW`, `CreateWindowExW`, `DefWindowProc`), расширен `Win32/Kernel32.cs` (`GetModuleHandle`).
+
 ### GlazeShell.Data
 
 Слой хранения и сериализации. Структура подготовлена, но JSON persistence, layout и SQLite намеренно не реализованы до Stage 7.
@@ -117,11 +124,11 @@ Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `Applica
 
 ### GlazeShell.Core.Tests
 
-MSTest test project. Проверяет foundation configuration, инварианты моделей, семантику `EventManager`, публикацию `SettingsChanged` в `InMemorySettingsManager` и discovery service.
+MSTest test project. Проверяет foundation configuration, инварианты моделей, семантику `EventManager`, публикацию `SettingsChanged` в `InMemorySettingsManager`, discovery service и `DesktopManager` (вкладки, активация, элементы, события `DesktopChanged`).
 
 ### GlazeShell.Windows.Tests
 
-MSTest test project. Проверяет managed резолвер `.lnk` (`ShellLinkResolverTests`), источники Start Menu и AppsFolder, `WindowsApplicationLauncher`, а также window manager (`WindowManagerTests` с окном-фикстурой `Win32TestWindow` на pumping-потоке). Использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо сломанного в окружении COM `IShellLinkW.Save`; environment-зависимые проверки (foreground lock) завершаются `Inconclusive`, а не падают.
+MSTest test project. Проверяет managed резолвер `.lnk` (`ShellLinkResolverTests`), источники Start Menu и AppsFolder, `WindowsApplicationLauncher`, window manager (`WindowManagerTests` с окном-фикстурой `Win32TestWindow` на pumping-потоке) и monitor manager (`MonitorManagerTests`: перечисление мониторов, primary, геометрия, DPI и событие `DisplayChanged` через `HWND_BROADCAST`). Использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо сломанного в окружении COM `IShellLinkW.Save`; environment-зависимые проверки (foreground lock, мониторы) завершаются `Inconclusive`, а не падают.
 
 ## Решения Stage 0
 
@@ -176,10 +183,21 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - Инлайн-панель окон привязана к карточке приложения по пути исполняемого файла (ordinal-ignore-case); у MSIX `ExecutablePath` не заполнен, поэтому их окна не попадают в панель — задокументированное ограничение.
 - UI получает события окон через `IEventManager` и выполняет единый коалесированный refresh на UI-потоке (`DispatcherQueue`), чтобы пачки событий не порождали лавину перестроений.
 
+## Решения Stage 5 — Desktop Integration
+
+- `MonitorInfo.Id` — HEX-представление `HMONITOR`, как `WindowInfo.Id` для `HWND`: Core остаётся framework-free, native handle восстанавливается через `TryParseId` только на уровне Windows Integration.
+- Мониторы перечисляются через `EnumDisplayMonitors` (все мониторы виртуального стола) и читаются через `GetMonitorInfoW` с `MONITORINFOEXW` (`cbSize = sizeof(MONITORINFOEXW)`), чтобы получить `szDevice` для `EnumDisplaySettingsW`.
+- `DEVMODEW` объявлен с union-частью через `[StructLayout(LayoutKind.Explicit)]` (`DevModeUnion`): печатная и display-ветви перекрываются в памяти по Win32-офсетам; `dmSize` выставляется до вызова `EnumDisplaySettingsW`.
+- DPI берётся через `GetDpiForMonitor(MDT_EFFECTIVE_DPI)` (scale factor = dpi / 96); при отсутствии shcore используется fallback на `GetDpiForSystem`.
+- Событие изменения дисплеев получается через hidden message window (`CreateWindowExW` + `GetMessage`-pump) на dedicated-потоке: `WM_DISPLAYCHANGE` рассылается всем top-level окнам, поэтому monitor-поток не требует hooks.
+- `MonitorManager` публикует `DisplayChanged` со свежим снимком `MonitorInfo` на каждый `WM_DISPLAYCHANGE`; коалесация публикаций выполняется на стороне UI (`DispatcherQueue`), а не на источнике — событие несёт фактическую конфигурацию, а не diff.
+- `DesktopManager` полностью framework-free и оперирует строками вкладок/элементов; категория «Основная» создаётся лениво при первом `AddItem`, переупорядочивание перебирает immutable `DesktopItem` с пересборкой `Order`.
+- UI-панель «Мониторы» получает `DisplayChanged` через `IEventManager` и обновляется на UI-потоке, переиспользуя VM по `Id` (паттерн `ApplicationListViewModel`); обновление не приводит к миганию списка.
+
 ## Границы UI
 
 UI может использовать модели, интерфейсы Application Services, events и state, не зная о native handles и Win32. Визуальный дизайн согласован: палитра (`#12151B`, `#1B1F27`, `#F4F6FA`, `#98A2B3`, `#6E7A8A`, `#4E5866`), шрифты и layout сохраняются без явного согласования изменений.
 
 ## Следующие архитектурные изменения
 
-Stages 5–6 добавят monitor/DPI integration и desktop integration. Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.
+Stage 6 добавит привязку desktop layout к мониторам (распределение вкладок по дисплеям, рекомендации по DPI). Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.
