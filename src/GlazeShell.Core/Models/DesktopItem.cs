@@ -18,4 +18,6 @@ public sealed record DesktopItem
     public int Order { get; }
 
     public string? Label { get; }
+
+    public DesktopItem WithOrder(int order) => new(Id, ApplicationId, order, Label);
 }

@@ -6,6 +6,36 @@
 
 ### Added
 
+#### Stage 6 — Tabs and Categories
+
+- Реализован полный backend рабочего пространства в `DesktopManager` (Core): вкладки (`CreateTab`, `RemoveTab`, `RenameTab`, `MoveTab`, `ActivateTab`), категории (`CreateCategory`, `RemoveCategory`, `RenameCategory`, `MoveCategory`) и размещение приложений (`AddApplication`, `RemoveApplication`, `MoveApplication`).
+- `MoveApplication` поддерживает перенос элемента между категориями с перенумерацией `Order` в исходной и целевой коллекциях; в пределах одной категории поведение совпадает с переупорядочиванием.
+- `AddApplication` принимает необязательный `categoryId`; без него элемент попадает в первую категорию вкладки, а при отсутствии категорий лениво создаётся категория по умолчанию (`main`/«Основная»).
+- Добавлен канонический порядок на всех трёх уровнях layout: `ApplicationCategory` получил поле `Order`, `Order` нормализуется в плотную последовательность `0..N-1` и совпадает с позицией в коллекции.
+- Нормализация внешнего layout выполняется на границе менеджера: `SetLayout` и конструктор с `initialLayout` сортируют по `Order` (с сохранением исходного порядка при равенстве) и перенумеровывают вкладки, категории и элементы.
+- `CreateTab` и `CreateCategory` принимают `int? order`: `null` добавляет объект в конец, явное значение вставляет по позиции с клампингом.
+- Все мутации unified-проходят через `Mutate(Func<DesktopLayout, DesktopLayout?>)`: запись в состояние происходит только после успешного вычисления, поэтому исключение валидации не оставляет частично обновлённого layout; `DesktopChanged` публикуется вне lock.
+- Мутации, не меняющие состояние (переименование в то же имя, перемещение в текущую позицию), возвращают `false` и не публикуют `DesktopChanged`.
+- Добавлены `DesktopTab.With(...)`, `ApplicationCategory.With(...)` и `DesktopItem.WithOrder(int)` для построения изменённых immutable-моделей с сохранением валидации (по образцу `Application.WithMetadata`).
+- Расширены `DesktopManagerTests`: вкладки (вставка по позиции, переименование, перемещение, append по умолчанию, клампинг), категории (CRUD, вставка, перемещение, append по умолчанию), размещение приложений (прицельная категория, дубликаты, перенумерация, перенос между категориями), нормализация layout и отсутствие публикации при no-op.
+- Результат: 118/119 tests green в Debug и Release (`GlazeShell.Core.Tests` 83/83, `GlazeShell.Windows.Tests` 35 passed); `FocusBringsWindowToForegroundOrIsDeniedBySystem` пропускается как environment-tolerant (результат зависит от foreground lock текущей сессии и меняется между прогонами). Debug и Release build — 0 warnings / 0 errors.
+
+#### Changed
+
+- `IDesktopManager`: `AddItem`/`RemoveItem`/`MoveItem` переименованы в `AddApplication`/`RemoveApplication`/`MoveApplication` согласно плану §13. Ломающее изменение контракта; прямых потребителей кроме `DesktopManager` и тестов не было.
+- `IDesktopManager` дополнен `RenameTab`, `MoveTab`, `CreateCategory`, `RemoveCategory`, `RenameCategory`, `MoveCategory` согласно плану §12/§13.
+- `CreateTab`/`CreateCategory` изменили сигнатуру: `int order = 0` заменён на `int? order = null` (append). Прежнее значение по умолчанию вставляло каждый новый объект в начало коллекции.
+
+#### Removed
+
+- Удалено `DesktopTab.IsActive`: поле дублировало `DesktopLayout.ActiveTabId` и никогда не поддерживалось `DesktopManager`, из-за чего всегда оставалось `false`. Единственный источник истины — `DesktopLayout.ActiveTabId`.
+
+#### Documentation
+
+- `README.md`: добавлен статус Stage 6, обновлено описание desktop layout и known issues; в roadmap отмечено выполнение вкладок/категорий, привязка layout к мониторам отнесена к Stage 7.
+- `ARCHITECTURE.md`: добавлен раздел «Решения Stage 6», обновлено описание `DesktopManager`; привязка layout к мониторам перенесена из Stage 6 в Stage 7 вместе с persistence.
+- XAML не изменялся: Stage 6 добавляет только backend-контракт, подключение UI выполняет владелец проекта.
+
 #### Stage 2 — Application Discovery
 
 - Добавлен managed-парсер бинарных shortcut-файлов `ShellLinkData` (MS-SHLLINK): header, LinkInfo, StringData, relative path, byte-safe и exception-free API.
@@ -43,7 +73,7 @@
 - Реализован `MonitorManager` (`IMonitorManager`): `Start`/`Dispose` по паттерну `WindowManager`, публикует `DisplayChanged` со свежим снимком мониторов.
 - UI: панель «Мониторы» в футере — список (device name, ориентация, refresh rate, DPI, рабочие площади), badge «Основной/Дополнительный» и сводка `MonitorSummary`; `MainViewModel` подписан на `DisplayChanged` и обновляет панель на UI-потоке.
 - Тесты: `DesktopManagerTests` (вкладки, активация, добавление/удаление/перемещение элементов, events) и `MonitorManagerTests` (environment-tolerant: перечисление, primary, геометрия, событие `DisplayChanged` через `HWND_BROADCAST`).
-- Результат: 84/85 tests green (`GlazeShell.Core.Tests` 49/49, `GlazeShell.Windows.Tests` 35 passed, 1 environment-tolerant skip), Debug и Release build — 0 warnings / 0 errors.
+- Результат на момент Stage 5: 84/85 tests green (`GlazeShell.Core.Tests` 49/49, `GlazeShell.Windows.Tests` 35 passed, 1 environment-tolerant skip), Debug и Release build — 0 warnings / 0 errors.
 
 #### UI
 
@@ -86,7 +116,8 @@
 ### Known limitations
 
 - Persistence layer и migrations ещё не реализованы.
-- Desktop layout ещё не привязан к мониторам: `DesktopManager` оперирует in-memory состоянием, а выбранная раскладка не сохраняется между запусками.
+- Desktop layout ещё не привязан к мониторам: `DesktopManager` оперирует in-memory состоянием, а выбранная раскладка не сохраняется между запусками. Привязка к мониторам запланирована на Stage 7 вместе с persistence.
+- UI-панель вкладок и категорий не подключена: контракт `IDesktopManager` полный, но визуальное дерево не изменялось — его подключает владелец проекта.
 - AppsFolder MSIX discovery на текущей машине ограничен `0x800401E5`; на штатных системах возвращает список пакетов.
 - Окна MSIX-приложений не привязываются к карточкам: у MSIX `ExecutablePath` не заполнен, и его окна не отображаются в инлайн-панели.
 - Core Stage 2/3/4 подключены к UI; настройки пока не сохраняются между запусками.

@@ -8,15 +8,27 @@ public interface IDesktopManager
 
     void SetLayout(DesktopLayout layout);
 
-    DesktopTab CreateTab(string name, int order = 0);
+    DesktopTab CreateTab(string name, int? order = null);
 
     bool RemoveTab(string tabId);
 
+    bool RenameTab(string tabId, string name);
+
+    bool MoveTab(string tabId, int newOrder);
+
     bool ActivateTab(string tabId);
 
-    bool AddItem(string tabId, DesktopItem item);
+    ApplicationCategory? CreateCategory(string tabId, string name, int? order = null);
 
-    bool RemoveItem(string tabId, string itemId);
+    bool RemoveCategory(string tabId, string categoryId);
 
-    bool MoveItem(string tabId, string itemId, int newOrder);
+    bool RenameCategory(string tabId, string categoryId, string name);
+
+    bool MoveCategory(string tabId, string categoryId, int newOrder);
+
+    bool AddApplication(string tabId, DesktopItem item, string? categoryId = null);
+
+    bool RemoveApplication(string tabId, string itemId);
+
+    bool MoveApplication(string tabId, string itemId, string? targetCategoryId = null, int newOrder = 0);
 }

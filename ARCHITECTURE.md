@@ -80,7 +80,7 @@ Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `Applica
 
 События: `WindowOpened`, `WindowClosed`, `ForegroundWindowChanged`, `WindowStateChanged`, `ProcessStarted`, `ProcessExited`, `DisplayChanged`, `DesktopChanged`, `SettingsChanged`, `ApplicationChanged`.
 
-Сервисы: `EventManager` — типизированная подписка и публикация с возвратом `IDisposable` для отписки; `InMemorySettingsManager` — хранение настроек в памяти без публикации дублирующих событий; `ApplicationDiscoveryService` — агрегация источников, dedup, cache и single-flight; `DesktopManager` — in-memory манипуляции с `DesktopLayout` (вкладки, категории, порядок элементов) с публикацией `DesktopChanged`.
+Сервисы: `EventManager` — типизированная подписка и публикация с возвратом `IDisposable` для отписки; `InMemorySettingsManager` — хранение настроек в памяти без публикации дублирующих событий; `ApplicationDiscoveryService` — агрегация источников, dedup, cache и single-flight; `DesktopManager` — in-memory манипуляции с `DesktopLayout` (вкладки, категории, размещение приложений и канонический порядок на трёх уровнях) с публикацией `DesktopChanged`.
 
 Идентификаторы окон, мониторов и приложений представлены строками, чтобы Core не зависел от `HWND`/`HMONITOR`. Соответствие строк и native handles устанавливается на уровне Windows Integration.
 
@@ -191,8 +191,22 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - DPI берётся через `GetDpiForMonitor(MDT_EFFECTIVE_DPI)` (scale factor = dpi / 96); при отсутствии shcore используется fallback на `GetDpiForSystem`.
 - Событие изменения дисплеев получается через hidden message window (`CreateWindowExW` + `GetMessage`-pump) на dedicated-потоке: `WM_DISPLAYCHANGE` рассылается всем top-level окнам, поэтому monitor-поток не требует hooks.
 - `MonitorManager` публикует `DisplayChanged` со свежим снимком `MonitorInfo` на каждый `WM_DISPLAYCHANGE`; коалесация публикаций выполняется на стороне UI (`DispatcherQueue`), а не на источнике — событие несёт фактическую конфигурацию, а не diff.
-- `DesktopManager` полностью framework-free и оперирует строками вкладок/элементов; категория «Основная» создаётся лениво при первом `AddItem`, переупорядочивание перебирает immutable `DesktopItem` с пересборкой `Order`.
+- `DesktopManager` полностью framework-free и оперирует строками вкладок/категорий/элементов; начиная со Stage 6 он предоставляет полный CRUD вкладок, категорий и размещения приложений (см. «Решения Stage 6»).
 - UI-панель «Мониторы» получает `DisplayChanged` через `IEventManager` и обновляется на UI-потоке, переиспользуя VM по `Id` (паттерн `ApplicationListViewModel`); обновление не приводит к миганию списка.
+
+## Решения Stage 6 — Tabs and Categories
+
+- `DesktopTab.IsActive` удалён: поле дублировало `DesktopLayout.ActiveTabId` и никогда не поддерживалось менеджером, из-за чего UI мог прочитать неверное состояние. Единственный источник истины — `DesktopLayout.ActiveTabId`; активная вкладка хранится один раз.
+- `ApplicationCategory` получил `Order`, поэтому порядок существует на всех трёх уровнях layout: tabs → categories → items. `Order` нормализуется в плотную последовательность `0..N-1` и совпадает с позицией в коллекции.
+- Нормализация выполняется на границе `DesktopManager`: `SetLayout` и конструктор с `initialLayout` приводят внешний layout к каноническому виду (сортировка по `Order` с сохранением исходного порядка при равенстве, затем перенумерация). Внутри менеджера порядок всегда канонический, поэтому семантика `MoveX(newOrder)` однозначна.
+- `MoveX` возвращает `false`, если целевая позиция совпадает с текущей — мутация, не меняющая состояние, не публикует `DesktopChanged` и не создаёт лишних копий layout.
+- Все мутации выполняются через единый `Mutate(Func<DesktopLayout, DesktopLayout?>)`: делегат под lock возвращает новый layout либо `null` при отказе, запись в поле происходит только после успешного вычисления, поэтому исключение валидации не оставляет частично обновлённого состояния. `DesktopChanged` публикуется вне lock.
+- `CreateTab`/`CreateCategory` принимают `int? order`: `null` добавляет в конец (обычный сценарий), явное значение вставляет по позиции с клампингом. Значение по умолчанию `0` не использовано намеренно — оно вставляло бы каждый новый объект в начало.
+- `AddApplication` без `categoryId` пишет в первую категорию вкладки, а если категорий нет — лениво создаёт категорию по умолчанию (`main`/«Основная»). Это сохраняет поведение Stage 5 и покрывает «просто добавить приложение» без настройки категорий.
+- `MoveApplication` поддерживает перенос между категориями: элемент извлекается из исходной категории, вставляется в целевую по позиции, обе коллекции перенумеровываются. Внутри одной категории поведение совпадает с переупорядочиванием.
+- Идентификаторы (`DesktopItem.Id`) уникальны в пределах вкладки, но не между вкладками — один и тот же `DesktopItem` может присутствовать в разных вкладках рабочего пространства.
+- Модели остаются immutable и валидирующими. Поскольку свойства get-only, изменение выполняется через конструктор; для удобства и сохранения валидации добавлены `DesktopTab.With(...)`, `ApplicationCategory.With(...)` и `DesktopItem.WithOrder(int)` по образцу существующего `Application.WithMetadata`.
+- XAML не изменялся: Stage 6 добавляет только backend-контракт. Подключение вкладок и категорий к визуальному дереву выполняет владелец проекта.
 
 ## Границы UI
 
@@ -200,4 +214,4 @@ UI может использовать модели, интерфейсы Applic
 
 ## Следующие архитектурные изменения
 
-Stage 6 добавит привязку desktop layout к мониторам (распределение вкладок по дисплеям, рекомендации по DPI). Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.
+Stage 7 (Persistence) добавит сериализацию layout, `schemaVersion`, миграции, recovery и привязку desktop layout к мониторам (распределение вкладок по дисплеям, рекомендации по DPI). Привязка перенесена сюда вместе с persistence: без сохранения layout она не имеет наблюдаемого эффекта. Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.

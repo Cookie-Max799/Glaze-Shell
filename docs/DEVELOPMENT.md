@@ -42,7 +42,7 @@ dotnet test --configuration Release
 
 `AppsFolderSourceTests` и `MonitorManagerTests` являются environment-tolerant: на машинах, где API недоступен, тест проверяет наличие объясняющего warning или завершается `Inconclusive`, а не падает на списке приложений/мониторов.
 
-Текущий статус: 84/85 tests green (`Core.Tests` 49/49, `Windows.Tests` 35 passed + 1 environment-tolerant skip), Debug и Release build — 0 warnings / 0 errors.
+Текущий статус: 118/119 tests green в Debug и Release (`Core.Tests` 83/83, `Windows.Tests` 35 passed), Debug и Release build — 0 warnings / 0 errors. `FocusBringsWindowToForegroundOrIsDeniedBySystem` — единственный environment-tolerant skip: результат зависит от foreground lock текущей сессии и меняется между прогонами (в отдельных прогонах он проходит, давая 119/119).
 
 ## Запуск
 
@@ -80,10 +80,17 @@ App project собирается только под `x64`. Если перед�
 6. Проверить diff.
 7. Создать отдельный commit в стиле проекта.
 
-Stage 0 использует commit:
+Сообщения коммитов пишутся на русском языке в свободной форме — это фактический стиль истории проекта (см. `git log`). Требование conventional commits из исходного плана не применяется; каждое расхождение фиксируется в локальном `AGENT_PROMPT.md`.
+
+Ориентиры по стадиям:
 
 ```text
-chore: initialize project architecture
+Начальная стадия, пока доступна лишь консоль, в виде заглушки, без везуальных элементов
+добавлен визуал ( заглушка ), исправлены проблемы с логами и секретами, обновлена система безопасности
+реализованы Stage 2 и Stage 3: discovery, launcher, UI и тесты
+реализован Stage 4: window manager, события окон, UI-панель окон и тесты
+реализован Stage 5: desktop integration - мониторы, DPI, display events, desktop layout и тесты
+реализован Stage 6: tabs, categories, размещение приложений, канонический порядок и тесты
 ```
 
 ## Release workflow

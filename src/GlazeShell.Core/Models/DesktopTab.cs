@@ -6,15 +6,13 @@ public sealed record DesktopTab
         string id,
         string name,
         IEnumerable<ApplicationCategory>? categories = null,
-        int order = 0,
-        bool isActive = false)
+        int order = 0)
     {
         Id = ModelValidation.Required(id, nameof(id));
         Name = ModelValidation.Required(name, nameof(name));
         Categories = ModelValidation.Copy(categories, nameof(categories));
         ModelValidation.NonNegative(order, nameof(order));
         Order = order;
-        IsActive = isActive;
     }
 
     public string Id { get; }
@@ -25,5 +23,9 @@ public sealed record DesktopTab
 
     public int Order { get; }
 
-    public bool IsActive { get; }
+    public DesktopTab With(
+        string? name = null,
+        IReadOnlyList<ApplicationCategory>? categories = null,
+        int? order = null) =>
+        new(Id, name ?? Name, categories ?? Categories, order ?? Order);
 }
