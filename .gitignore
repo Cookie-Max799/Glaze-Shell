@@ -29,3 +29,6 @@ UserData/
 *.cer
 *.secret
 secrets.json
+
+# Local development instructions (not part of the repository)
+/AGENT_PROMPT.md
