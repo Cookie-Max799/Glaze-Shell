@@ -11,10 +11,15 @@ namespace GlazeShell.Data.Tests;
 /// </summary>
 internal sealed class TempUserData : IDisposable
 {
-    public TempUserData()
+    public TempUserData(bool createThemesDirectory = true)
     {
         Root = Path.Combine(Path.GetTempPath(), "GlazeShell.Data.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Root);
+        if (createThemesDirectory)
+        {
+            Directory.CreateDirectory(Path.Combine(Root, UserDataFileNames.ThemesDirectory));
+        }
+
         Reported = new List<string>();
     }
 
@@ -32,6 +37,12 @@ internal sealed class TempUserData : IDisposable
         new(Root, (message, _) => Reported.Add(message), versions, migrations);
 
     public string GetPath(string fileName) => Path.Combine(Root, fileName);
+
+    /// <summary>
+    /// Записывает файл темы в каталог <c>themes</c> — так, как это сделал бы пользователь.
+    /// </summary>
+    public void WriteTheme(string fileName, string content) =>
+        File.WriteAllText(Path.Combine(Root, UserDataFileNames.ThemesDirectory, fileName), content);
 
     public bool FileExists(string fileName) => File.Exists(GetPath(fileName));
 

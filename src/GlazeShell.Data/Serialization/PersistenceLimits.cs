@@ -28,6 +28,24 @@ public static class PersistenceLimits
     public const int MaxItemsPerCategory = 4096;
 
     /// <summary>
+    /// Максимальный размер одного файла темы. Тема — это данные оформления,
+    /// поэтому файл больше лимита документа пользовательских данных не читается вовсе.
+    /// </summary>
+    public const long MaxThemeBytes = 512L * 1024;
+
+    /// <summary>
+    /// Максимальное число тем в каталоге. Ограничивает время запуска и объём памяти:
+    /// каталог тем наполняет пользователь, а не программа.
+    /// </summary>
+    public const int MaxThemes = 64;
+
+    public const int MaxColorsPerTheme = 256;
+
+    public const int MaxFontsPerTheme = 64;
+
+    public const int MaxIconsPerTheme = 256;
+
+    /// <summary>
     /// Максимальная длина записываемого JSON-документа в байтах UTF-8.
     /// За превышение запись отклоняется: существующий корректный файл не перезаписывается.
     /// </summary>

@@ -106,6 +106,23 @@ public sealed record SettingsChanged : GlazeEvent
     public UserSettings Settings { get; }
 }
 
+public sealed record ThemeChanged : GlazeEvent
+{
+    public ThemeChanged(Theme theme, string? previousThemeId = null)
+    {
+        Theme = theme ?? throw new ArgumentNullException(nameof(theme));
+        PreviousThemeId = previousThemeId;
+    }
+
+    public Theme Theme { get; }
+
+    /// <summary>
+    /// Идентификатор предыдущей темы; <c>null</c>, если до смены темы не было выбрано ни одной.
+    /// Позволяет подписчику отличить первую установку темы от переключения.
+    /// </summary>
+    public string? PreviousThemeId { get; }
+}
+
 public sealed record ApplicationChanged : GlazeEvent
 {
     public ApplicationChanged(IEnumerable<Application> applications)

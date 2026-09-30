@@ -10,6 +10,14 @@ public static class UserDataFileNames
     public const string Layout = "layout.json";
     public const string Settings = "settings.json";
 
+    /// <summary>
+    /// Каталог пользовательских тем внутри корневого каталога данных.
+    /// Темы наполняет пользователь, поэтому программа только читает их.
+    /// </summary>
+    public const string ThemesDirectory = "themes";
+
+    public const string ThemeFileExtension = ".json";
+
     public const string BackupsDirectory = "backups";
     public const string RecoveryDirectory = "recovery";
 

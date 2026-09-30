@@ -52,6 +52,41 @@ public sealed record Theme
     public ThemeWallpaper? Wallpaper { get; }
 
     public ThemeEffects Effects { get; }
+
+    /// <summary>
+    /// Встроенная тема по умолчанию. Приложение всегда имеет хотя бы одну тему:
+    /// набор пользовательских тем не обязателен, а UI не должен оставаться без значений.
+    /// </summary>
+    public static Theme CreateDefault() => new(
+        DefaultThemeId,
+        "Glaze Shell",
+        new ThemeMetadata("Glaze Shell", "1.0", "Glaze Shell", "The built-in light theme."),
+        new ThemeColors(
+        [
+            new ThemeColor("layerBackground", "#FFFFFFFF"),
+            new ThemeColor("layerText", "#FF1A1A1A"),
+            new ThemeColor("subtleText", "#FF5C5C5C"),
+            new ThemeColor("controlBackground", "#FFF3F3F3"),
+            new ThemeColor("controlBackgroundHover", "#FFE8E8E8"),
+            new ThemeColor("controlBorder", "#FFD0D0D0"),
+            new ThemeColor("accentBackground", "#FF0F6CBD"),
+            new ThemeColor("accentText", "#FFFFFFFF"),
+            new ThemeColor("criticalBackground", "#FFC42B1C"),
+            new ThemeColor("criticalText", "#FFFFFFFF")
+        ]),
+        new ThemeFonts(
+        [
+            new ThemeFont("Segoe UI Variable Text", 14),
+            new ThemeFont("Segoe UI Variable Display", 20, "Semibold")
+        ]),
+        new ThemeDimensions(cornerRadius: 8, spacing: 8, iconSize: 24, titleBarHeight: 32),
+        new ThemeIcons());
+
+    /// <summary>
+    /// Идентификатор встроенной темы. Задан константой, а не строкой в коде загрузки,
+    /// чтобы ссылка на тему по умолчанию была одной и проверяемой.
+    /// </summary>
+    public const string DefaultThemeId = "glaze-default";
 }
 
 public sealed record ThemeMetadata
@@ -77,10 +112,39 @@ public sealed record ThemeColors
 {
     public ThemeColors(IEnumerable<ThemeColor>? colors = null)
     {
-        Colors = ModelValidation.Copy(colors, nameof(colors));
+        var copy = ModelValidation.Copy(colors, nameof(colors));
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var color in copy)
+        {
+            if (!seen.Add(color.Name))
+            {
+                throw new ArgumentException($"The color '{color.Name}' is duplicated.", nameof(colors));
+            }
+        }
+
+        Colors = copy;
     }
 
     public IReadOnlyList<ThemeColor> Colors { get; }
+
+    /// <summary>
+    /// Цвет по имени. Регистр не учитывается: имена задаёт пользователь темы,
+    /// а UI обращается к ним из кода. Возвращает <c>null</c>, если тема не задаёт цвет.
+    /// </summary>
+    public ThemeColor? Find(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        foreach (var color in Colors)
+        {
+            if (string.Equals(color.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return color;
+            }
+        }
+
+        return null;
+    }
 }
 
 public sealed record ThemeColor
@@ -210,6 +274,18 @@ public sealed record ThemeEffects
     public double Opacity { get; }
 }
 
+/// <summary>
+/// Проверка источника ассета темы.
+/// </summary>
+/// <remarks>
+/// Тема — это данные, а не программа: план запрещает выполнять код из тем, поэтому
+/// источник проверяется по двум независимым признакам.
+/// <para>Расширение: исполняемые и загружаемые форматы отклоняются явным списком,
+/// чтобы запрет не зависел от того, какие расширения система считает выполняемыми.</para>
+/// <para>Путь: разрешены только относительные пути внутри каталога темы. Абсолютный путь,
+/// UNC, диск и выход вверх через <c>..</c> недопустимы, иначе тема заставила бы UI
+/// читать файлы за пределами каталога тем — это уже чтение по пути, заданному документом.</para>
+/// </remarks>
 internal static class ThemeAssetValidation
 {
     private static readonly string[] ForbiddenExtensions =
@@ -221,18 +297,66 @@ internal static class ThemeAssetValidation
         ".dll",
         ".com",
         ".msi",
-        ".scr"
+        ".scr",
+        ".vbs",
+        ".js",
+        ".jse",
+        ".wsf",
+        ".hta",
+        ".lnk",
+        ".reg",
+        ".msc",
+        ".jar",
+        ".psm1"
     ];
 
     public static string Source(string value, string parameterName)
     {
         var source = ModelValidation.Required(value, parameterName);
+
         var extension = Path.GetExtension(source);
         if (ForbiddenExtensions.Contains(extension, StringComparer.OrdinalIgnoreCase))
         {
             throw new ArgumentException("Executable theme assets are not allowed.", parameterName);
         }
 
+        if (!IsSafeRelativePath(source))
+        {
+            throw new ArgumentException(
+                "A theme asset path must be relative and must stay inside the theme directory.",
+                parameterName);
+        }
+
         return source;
+    }
+
+    private static bool IsSafeRelativePath(string source)
+    {
+        if (source.IndexOfAny(['\0', '\r', '\n']) >= 0)
+        {
+            return false;
+        }
+
+        // Схема (ms-appx://, http://, file://) и двоеточие — признак URI или потока NTFS,
+        // а не относительного пути внутри каталога темы.
+        if (source.Contains(':', StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        if (Path.IsPathRooted(source) || source.StartsWith('\\') || source.StartsWith('/'))
+        {
+            return false;
+        }
+
+        foreach (var segment in source.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (segment == "..")
+            {
+                return false;
+            }
+        }
+
+        return source.Length > 0;
     }
 }

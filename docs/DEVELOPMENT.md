@@ -35,17 +35,17 @@ dotnet test --configuration Release
 
 Тестовые проекты:
 
-- `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service, `DesktopManager`, `MonitorLayoutBinding`, `UserDataDirectoryName`.
-- `tests/GlazeShell.Data.Tests` — `JsonUserDataStoreTests`, `SchemaMigrationRunnerTests`, `PersistingSettingsManagerTests`, `DesktopLayoutPersistenceWriterTests`. Каждый тест работает в собственном временном каталоге (`TempUserData`), который удаляется после теста.
+- `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service, `DesktopManager`, `MonitorLayoutBinding`, `UserDataDirectoryName`, `ThemeManager`.
+- `tests/GlazeShell.Data.Tests` — `JsonUserDataStoreTests`, `SchemaMigrationRunnerTests`, `PersistenceServicesTests`, `ThemeStoreTests`. Каждый тест работает в собственном временном каталоге (`TempUserData`), который удаляется после теста.
 - `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`, `WindowManagerTests`, `MonitorManagerTests`.
 
 `Windows.Tests` использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо COM `IShellLinkW.Save`, который в текущем окружении возвращает `0x80070002`.
 
-`WindowManagerTests.RaisesWindowOpenedAndClosedEvents` зависит от доставки `EVENT_OBJECT_DESTROY` для собственного процесса и потому чувствителен к нагрузке и параллелизму прогонов: при запуске всего решения тест проходит, при изолированном запуске под нагрузкой может не дождаться события. Поведение воспроизводится и на commit до Stage 7, то есть не связано с persistence.
+`WindowManagerTests.RaisesWindowOpenedAndClosedEvents` зависит от доставки `EVENT_OBJECT_DESTROY` для собственного процесса и потому чувствителен к нагрузке и параллелизму прогонов: таймаут ожидания события истекает, когда тестовые сборки запускаются одновременно. Поведение воспроизводится и на commit до Stage 7, то есть не связано с persistence или темами; изолированный запуск `GlazeShell.Windows.Tests` проходит стабильно.
 
 `AppsFolderSourceTests` и `MonitorManagerTests` являются environment-tolerant: на машинах, где API недоступен, тест проверяет наличие объясняющего warning или завершается `Inconclusive`, а не падает на списке приложений/мониторов.
 
-Текущий статус: 180/181 tests green в Debug и Release (`Core.Tests` 99/99, `Data.Tests` 46/46, `Windows.Tests` 35 passed), Debug и Release build — 0 warnings / 0 errors. `FocusBringsWindowToForegroundOrIsDeniedBySystem` — единственный environment-tolerant skip: результат зависит от foreground lock текущей сессии и меняется между прогонами (в отдельных прогонах он проходит, давая 181/181).
+Текущий статус: 220/221 tests green в Debug и Release (`Core.Tests` 121/121, `Data.Tests` 64/64, `Windows.Tests` 35 passed), Debug и Release build — 0 warnings / 0 errors. `FocusBringsWindowToForegroundOrIsDeniedBySystem` — единственный environment-tolerant skip: результат зависит от foreground lock текущей сессии и меняется между прогонами (в отдельных прогонах он проходит, давая 181/181).
 
 ## Запуск
 
@@ -94,7 +94,7 @@ App project собирается только под `x64`. Если перед�
 реализован Stage 4: window manager, события окон, UI-панель окон и тесты
 реализован Stage 5: desktop integration - мониторы, DPI, display events, desktop layout и тесты
 реализован Stage 6: tabs, categories, размещение приложений, канонический порядок и тесты
-реализован Stage 7: persistence (JSON-документы, schema migrations, recovery, автосохранение layout, привязка вкладок к мониторам) и тесты
+реализован Stage 7: persistence (JSON-документы, schema migrations, recovery, автосохранение layout, привязка вкладок к мониторам) и Stage 8: theme system (реестр тем, выбор активной темы, загрузка пользовательских тем из `themes` без исполняемого кода) и тесты
 ```
 
 ## Release workflow

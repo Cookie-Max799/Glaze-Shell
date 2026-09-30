@@ -82,7 +82,7 @@ Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `Applica
 
 События: `WindowOpened`, `WindowClosed`, `ForegroundWindowChanged`, `WindowStateChanged`, `ProcessStarted`, `ProcessExited`, `DisplayChanged`, `DesktopChanged`, `SettingsChanged`, `ApplicationChanged`.
 
-Сервисы: `EventManager` — типизированная подписка и публикация с возвратом `IDisposable` для отписки; `InMemorySettingsManager` — хранение настроек в памяти без публикации дублирующих событий; `ApplicationDiscoveryService` — агрегация источников, dedup, cache и single-flight; `DesktopManager` — in-memory манипуляции с `DesktopLayout` (вкладки, категории, размещение приложений и канонический порядок на трёх уровнях) с публикацией `DesktopChanged`; `MonitorLayoutBinding` — framework-free сверка привязок вкладок к списку доступных мониторов.
+Сервисы: `EventManager` — типизированная подписка и публикация с возвратом `IDisposable` для отписки; `InMemorySettingsManager` — хранение настроек в памяти без публикации дублирующих событий; `ApplicationDiscoveryService` — агрегация источников, dedup, cache и single-flight; `DesktopManager` — in-memory манипуляции с `DesktopLayout` (вкладки, категории, размещение приложений и канонический порядок на трёх уровнях) с публикацией `DesktopChanged`; `MonitorLayoutBinding` — framework-free сверка привязок вкладок к списку доступных мониторов; `ThemeManager` — реестр тем, выбор действующей темы и публикация `ThemeChanged` (темы неизменяемы после загрузки, а при отсутствии выбранной темы действует встроенная `Theme.CreateDefault()`).
 
 Persistence contracts: `PersistenceStatus` (`Created`/`Loaded`/`Migrated`/`Recovered`/`Unsupported`), `PersistenceLoadResult<T>` (значение, статус, диагностика) и `UserDataDirectoryName` — единая валидация имени каталога пользовательских данных, используемая и Infrastructure, и слоем Data.
 
@@ -120,7 +120,7 @@ Persistence contracts: `PersistenceStatus` (`Created`/`Loaded`/`Migrated`/`Recov
 
 ### GlazeShell.Data
 
-Слой хранения и сериализации. Реализует JSON persistence пользовательских данных: `JsonUserDataStore` (`IUserDataStore`) читает и пишет `config.json`, `settings.json` и `layout.json`; `JsonDocumentPipeline` выполняет общий путь загрузки (лимит размера, разбор, миграции, маппинг, recovery); `SchemaMigrationRunner` применяет цепочку миграций одного типа документа; `UserDataDirectory` реализует атомарную запись, резервные копии и изоляцию повреждённых документов. Слой зависит только от Core и `System.Text.Json`, поэтому тестируется без Windows и без UI. SQLite в текущем дизайне не используется: документы пользователя малы и должны оставаться читаемыми и переносимыми.
+Слой хранения и сериализации. Реализует JSON persistence пользовательских данных: `JsonUserDataStore` (`IUserDataStore`) читает и пишет `config.json`, `settings.json` и `layout.json`; `JsonDocumentPipeline` выполняет общий путь загрузки (лимит размера, разбор, миграции, маппинг, recovery); `SchemaMigrationRunner` применяет цепочку миграций одного типа документа; `UserDataDirectory` реализует атомарную запись, резервные копии и изоляцию повреждённых документов. Подкаталог `Themes/` отвечает за чтение пользовательских тем: `ThemeStore` читает `themes/*.json` и возвращает `ThemeLoadResult` с темами и диагностикой, `ThemeDocumentMapper` проверяет документ темы. Слой зависит только от Core и `System.Text.Json`, поэтому тестируется без Windows и без UI. SQLite в текущем дизайне не используется: документы пользователя малы и должны оставаться читаемыми и переносимыми.
 
 ### GlazeShell.Infrastructure
 
@@ -128,11 +128,11 @@ Persistence contracts: `PersistenceStatus` (`Created`/`Loaded`/`Migrated`/`Recov
 
 ### GlazeShell.Core.Tests
 
-MSTest test project. Проверяет foundation configuration, инварианты моделей, семантику `EventManager`, публикацию `SettingsChanged` в `InMemorySettingsManager`, discovery service и `DesktopManager` (вкладки, активация, элементы, события `DesktopChanged`).
+MSTest test project. Проверяет foundation configuration, инварианты моделей, семантику `EventManager`, публикацию `SettingsChanged` в `InMemorySettingsManager`, discovery service, `DesktopManager` (вкладки, активация, элементы, события `DesktopChanged`), `MonitorLayoutBinding`, `UserDataDirectoryName` и `ThemeManager` (порядок тем, выбор активной темы, `ThemeChanged`, запрет исполняемых ассетов и выхода за пределы каталога темы).
 
 ### GlazeShell.Data.Tests
 
-MSTest test project. Проверяет `JsonUserDataStore` (round-trip, создание документов по умолчанию, recovery, изоляция, лимиты размера, атомарность записи, сохранение документов из будущих версий), `SchemaMigrationRunner` (последовательные миграции, пропуск версии, дубли, неподдерживаемые версии), `PersistingSettingsManager` и `DesktopLayoutPersistenceWriter`. Каждый тест работает в собственном временном каталоге, который удаляется после теста; файловой системой имитируется только недоступность каталогов `backups` и `recovery`.
+MSTest test project. Проверяет `JsonUserDataStore` (round-trip, создание документов по умолчанию, recovery, изоляция, лимиты размера, атомарность записи, сохранение документов из будущих версий), `SchemaMigrationRunner` (последовательные миграции, пропуск версии, дубли, неподдерживаемые версии), `PersistingSettingsManager`, `DesktopLayoutPersistenceWriter` и `ThemeStore` (загрузка тем, отклонение непригодных по отдельности, лимиты количества и размера, проверка формата цвета и безопасности ассетов). Каждый тест работает в собственном временном каталоге, который удаляется после теста; файловой системой имитируется только недоступность каталогов `backups` и `recovery`.
 
 ### GlazeShell.Windows.Tests
 
@@ -233,10 +233,22 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - `App` читает конфигурацию один раз из каталога по умолчанию, определяет корневой каталог и уже из него загружает layout и настройки. Повторное чтение конфигурации из нового каталога создало бы там документ по умолчанию и сбросило бы настройки пользователя.
 - XAML не изменялся: Stage 7 добавляет backend и composition wiring, подключение визуального дерева остаётся за владельцем проекта.
 
+## Решения Stage 8 — Theme System
+
+- Тема — это данные оформления, а не программа: `Theme` содержит только `Metadata`, `Colors`, `Fonts`, `Dimensions`, `Icons`, `Wallpaper` и `Effects`. Исполняемый код из темы не выполняется и не может быть описан: в модели нет полей для команд, скриптов и подключаемых сборок.
+- Источник ассета проверяется по двум независимым признакам (`ThemeAssetValidation`): расширение не должно быть исполняемым или загружаемым, а путь должен быть относительным и не выходить за каталог темы. Запрет по расширению не зависит от того, что система считает выполняемым, а ограничение пути не позволяет теме указать файл за её пределами.
+- Цвет задаётся только как `#RGB`, `#RRGGBB` или `#AARRGGBB`. Имена вроде `red` и выражения вроде `rgb(...)` отклоняются: UI передаёт значение движку рендеринга, а разбор выражения означал бы выполнение кода, заданного темой.
+- Пользовательские темы лежат в `themes/*.json` каталога данных приложения и наполняются пользователем, поэтому программа их только читает. Загрузчик не обходит подкаталоги: тема не может подключить другие файлы.
+- Непригодная тема отбрасывается по отдельности и попадает в `ThemeLoadResult.Diagnostics`, а весь набор тем не изолируется в `recovery`: в отличие от документов программы, тема является данными пользователя, и перемещение её файла означало бы потерю работы пользователя.
+- `ThemeManager` хранит темы неизменяемыми: подписчик `ThemeChanged` получает согласованный снимок, а выбор той же темы событие не публикует — тем же правилом, что и мутации desktop layout. Порядок тем задаётся по имени и идентификатору, чтобы не зависеть от порядка файлов в каталоге.
+- Действующая тема всегда существует: пока тема не выбрана, действует встроенная `Theme.CreateDefault()` (`glaze-default`). Неизвестный идентификатор из настроек не оставляет приложение без оформления — сохраняется предыдущая тема, а факт подмены попадает в лог.
+- Идентификаторы тем сравниваются без учёта регистра: идентификатор попадает в `settings.json`, который пользователь читает и правит вручную, и `Midnight`/`midnight` не должны оказаться двумя разными темами под одним именем.
+- XAML не изменялся: Stage 8 добавляет только backend. Как именно применить цвета, шрифты и размеры, решает UI, поэтому `IThemeManager` отдаёт значения, а не ресурсы XAML.
+
 ## Границы UI
 
 UI может использовать модели, интерфейсы Application Services, events и state, не зная о native handles и Win32. Визуальный дизайн согласован: палитра (`#12151B`, `#1B1F27`, `#F4F6FA`, `#98A2B3`, `#6E7A8A`, `#4E5866`), шрифты и layout сохраняются без явного согласования изменений.
 
 ## Следующие архитектурные изменения
 
-Следующие стадии: Theme System (загрузка данных тем без исполняемого кода), Application Lifecycle (single-instance и автозапуск) и Stage 13 Security (общий security review с hardening boundaries). Persistence расширяется только по необходимости: если данные потребуют запросов или транзакций, будет рассмотрен переход на SQLite с явной версией схемы. Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.
+Следующие стадии: Windows Events (централизованная event-driven модель), Application Lifecycle (single-instance и автозапуск) и Stage 13 Security (общий security review с hardening boundaries). Persistence расширяется только по необходимости: если данные потребуют запросов или транзакций, будет рассмотрен переход на SQLite с явной версией схемы. Система тем расширяется в сторону каталога тем и в сторону UI: загрузчик уже ограничен лимитами и проверками, а применение темы к визуальному дереву остаётся за владельцем проекта. Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.

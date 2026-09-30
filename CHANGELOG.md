@@ -6,6 +6,19 @@
 
 ### Added
 
+#### Stage 8 — Theme System
+
+- Реализован `ThemeManager` (`IThemeManager`): реестр тем в детерминированном порядке (по имени, затем по идентификатору), выбор действующей темы, `ThemeChanged` при фактической смене. Темы возвращаются как неизменяемый снимок и не меняются после загрузки.
+- `IThemeManager` расширен `GetActiveTheme` и `SetActiveTheme`. Действующая тема всегда существует: пока тема не выбрана, действует встроенная `Theme.CreateDefault()` (`glaze-default`). Неизвестный идентификатор не оставляет приложение без темы — сохраняется предыдущая.
+- Добавлена встроенная тема `glaze-default`: цвета (`layerBackground`, `layerText`, `subtleText`, `controlBackground`, `controlBackgroundHover`, `controlBorder`, `accentBackground`, `accentText`, `criticalBackground`, `criticalText`), шрифты, размеры и эффекты.
+- Добавлен `ThemeStore` (`GlazeShell.Data/Themes`): чтение пользовательских тем из каталога `themes` в каталоге данных приложения, только `*.json` верхнего уровня. Темы наполняет пользователь, поэтому программа их только читает.
+- Непригодная тема отбрасывается по отдельности, а не отправляет весь набор в recovery: пользовательские темы — данные пользователя, а не документы программы. Причины отклонения возвращаются в `ThemeLoadResult.Diagnostics`.
+- Добавлены `ThemeDocument` и `ThemeDocumentMapper`: проверяются идентификатор, имя, метаданные, формат цвета (`#RGB`, `#RRGGBB`, `#AARRGGBB`), размеры, режим обоев, диапазоны анимаций и лимиты количества (64 темы, 256 цветов, 64 шрифта, 256 иконок, 512 KiB на файл).
+- `App.xaml.cs` загружает темы при старте, выбирает тему из `UserSettings.ActiveThemeId` и логирует количество загруженных тем, диагностику и факт замены недоступной темы на встроенную.
+- `ThemeColors.Find` ищет цвет по имени без учёта регистра; дубликаты имён цветов отклоняются моделью.
+- Добавлены тесты `ThemeManagerTests` (Core) и `ThemeStoreTests` (Data), включая запрет исполняемых ассетов, выход за пределы каталога темы, неверный формат цвета, превышение лимитов и устойчивость к одной повреждённой теме.
+- Результат: 220/221 tests green в Release (`GlazeShell.Core.Tests` 121/121, `GlazeShell.Data.Tests` 64/64, `GlazeShell.Windows.Tests` 35 passed + 1 пропущенный). Debug и Release build — 0 warnings / 0 errors.
+
 #### Stage 7 — Persistence
 
 - Добавлен слой `GlazeShell.Data` с `JsonUserDataStore` (`IUserDataStore`): документы `config.json`, `settings.json`, `layout.json` в каталоге пользовательских данных, чтение и запись по требованию.

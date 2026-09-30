@@ -4,6 +4,7 @@ using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Persistence;
 using GlazeShell.Core.Services;
 using GlazeShell.Data.Persistence;
+using GlazeShell.Data.Themes;
 using GlazeShell.Infrastructure.Logging;
 using GlazeShell.Infrastructure.System;
 using GlazeShell.Windows.Applications;
@@ -19,6 +20,12 @@ public partial class App : Application
 {
     private readonly FileLogger _logger;
     private Window? _window;
+
+    /// <summary>
+    /// Активная тема хранится в поле, а не в локальной переменной: менеджер должен
+    /// пережить создание окна, иначе выбор темы потерял бы подписчиков и состояние.
+    /// </summary>
+    private ThemeManager? _themeManager;
 
     public App()
     {
@@ -65,6 +72,8 @@ public partial class App : Application
         var layoutWriter = new DesktopLayoutPersistenceWriter(store, eventManager, ReportPersistence);
         var settingsManager = new PersistingSettingsManager(store, eventManager, ReportPersistence);
         ReportPersistenceStatus(settingsManager.Load());
+
+        _themeManager = CreateThemeManager(store, eventManager, settingsManager.GetSettings().ActiveThemeId);
 
         _window = new MainWindow(
             configuration.ApplicationName,
@@ -147,6 +156,39 @@ public partial class App : Application
         }
 
         return reconciliation.Layout;
+    }
+
+    /// <summary>
+    /// Загружает пользовательские темы и выбирает тему из настроек.
+    /// Темы наполняет пользователь, поэтому их отсутствие или повреждение — не повод
+    /// прерывать запуск: применяется встроенная тема, а причины попадают в лог.
+    /// </summary>
+    private ThemeManager CreateThemeManager(JsonUserDataStore store, IEventManager eventManager, string? activeThemeId)
+    {
+        var loaded = new ThemeStore(store.RootDirectory).LoadThemes();
+
+        foreach (var diagnostic in loaded.Diagnostics)
+        {
+            _logger.Write(GlazeLogLevel.Warning, "Theme", diagnostic);
+        }
+
+        var manager = new ThemeManager(eventManager, loaded.Themes, activeThemeId);
+        var active = manager.GetActiveTheme();
+
+        if (activeThemeId is not null && !string.Equals(activeThemeId, active.Id, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.Write(
+                GlazeLogLevel.Warning,
+                "Theme",
+                $"The configured theme '{activeThemeId}' is not available, so the theme '{active.Id}' is used.");
+        }
+
+        _logger.Write(
+            GlazeLogLevel.Information,
+            "Theme",
+            $"Theme '{active.Id}' is active, {manager.GetThemes().Count} user theme(s) are loaded.");
+
+        return manager;
     }
 
     private void ReportPersistenceStatus<T>(PersistenceLoadResult<T> result)
