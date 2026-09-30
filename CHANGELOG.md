@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Документация сведена к двум файлам, чтобы её было проще читать на GitHub: `docs/ARCHITECTURE.md` (слои, решения по этапам, таблица использованных Windows API, производительность) и `docs/SECURITY.md` (модель угроз и принятые риски). Раздел «Разработка» перенесён в `README.md`; `docs/DEVELOPMENT.md`, `docs/WINDOWS_API.md`, `docs/PERFORMANCE.md` и корневой `ARCHITECTURE.md` удалены. Содержание сохранено полностью, изменены только пути, уровни заголовков и формулировки под фактическое состояние репозитория.
+- `docs/ARCHITECTURE.md`: таблица Windows API дополнена реально используемыми API Stage 5/6 (`EnumDisplayMonitors`, `EnumDisplaySettingsW`, `MonitorFromWindow`, `MonitorFromPoint`, `GetDpiForMonitor`, `GetDpiForSystem`, `GetDpiForWindow`, `WM_DISPLAYCHANGE`, `SHGetKnownFolderPath`/`SHGetKnownFolderItem`) и исправлена ссылка на `Shell/IPersistFile.cs`: интерфейс объявлен в `Shell/IShellLinkW.cs`, отдельного файла нет.
+- Из структуры репозитория убраны пустые каталоги-заглушки с `.gitkeep`: `assets`, `GlazeShell.Data/Database`, `GlazeShell.Infrastructure/Diagnostics`, `GlazeShell.Infrastructure/Startup`, `GlazeShell.Windows/Windows`, а также устаревшие `.gitkeep` в непустых `GlazeShell.Windows/Interop`, `Shell` и `Win32`. Git не хранит пустые каталоги, поэтому файлы-заглушки только мешали читать дерево репозитория; каталоги появятся вместе с содержимым.
+
 ### Added
 
 #### Stage 8 — Theme System

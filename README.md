@@ -103,19 +103,71 @@ dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 
 При первом запуске создаётся каталог пользовательских данных в `%LOCALAPPDATA%\GlazeShell`: в нём появляются `config.json`, `settings.json`, `layout.json` и каталог логов. Имя каталога данных берётся из `config.json`, поэтому путь к данным задаётся пользователем без правки кода.
 
-## Development
+## Документация
 
-Структура, правила сборки и Git workflow описаны в [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — слои, dependency flow, решения по этапам, использованные Windows API и производительность.
+- [docs/SECURITY.md](docs/SECURITY.md) — модель угроз, границы доверия и принятые риски.
+- [CHANGELOG.md](CHANGELOG.md) — история изменений.
 
-## Архитектура
+## Разработка
 
-Описание слоёв и dependency flow находится в [ARCHITECTURE.md](ARCHITECTURE.md).
+### Требования
 
-Документация по системным возможностям и безопасности:
+- Windows 10 версии 1809 или новее;
+- .NET SDK, указанный в `global.json`;
+- NuGet access для restore;
+- для полноценной WinUI 3 разработки: Visual Studio с Windows App SDK tooling и Windows 10 SDK;
+- Git.
 
-- [docs/WINDOWS_API.md](docs/WINDOWS_API.md)
-- [docs/SECURITY.md](docs/SECURITY.md)
-- [docs/PERFORMANCE.md](docs/PERFORMANCE.md)
+Приложение собирается в режиме unpackaged и использует self-contained Windows App SDK; при изменении deployment strategy нужно проверить размер, startup и runtime requirements.
+
+### Сборка и тесты
+
+```powershell
+dotnet build --configuration Debug
+dotnet build --configuration Release
+dotnet test
+dotnet test --configuration Release
+```
+
+Тестовые проекты:
+
+- `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service, `DesktopManager`, `MonitorLayoutBinding`, `UserDataDirectoryName`, `ThemeManager`.
+- `tests/GlazeShell.Data.Tests` — `JsonUserDataStoreTests`, `SchemaMigrationRunnerTests`, `PersistenceServicesTests`, `ThemeStoreTests`; каждый тест работает в собственном временном каталоге (`TempUserData`), который удаляется после теста.
+- `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`, `WindowManagerTests`, `MonitorManagerTests`.
+
+`Windows.Tests` использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо COM `IShellLinkW.Save`, который в текущем окружении возвращает `0x80070002`.
+
+Текущий статус: 220/221 tests green в Debug и Release (`Core.Tests` 121/121, `Data.Tests` 64/64, `Windows.Tests` 35 passed), build — 0 warnings / 0 errors. `FocusBringsWindowToForegroundOrIsDeniedBySystem` — единственный environment-tolerant skip: результат зависит от foreground lock текущей сессии (в отдельных прогонах он проходит, давая 221/221).
+
+Остальные environment-tolerant тесты не падают из-за недоступных API, а завершаются `Inconclusive` с объясняющим warning: `AppsFolderSourceTests` и `MonitorManagerTests`. `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` зависит от доставки `EVENT_OBJECT_DESTROY` для собственного процесса и потому чувствителен к параллелизму прогонов: таймаут ожидания события истекает, когда тестовые сборки запускаются одновременно. Поведение воспроизводится и на commit до Stage 7, то есть не связано с persistence или темами; изолированный запуск `GlazeShell.Windows.Tests` проходит стабильно.
+
+### Запуск и данные приложения
+
+App project собирается только под `x64` (значение `AnyCPU` в `.csproj` заменяется автоматически); при передаче платформы явно используйте `--arch x64`.
+
+Приложение использует `%LOCALAPPDATA%\GlazeShell\logs\glaze-shell.log` для startup log и `%LOCALAPPDATA%\GlazeShell` как каталог пользовательских данных: `config.json`, `settings.json`, `layout.json`, каталоги `backups`, `recovery` и `themes`. Имя каталога данных задаётся полем `dataDirectoryName` в `config.json`; при его смене лог текущей сессии остаётся в исходном каталоге.
+
+### Отладка и правила кода
+
+- Для XAML и App lifecycle используйте Visual Studio с Windows App SDK tooling; для диагностики startup проверьте лог и Output window.
+- Не изменяйте generated `bin` и `obj` вручную.
+- При добавлении P/Invoke сначала проверьте ownership и lifetime native handles; сам P/Invoke размещается только в `GlazeShell.Windows`.
+- Core-модели и события добавляются в `src/GlazeShell.Core`; не помещайте туда UI, Win32 или инфраструктурные зависимости.
+- Новые сервисы Core возвращают `IDisposable`, если удерживают подписки или ресурсы.
+- Package versions задаются centrally в `Directory.Packages.props`; floating versions не добавляются. Перед добавлением dependency фиксируются назначение, лицензия, размер, влияние на startup и альтернатива BCL/Windows API. MSTest используется только для автоматического тестирования.
+
+### Git workflow
+
+1. Проверить `git status` и текущую ветку.
+2. Изучить существующие изменения и документацию.
+3. Реализовать одну логически завершённую задачу.
+4. Добавить тесты и обновить документацию.
+5. Выполнить build и tests.
+6. Проверить diff.
+7. Создать отдельный commit в стиле проекта.
+
+Сообщения коммитов пишутся на русском языке в свободной форме — это фактический стиль истории проекта (см. `git log`). Release workflow появится на Stage 14; до его утверждения нельзя публиковать installer или собранные binaries как релиз.
 
 ## Known issues
 
@@ -127,7 +179,3 @@ dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 - Фокусировка окна — best-effort: при отказе `SetForegroundWindow` (foreground lock) используется fallback через `AttachThreadInput`; в окружениях с жёстким foreground lock команда может не сработать.
 - Используется системный title bar, поэтому его оформление не следует тёмной палитре контента; кастомный title bar запланирован вместе с Theme System.
 - Лицензия проекта ещё не выбрана владельцем проекта; файл `LICENSE` не предоставляет юридических прав до утверждения лицензии.
-
-## Changelog
-
-История изменений находится в [CHANGELOG.md](CHANGELOG.md).

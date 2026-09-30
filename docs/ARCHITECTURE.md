@@ -9,32 +9,48 @@ Glaze Shell строится как модульное Windows-приложен�
 ```text
 GlazeShell/
 ├── README.md
-├── ARCHITECTURE.md
 ├── CHANGELOG.md
 ├── LICENSE
-├── .gitignore
-├── .editorconfig
+├── GlazeShell.slnx
+├── global.json
 ├── Directory.Build.props
 ├── Directory.Packages.props
-├── global.json
+├── .editorconfig
+├── .gitattributes
+├── .gitignore
 ├── docs/
+│   ├── ARCHITECTURE.md
+│   └── SECURITY.md
 ├── src/
 │   ├── GlazeShell.App/
+│   │   └── Presentation/
 │   ├── GlazeShell.Core/
 │   │   ├── Configuration/
+│   │   ├── Discovery/
 │   │   ├── Events/
 │   │   ├── Interfaces/
 │   │   ├── Models/
 │   │   ├── Persistence/
 │   │   └── Services/
-│   ├── GlazeShell.Windows/
 │   ├── GlazeShell.Data/
-│   └── GlazeShell.Infrastructure/
-├── tests/
-│   ├── GlazeShell.Core.Tests/
-│   ├── GlazeShell.Data.Tests/
-│   └── GlazeShell.Windows.Tests/
-└── assets/
+│   │   ├── Persistence/
+│   │   ├── Serialization/
+│   │   └── Themes/
+│   ├── GlazeShell.Infrastructure/
+│   │   ├── Logging/
+│   │   └── System/
+│   └── GlazeShell.Windows/
+│       ├── Applications/
+│       ├── DisplayManagement/
+│       ├── Interop/
+│       ├── Shell/
+│       ├── Win32/
+│       └── WindowManagement/
+└── tests/
+    ├── GlazeShell.Core.Tests/
+    ├── GlazeShell.Data.Tests/
+    └── GlazeShell.Windows.Tests/
+```
 ```
 
 ## Dependency flow
@@ -244,6 +260,134 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - Действующая тема всегда существует: пока тема не выбрана, действует встроенная `Theme.CreateDefault()` (`glaze-default`). Неизвестный идентификатор из настроек не оставляет приложение без оформления — сохраняется предыдущая тема, а факт подмены попадает в лог.
 - Идентификаторы тем сравниваются без учёта регистра: идентификатор попадает в `settings.json`, который пользователь читает и правит вручную, и `Midnight`/`midnight` не должны оказаться двумя разными темами под одним именем.
 - XAML не изменялся: Stage 8 добавляет только backend. Как именно применить цвета, шрифты и размеры, решает UI, поэтому `IThemeManager` отдаёт значения, а не ресурсы XAML.
+
+## Windows API
+
+### Текущий статус
+
+Glaze Shell использует только официальные Win32 и COM API. P/Invoke и COM-интерфейсы изолированы в `GlazeShell.Windows` (каталоги `Interop`, `Shell`, `Win32`, `Applications`, `WindowManagement`, `DisplayManagement`); `GlazeShell.Core` и `GlazeShell.Data` Windows API не используют: Core не содержит native типов, а Data работает через BCL (`System.Text.Json`, `System.IO`) и зависит только от Core, поэтому проверки безопасности Windows к этим слоям не применяются.
+
+### Целевая платформа и версии API
+
+- Target framework: `net10.0-windows10.0.19041.0`.
+- Минимальная версия, заявленная для App и Windows Integration: Windows 10 1809 (`10.0.17763.0`).
+- Перед использованием API необходимо проверить его availability для этой версии и для Windows 11.
+
+### Используемые API
+
+| Область | API | Каталог |
+| --- | --- | --- |
+| Shortcuts | бинарный формат MS-SHLLINK через managed `ShellLinkData` | `Shell/ShellLinkData.cs` |
+| Shortcuts | `IShellLinkW` (Load/Get*), `IPersistFile` (Load) | `Shell/IShellLinkW.cs`, `Shell/ShellIdentifiers.cs` |
+| Shortcuts | `IShellItem`, `IShellItem2` property store (`PKEY_Link_TargetParsingPath`, `PKEY_Link_Arguments`, `PKEY_Link_Name`) | `Shell/IShellItem.cs` |
+| AppsFolder | `SHCreateItemFromParsingName`, `IShellFolder`, `IShellItemArray`, `IID_IShellItemArray` `{56FDF344-FD6D-11D0-958A-006097C9A090}` | `Shell/AppsFolderSource.cs` |
+| MSIX | `IApplicationActivationManager` (`ActivateApplication`, `GetApplicationUserModelIdFromProcessId`) | `Interop/IApplicationActivationManager.cs` |
+| MSIX | реестр `AppxAllUserStore\Applications` для install location | `Applications/PackageInstallLocationResolver.cs` |
+| Processes | `Process.GetProcesses`, `CloseMainWindow` | `Applications/WindowsApplicationLauncher.cs`, `Applications/ProcessInspector.cs` |
+| COM | `CoInitializeEx`, `CoUninitialize`, `CoTaskMemFree`, `CoCreateInstance` | `Win32/Ole32.cs`, `Shell/ShellIdentifiers.cs` |
+| Windows | `EnumWindows`, `GetForegroundWindow`, `IsWindow`, `GetWindowText`, `GetClassName`, `GetWindowThreadProcessId`, `ShowWindowAsync`, `PostMessage`, `SetForegroundWindow`, `AttachThreadInput`, `GetWindowPlacement`, `SetWindowPos` | `Win32/User32.cs` |
+| Windows events | `SetWinEventHook`/`UnhookWinEvent`, `GetMessage`/`TranslateMessage`/`DispatchMessage` (0x0003–0x0017, 0x8000–0x8017) | `Win32/User32.cs`, `WindowManagement/WindowEventMonitor.cs` |
+| Window cloak | `DwmGetWindowAttribute` (`DWMWA_CLOAKED`) | `Win32/Dwmapi.cs`, `WindowManagement/NativeWindowEnumerator.cs` |
+| Monitors | `EnumDisplayMonitors`, `EnumDisplaySettingsW`, `MonitorFromWindow`, `MonitorFromPoint` | `Win32/User32.cs`, `DisplayManagement/NativeMonitorEnumerator.cs` |
+| DPI | `GetDpiForMonitor` (`MDT_EFFECTIVE_DPI`), `GetDpiForSystem`, `GetDpiForWindow` | `Win32/Shcore.cs`, `Win32/User32.cs` |
+| Display events | `WM_DISPLAYCHANGE` (`0x007E`) в hidden message window, `DisplayChanged` | `DisplayManagement/MonitorEventMonitor.cs`, `Win32/User32.cs` |
+| Known folders | `SHGetKnownFolderPath`, `SHGetKnownFolderItem` | `Win32/Shell32.cs` |
+| Threads | `GetCurrentThreadId` | `Win32/Kernel32.cs` |
+
+### Правила использования
+
+- P/Invoke размещается только в `GlazeShell.Windows` и изолируется в `Win32` или `Interop`.
+- Core не импортирует Windows API и не использует native handle types.
+- Каждый API задокументирован: permissions, lifetime ресурсов, thread affinity и альтернатива.
+- COM-объекты создаются в STA и освобождаются; `CoInitializeEx`/`CoUninitialize` балансируются на dedicated threads.
+- P/Invoke user32 объявляется с `CharSet.Unicode` и без `ExactSpelling`, когда нативный экспорт существует только с суффиксом `W`/`A` (`GetMessage`, `DefWindowProc`, `GetModuleHandle`, `PostMessage`).
+- `SetWinEventHook` работает в режиме `WINEVENT_OUTOFCONTEXT`: callback вызывается на потоке, установившем hook, только когда этот поток вызывает `GetMessage`. Hook-поток обязан иметь цикл сообщений.
+- Managed fast path (`ShellLinkData`) используется первым: он не требует COM и работает при нерабочем `CLSID_ShellLink`.
+- Не используются undocumented API без отдельного обоснования и security review.
+
+### Известные ограничения среды
+
+- В текущем окружении `CLSID_ShellLink` зарегистрирован в `C:\Windows\System32\windows.storage.dll`, `IShellLinkW.Load` реальных `.lnk` возвращает `0x00000001`, `Save` — `0x80070002`.
+- `IPropertyStore`/`IShellItem2` на реальных `.lnk` возвращают `0x80004002`; AppsFolder через `MatchOption.None` — `0x800401E5`.
+- `SHGetPathFromIDListEx` с извлечённым из `.lnk` PIDL вызывал `0xC0000005`; native PIDL-резолв не используется, вместо него работает managed LinkInfo.
+- Эти ограничения специфичны для данной машины; на штатных системах соответствующие fallback возвращают результат.
+- Delivery событий `SetWinEventHook` зависит от сессии: в службовых/неинтерактивных сессиях и в некоторых host-окружениях события могут не доставляться, поэтому событийные тесты являются environment-tolerant (`Inconclusive`).
+
+## Производительность
+
+### Исходные условия
+
+Приложение не создаёт фоновые service процессы. Startup создаёт WinUI window, startup log record, запускает однократное сканирование приложений в фоне и (со Stage 4) поднимает один hook-поток оконных событий.
+
+Stage 1 добавил только framework-free Core: модели, контракты и in-memory сервисы, которые не создают потоков, таймеров или внешних ресурсов.
+
+`EventManager` не хранит события и не запускает фоновую обработку: доставка выполняется синхронно в потоке publisher, а `Publish` работает с копией списка подписок, поэтому подписка и отписка не требуют блокировки на стороне вызывающего.
+
+### Stage 2 — Discovery
+
+- `StartMenuShortcutSource` использует параллельное сканирование с ограничением `min(max(1, Environment.ProcessorCount), 8)` потоков; результат детерминированно сортируется.
+- Для каждого `.lnk` сначала выполняется managed fast path (`ShellLinkData`) без COM; fallback на `IShellLinkW`/property store выполняется только для нерезолвнутых файлов.
+- AppsFolder сканируется через один STA-вызов `IShellItemArray`; COM-объекты освобождаются в `finally`.
+- `ApplicationDiscoveryService` кэширует снапшот на `CacheDuration` (5 минут) и использует single-flight lock, поэтому повторный `DiscoverAsync` в течение окна не сканирует диск.
+- Результат сканирования (десятки shortlinks) собирается за время меньше секунды на штатных системах.
+
+### Stage 3 — Launcher
+
+- `PackageInstallLocationResolver` один раз строит immutable cache из реестра AppxAllUserStore и не обращается к реестру на каждый запрос.
+- `ProcessInspector` итерирует процессы один раз, освобождая каждый `Process` через `using`, и не копирует `Process[]` бесконечно.
+- UI проверяет фоновые процессы не чаще, чем раз в 3 секунды, и только после завершения первичного сканирования.
+- Периодический polling оправдан техническим ограничением: .NET не предоставляет событие «процесс запущен» для произвольных exe.
+
+### Stage 4 — Window Manager
+
+- Оконные события получаются через `SetWinEventHook` вместо polling: callback вызывается только при реальном событии, фоновый поток с `GetMessage`-pump простаивает без нагрузки.
+- Hook-поток один и создаётся только при `WindowManager.Start()`; на нём живут оба hook-диапазона, отдельный поток на окно не создаётся.
+- UI не перестраивает список на каждое событие: `MainViewModel` коалесирует события (один pending refresh) и выполняет перечисление окон на UI-потоке.
+- `EnumWindows` перечисляет только видимые top-level окна и возвращает ограниченное количество элементов; чтение метаданных (`DWMWA_CLOAKED`, состояние, заголовок) выполняется только после фильтрации.
+- Оконные хуки и dedicated-поток освобождаются в `Dispose` (`UnhookWinEvent`), чтобы не копить hook-идентификаторы между запусками.
+
+### Stage 7 — Persistence
+
+- Документы малы (десятки килобайт) и читаются один раз при старте: `LoadConfiguration`, `LoadLayout` и `LoadSettings` не выполняются в цикле и не блокируют регулярную работу приложения.
+- Запись layout выполняется по событию `DesktopChanged`, но с задержкой 400 мс: серия изменений (перетаскивание, массовое перемещение) приводит к одной записи вместо одной на событие. Таймер одноразовый и не создаёт постоянного фонового цикла.
+- Запись атомарна и завершается синхронно в вызывающем потоке, но объём данных ограничен лимитом 4 MiB, поэтому запись не может стать источником длительной блокировки UI.
+- Проверка размера файла выполняется через `FileInfo.Length` до чтения: слишком большой документ не попадает в память целиком.
+- Разбор JSON ограничен глубиной 32 и числом элементов (`PersistenceLimits`), поэтому повреждённый документ не может исчерпать память или время разбора.
+- Резервные копии и изолированные документы ограничены тремя последними файлами, поэтому каталог пользовательских данных не растёт бесконечно.
+- Запись выполняется только при изменении состояния: мутации `DesktopManager`, не меняющие layout, не публикуют `DesktopChanged` и не порождают запись на диск.
+
+### Stage 8 — Theme System
+
+- Темы читаются один раз при старте и остаются в памяти: `ThemeStore` не наблюдает за каталогом и не перечитывает файлы, поэтому фоновая нагрузка отсутствует.
+- Каталог ограничен 64 темами по 512 KiB, а глубина JSON — 32 уровнями: стоимость загрузки ограничена сверху и не зависит от размера каталога.
+- Файлы сортируются по имени файла, поэтому порядок диагностики и выбор первой темы не зависят от файловой системы.
+- Непригодная тема отбрасывается по отдельности и не порождает повторных попыток: чтение каталога линейно по числу файлов.
+- `ThemeManager` отдаёт неизменяемый снимок, поэтому подписчики `ThemeChanged` не перестраивают набор тем и не копируют его на каждое обращение.
+- Смена темы не пишет на диск: выбор темы меняет только состояние в памяти, а `ActiveThemeId` сохраняется вместе с настройками обычным путём.
+
+### Принципы проектирования
+
+- Использовать Windows events и callbacks вместо постоянных polling loops.
+- Polling допускается только при documented technical limitation, с минимальным интервалом и измеримым обоснованием.
+- Не создавать background service без конкретной потребности.
+- Не доставлять события из фонового потока в UI без явного маршалинга на UI thread.
+- Проверять idle CPU, RAM, startup time, thread count, Win32 handles, GDI/USER handles и allocations.
+- Освобождать event hooks, native handles, subscriptions и disposable services на всех exit paths.
+- Не выполнять тяжёлую disk/network операцию на UI thread.
+- Не добавлять rendering или animation logic до появления соответствующего UI design.
+
+### Планируемые измерения
+
+Stage 11 выполнит профилирование и зафиксирует baseline для:
+
+- запуска приложения;
+- idle CPU и RAM;
+- количества потоков и handles;
+- поведения при monitor/DPI changes;
+- event callback latency;
+- утечек resources после create/destroy сценариев.
+
+Результаты измерений и найденные bottlenecks будут добавлены в этот документ.
 
 ## Границы UI
 
