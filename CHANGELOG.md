@@ -6,6 +6,37 @@
 
 ### Added
 
+#### Stage 7 — Persistence
+
+- Добавлен слой `GlazeShell.Data` с `JsonUserDataStore` (`IUserDataStore`): документы `config.json`, `settings.json`, `layout.json` в каталоге пользовательских данных, чтение и запись по требованию.
+- Добавлены DTO и строгие мапперы `ConfigurationDocument`, `SettingsDocument`, `LayoutDocument` с проверкой идентификаторов, имён, уникальности id, ссылок на активную вкладку и лимитов `PersistenceLimits` (4 MiB на документ, глубина JSON 32, 512 вкладок, 512 категорий на вкладку, 4096 элементов на категорию).
+- Версия схемы хранится в каждом документе (`schemaVersion`). `SchemaMigrationRunner` применяет миграции строго последовательно, отказывается строить цепочку с пропуском версии или дублем и не трогает документы из будущих версий приложения (`UnsupportedSchemaVersionException` → `PersistenceStatus.Unsupported`).
+- Миграции принадлежат конкретному типу документа (`UserDataDocumentKind`): миграция настроек никогда не применяется к конфигурации или layout.
+- Перед перезаписью миграцией создаётся резервная копия в `backups` (хранятся 3 последние). Если копию создать не удалось, документ не переписывается, а переходит в recovery.
+- Запись атомарна: временный файл рядом с целью, `FileStream.Flush(flushToDisk: true)` и `File.Move(overwrite)`; превышение лимита записи отклоняется до касания существующего файла.
+- Повреждённые документы изолируются перемещением в `recovery` (3 последние) и заменяются значениями по умолчанию. Если изолировать файл не удалось, он остаётся нетронутым, а значения по умолчанию применяются только в памяти.
+- `JsonDocumentPipeline` — общий путь загрузки (лимит размера до разбора, разбор, миграции, маппинг, recovery) с единым отчётом об ошибках `PersistenceErrorReporter`.
+- `DesktopLayoutPersistenceWriter` сохраняет layout по событию `DesktopChanged` с объединением изменений (400 мс) и `Flush`/`Dispose` при закрытии окна.
+- `PersistingSettingsManager` загружает настройки при старте, сохраняет их при изменении и публикует `SettingsChanged`. Ошибка записи не отменяет изменение: она передаётся обработчику и попадает в лог.
+- Привязка вкладок к мониторам: `DesktopTab.MonitorId`, `DesktopTab.WithMonitor`, `IDesktopManager.AssignTabToMonitor` и `GetTabsForMonitor`, а также framework-free сервис `MonitorLayoutBinding.Reconcile`.
+- При загрузке layout привязки к недоступным мониторам снимаются, каждая снятая привязка логируется, а результат сверки сразу сохраняется. Пустой или недоступный список мониторов не считается основанием для снятия привязок.
+- Валидация имени каталога данных вынесена в `UserDataDirectoryName` (Core) и используется `UserDataPaths` и маппером конфигурации: запрещены разделители, обход каталогов, зарезервированные имена устройств, точка/пробел в конце и длина более 64 символов.
+- `App.xaml.cs`: конфигурация читается один раз из каталога по умолчанию, корневой каталог берётся из неё, layout/settings загружаются из него же, логирование старта и статус загрузки документов пишутся в лог.
+- Добавлен тестовый проект `GlazeShell.Data.Tests` (46 тестов) и расширен `GlazeShell.Core.Tests` (`MonitorLayoutBindingTests`, `UserDataDirectoryNameTests`).
+- Результат: 180/181 tests green в Debug и Release (`GlazeShell.Core.Tests` 99/99, `GlazeShell.Data.Tests` 46/46, `GlazeShell.Windows.Tests` 35 passed + 1 пропущенный `FocusBringsWindowToForegroundOrIsDeniedBySystem` как environment-tolerant). Debug и Release build — 0 warnings / 0 errors.
+
+#### Fixed
+
+- Исправлена двойная загрузка конфигурации при старте: при смене `DataDirectoryName` второй load из нового каталога создавал там документ по умолчанию и сбрасывал имя приложения.
+- Исправлена атомарная запись: `FileStream.Flush(flushToDisk: true)` вызывался после `Dispose` писателя, из-за чего любая запись завершалась `ObjectDisposedException` и документ не сохранялся.
+- Снятые привязки к мониторам теперь сохраняются, иначе они вычислялись бы заново при каждом запуске.
+
+#### Changed
+
+- `MonitorLayoutBinding.Reconcile` при пустом или недоступном списке мониторов возвращает layout без изменений: при отсутствии достоверных сведений привязки не снимаются.
+- `IsValidIdentifier` отклоняет управляющие символы, как и `IsValidName`: идентификаторы попадают в диагностику и логи.
+- `GlazeShell.Data` подключён к `GlazeShell.Core`; `GlazeShell.App` подключён к `GlazeShell.Data`.
+
 #### Stage 6 — Tabs and Categories
 
 - Реализован полный backend рабочего пространства в `DesktopManager` (Core): вкладки (`CreateTab`, `RemoveTab`, `RenameTab`, `MoveTab`, `ActivateTab`), категории (`CreateCategory`, `RemoveCategory`, `RenameCategory`, `MoveCategory`) и размещение приложений (`AddApplication`, `RemoveApplication`, `MoveApplication`).

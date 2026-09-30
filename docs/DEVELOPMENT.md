@@ -35,14 +35,17 @@ dotnet test --configuration Release
 
 Тестовые проекты:
 
-- `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service, `DesktopManager`.
+- `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service, `DesktopManager`, `MonitorLayoutBinding`, `UserDataDirectoryName`.
+- `tests/GlazeShell.Data.Tests` — `JsonUserDataStoreTests`, `SchemaMigrationRunnerTests`, `PersistingSettingsManagerTests`, `DesktopLayoutPersistenceWriterTests`. Каждый тест работает в собственном временном каталоге (`TempUserData`), который удаляется после теста.
 - `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`, `WindowManagerTests`, `MonitorManagerTests`.
 
 `Windows.Tests` использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо COM `IShellLinkW.Save`, который в текущем окружении возвращает `0x80070002`.
 
+`WindowManagerTests.RaisesWindowOpenedAndClosedEvents` зависит от доставки `EVENT_OBJECT_DESTROY` для собственного процесса и потому чувствителен к нагрузке и параллелизму прогонов: при запуске всего решения тест проходит, при изолированном запуске под нагрузкой может не дождаться события. Поведение воспроизводится и на commit до Stage 7, то есть не связано с persistence.
+
 `AppsFolderSourceTests` и `MonitorManagerTests` являются environment-tolerant: на машинах, где API недоступен, тест проверяет наличие объясняющего warning или завершается `Inconclusive`, а не падает на списке приложений/мониторов.
 
-Текущий статус: 118/119 tests green в Debug и Release (`Core.Tests` 83/83, `Windows.Tests` 35 passed), Debug и Release build — 0 warnings / 0 errors. `FocusBringsWindowToForegroundOrIsDeniedBySystem` — единственный environment-tolerant skip: результат зависит от foreground lock текущей сессии и меняется между прогонами (в отдельных прогонах он проходит, давая 119/119).
+Текущий статус: 180/181 tests green в Debug и Release (`Core.Tests` 99/99, `Data.Tests` 46/46, `Windows.Tests` 35 passed), Debug и Release build — 0 warnings / 0 errors. `FocusBringsWindowToForegroundOrIsDeniedBySystem` — единственный environment-tolerant skip: результат зависит от foreground lock текущей сессии и меняется между прогонами (в отдельных прогонах он проходит, давая 181/181).
 
 ## Запуск
 
@@ -50,7 +53,7 @@ dotnet test --configuration Release
 dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 ```
 
-Приложение использует `%LOCALAPPDATA%\GlazeShell\logs\glaze-shell.log` для startup log. Приложение пока не создаёт config.json автоматически; persistence будет реализован на Stage 7.
+Приложение использует `%LOCALAPPDATA%\GlazeShell\logs\glaze-shell.log` для startup log и `%LOCALAPPDATA%\GlazeShell` как каталог пользовательских данных: `config.json`, `settings.json`, `layout.json`, а также `backups` и `recovery`. Имя каталога данных задаётся полем `dataDirectoryName` в `config.json`; при его смене лог текущей сессии остаётся в исходном каталоге.
 
 App project собирается только под `x64`. Если передать платформу явно, используйте `--arch x64`; значение `AnyCPU` в `.csproj` заменяется на `x64` автоматически.
 
@@ -91,6 +94,7 @@ App project собирается только под `x64`. Если перед�
 реализован Stage 4: window manager, события окон, UI-панель окон и тесты
 реализован Stage 5: desktop integration - мониторы, DPI, display events, desktop layout и тесты
 реализован Stage 6: tabs, categories, размещение приложений, канонический порядок и тесты
+реализован Stage 7: persistence (JSON-документы, schema migrations, recovery, автосохранение layout, привязка вкладок к мониторам) и тесты
 ```
 
 ## Release workflow

@@ -18,6 +18,8 @@ Stage 5 — Desktop Integration завершён. Реализованы мон�
 
 Stage 6 — Tabs and Categories завершён. Реализован полный backend рабочего пространства: вкладки (создание, удаление, переименование, перемещение, активация), категории (создание, удаление, переименование, перемещение) и размещение приложений (добавление, удаление, перенос между категориями) с единым каноническим порядком `Order` на трёх уровнях layout. `DesktopTab.IsActive` удалён как дублирующее поле — единственный источник активной вкладки `DesktopLayout.ActiveTabId`.
 
+Stage 7 — Persistence завершён. Реализовано сохранение пользовательских данных в JSON (`config.json`, `settings.json`, `layout.json`): версия схемы в каждом документе, цепочка миграций с резервной копией перед перезаписью, атомарная запись, изоляция повреждённых документов в `recovery` и неприкосновенность документов из будущих версий приложения. Layout восстанавливается между запусками вместе с привязкой вкладок к мониторам: привязки к недоступным мониторам снимаются, а результат сверки сразу сохраняется. Автосохранение layout выполняет `DesktopLayoutPersistenceWriter`, объединяя частые изменения в одну запись.
+
 ## Возможности
 
 Реализовано на текущем этапе:
@@ -36,6 +38,8 @@ Stage 6 — Tabs and Categories завершён. Реализован полн�
 - desktop layout: полный backend рабочего пространства через `DesktopManager` — вкладки (`CreateTab`/`RemoveTab`/`RenameTab`/`MoveTab`/`ActivateTab`), категории (`CreateCategory`/`RemoveCategory`/`RenameCategory`/`MoveCategory`) и приложения (`AddApplication`/`RemoveApplication`/`MoveApplication`, в том числе перенос между категориями); событие `DesktopChanged`; канонический `Order` нормализуется на каждом уровне, layout нормализуется при установке;
 - UI-панель вкладок и категорий не подключена: подключение визуального дерева выполняет владелец проекта.
 - панель «Мониторы» в футере UI со сводкой, списком устройств (разрешение, DPI, refresh rate, ориентация) и автообновлением по display events;
+- persistence: JSON-документы пользовательских данных (`config.json`, `settings.json`, `layout.json`) с версией схемы, цепочкой миграций, атомарной записью, резервными копиями и изоляцией повреждённых документов; лимиты размера и глубины разбора; пути берутся только из кода;
+- привязка вкладок к мониторам: `DesktopTab.MonitorId`, `IDesktopManager.AssignTabToMonitor`, снятие привязок к недоступным мониторам при загрузке layout;
 - файловое логирование в `%LOCALAPPDATA%\GlazeShell\logs`.
 
 Планируемые возможности:
@@ -43,7 +47,7 @@ Stage 6 — Tabs and Categories завершён. Реализован полн�
 - кастомизация рабочего стола;
 - пользовательские темы и обои;
 - системные события Windows;
-- автозапуск и сохранение конфигурации;
+- автозапуск приложения при входе в систему;
 - будущая система виджетов и расширений.
 
 ## Roadmap
@@ -55,7 +59,7 @@ Stage 6 — Tabs and Categories завершён. Реализован полн�
 5. Window Manager — управление окнами и события окон. ✅
 6. Desktop Integration — мониторы, DPI и display configuration. ✅
 7. Tabs and Categories — вкладки, категории, размещение приложений и порядок элементов. ✅
-8. Persistence — JSON, layout, settings, schema migrations и recovery. Включает привязку desktop layout к мониторам.
+8. Persistence — JSON, layout, settings, schema migrations и recovery. Включает привязку desktop layout к мониторам. ✅
 9. Theme System — безопасная загрузка данных тем без исполняемого кода.
 10. Windows Events — централизованная event-driven модель.
 11. Application Lifecycle — startup, shutdown и single-instance.
@@ -93,7 +97,7 @@ dotnet test
 dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 ```
 
-При первом запуске создаётся каталог пользовательских данных в `%LOCALAPPDATA%\GlazeShell`. Приложение создаёт каталог логов; полноценное сохранение конфигурации запланировано на Stage 7.
+При первом запуске создаётся каталог пользовательских данных в `%LOCALAPPDATA%\GlazeShell`: в нём появляются `config.json`, `settings.json`, `layout.json` и каталог логов. Имя каталога данных берётся из `config.json`, поэтому путь к данным задаётся пользователем без правки кода.
 
 ## Development
 
@@ -114,7 +118,7 @@ dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 - Visual Studio/WinUI 3 template не установлен в текущем окружении; App project создан вручную.
 - В текущей среде `CLSID_ShellLink` зарегистрирован не в `shell32.dll`, поэтому `IShellLinkW.Load` реальных `.lnk` возвращает `0x00000001`, а `Save` — `0x80070002`. Классические `.lnk` резолвятся managed-парсером `ShellLinkData` (LinkInfo/relative path); через property store и `IShellLinkW` — в зависимости от здоровья среды.
 - `IShellItemArray` AppsFolder в текущей среде возвращает `0x800401E5`, поэтому MSIX-источник может сообщить warning вместо списка приложений. Это environment-specific limitation и не считается ошибкой продукта.
-- `InMemorySettingsManager` не сохраняет настройки между запусками; persistence запланирован на Stage 7. Desktop layout (`DesktopManager`) полностью реализован, но живёт только в памяти и не восстанавливается между запусками.
+
 - Окна MSIX-приложений не привязываются к карточкам приложений: у MSIX-приложения `ExecutablePath` не заполнен, поэтому его окна не попадают в инлайн-панель. Окна остальных (Win32) приложений привязываются по пути исполняемого файла.
 - Фокусировка окна — best-effort: при отказе `SetForegroundWindow` (foreground lock) используется fallback через `AttachThreadInput`; в окружениях с жёстким foreground lock команда может не сработать.
 - Используется системный title bar, поэтому его оформление не следует тёмной палитре контента; кастомный title bar запланирован вместе с Theme System.

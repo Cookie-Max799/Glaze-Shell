@@ -10,6 +10,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/GlazeShell.Core.Tests/GlazeShell.Core.Tests.csproj" />
+    <Project Path="tests/GlazeShell.Data.Tests/GlazeShell.Data.Tests.csproj" />
     <Project Path="tests/GlazeShell.Windows.Tests/GlazeShell.Windows.Tests.csproj" />
   </Folder>
 </Solution>

@@ -25,12 +25,14 @@ GlazeShell/
 │   │   ├── Events/
 │   │   ├── Interfaces/
 │   │   ├── Models/
+│   │   ├── Persistence/
 │   │   └── Services/
 │   ├── GlazeShell.Windows/
 │   ├── GlazeShell.Data/
 │   └── GlazeShell.Infrastructure/
 ├── tests/
 │   ├── GlazeShell.Core.Tests/
+│   ├── GlazeShell.Data.Tests/
 │   └── GlazeShell.Windows.Tests/
 └── assets/
 ```
@@ -59,7 +61,7 @@ Core не должен содержать P/Invoke, `HWND`, `HMONITOR`, `HANDLE`
 
 ### GlazeShell.App
 
-WinUI 3 executable и composition root приложения. Содержит окно с явно заданным размером и центрированием на экране. На Stage 3 подключает `ApplicationDiscoveryService` и `WindowsApplicationLauncher`: создаёт реальный лаунчер-UI с поиском, списком приложений, статусной строкой и клавиатурной навигацией. На Stage 4 подключает `WindowManager` и события окон: UI-слой (`Presentation/MainViewModel`, `ApplicationListViewModel`, `WindowListItemViewModel`, `AsyncCommand`, `DispatcherQueueExtensions`) общается только с Core-интерфейсами.
+WinUI 3 executable и composition root приложения. Содержит окно с явно заданным размером и центрированием на экране. На Stage 3 подключает `ApplicationDiscoveryService` и `WindowsApplicationLauncher`: создаёт реальный лаунчер-UI с поиском, списком приложений, статусной строкой и клавиатурной навигацией. На Stage 4 подключает `WindowManager` и события окон: UI-слой (`Presentation/MainViewModel`, `ApplicationListViewModel`, `WindowListItemViewModel`, `AsyncCommand`, `DispatcherQueueExtensions`) общается только с Core-интерфейсами. На Stage 7 создаёт `JsonUserDataStore`, читает конфигурацию один раз из каталога по умолчанию, определяет каталог данных, загружает layout с привязкой мониторов и настройки, подключает `DesktopLayoutPersistenceWriter` и `PersistingSettingsManager` и сбрасывает writer при закрытии окна.
 
 ### GlazeShell.Core
 
@@ -76,11 +78,13 @@ WinUI 3 executable и composition root приложения. Содержит о
 
 Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `ApplicationDiscoveryOptions`, `ApplicationIdentity`, `ApplicationLaunchResult`.
 
-Интерфейсы: `IApplicationManager`, `IApplicationLauncher`, `IApplicationDiscoverySource`, `IProcessInspector`, `IPackageLocationResolver`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IThemeManager`, `IEventManager`, `IMonitorManager`.
+Интерфейсы: `IApplicationManager`, `IApplicationLauncher`, `IApplicationDiscoverySource`, `IProcessInspector`, `IPackageLocationResolver`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IUserDataStore`, `IThemeManager`, `IEventManager`, `IMonitorManager`.
 
 События: `WindowOpened`, `WindowClosed`, `ForegroundWindowChanged`, `WindowStateChanged`, `ProcessStarted`, `ProcessExited`, `DisplayChanged`, `DesktopChanged`, `SettingsChanged`, `ApplicationChanged`.
 
-Сервисы: `EventManager` — типизированная подписка и публикация с возвратом `IDisposable` для отписки; `InMemorySettingsManager` — хранение настроек в памяти без публикации дублирующих событий; `ApplicationDiscoveryService` — агрегация источников, dedup, cache и single-flight; `DesktopManager` — in-memory манипуляции с `DesktopLayout` (вкладки, категории, размещение приложений и канонический порядок на трёх уровнях) с публикацией `DesktopChanged`.
+Сервисы: `EventManager` — типизированная подписка и публикация с возвратом `IDisposable` для отписки; `InMemorySettingsManager` — хранение настроек в памяти без публикации дублирующих событий; `ApplicationDiscoveryService` — агрегация источников, dedup, cache и single-flight; `DesktopManager` — in-memory манипуляции с `DesktopLayout` (вкладки, категории, размещение приложений и канонический порядок на трёх уровнях) с публикацией `DesktopChanged`; `MonitorLayoutBinding` — framework-free сверка привязок вкладок к списку доступных мониторов.
+
+Persistence contracts: `PersistenceStatus` (`Created`/`Loaded`/`Migrated`/`Recovered`/`Unsupported`), `PersistenceLoadResult<T>` (значение, статус, диагностика) и `UserDataDirectoryName` — единая валидация имени каталога пользовательских данных, используемая и Infrastructure, и слоем Data.
 
 Идентификаторы окон, мониторов и приложений представлены строками, чтобы Core не зависел от `HWND`/`HMONITOR`. Соответствие строк и native handles устанавливается на уровне Windows Integration.
 
@@ -116,7 +120,7 @@ Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `Applica
 
 ### GlazeShell.Data
 
-Слой хранения и сериализации. Структура подготовлена, но JSON persistence, layout и SQLite намеренно не реализованы до Stage 7.
+Слой хранения и сериализации. Реализует JSON persistence пользовательских данных: `JsonUserDataStore` (`IUserDataStore`) читает и пишет `config.json`, `settings.json` и `layout.json`; `JsonDocumentPipeline` выполняет общий путь загрузки (лимит размера, разбор, миграции, маппинг, recovery); `SchemaMigrationRunner` применяет цепочку миграций одного типа документа; `UserDataDirectory` реализует атомарную запись, резервные копии и изоляцию повреждённых документов. Слой зависит только от Core и `System.Text.Json`, поэтому тестируется без Windows и без UI. SQLite в текущем дизайне не используется: документы пользователя малы и должны оставаться читаемыми и переносимыми.
 
 ### GlazeShell.Infrastructure
 
@@ -125,6 +129,10 @@ Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `Applica
 ### GlazeShell.Core.Tests
 
 MSTest test project. Проверяет foundation configuration, инварианты моделей, семантику `EventManager`, публикацию `SettingsChanged` в `InMemorySettingsManager`, discovery service и `DesktopManager` (вкладки, активация, элементы, события `DesktopChanged`).
+
+### GlazeShell.Data.Tests
+
+MSTest test project. Проверяет `JsonUserDataStore` (round-trip, создание документов по умолчанию, recovery, изоляция, лимиты размера, атомарность записи, сохранение документов из будущих версий), `SchemaMigrationRunner` (последовательные миграции, пропуск версии, дубли, неподдерживаемые версии), `PersistingSettingsManager` и `DesktopLayoutPersistenceWriter`. Каждый тест работает в собственном временном каталоге, который удаляется после теста; файловой системой имитируется только недоступность каталогов `backups` и `recovery`.
 
 ### GlazeShell.Windows.Tests
 
@@ -208,10 +216,27 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - Модели остаются immutable и валидирующими. Поскольку свойства get-only, изменение выполняется через конструктор; для удобства и сохранения валидации добавлены `DesktopTab.With(...)`, `ApplicationCategory.With(...)` и `DesktopItem.WithOrder(int)` по образцу существующего `Application.WithMetadata`.
 - XAML не изменялся: Stage 6 добавляет только backend-контракт. Подключение вкладок и категорий к визуальному дереву выполняет владелец проекта.
 
+## Решения Stage 7 — Persistence
+
+- Документы пользовательских данных — единственный источник истины между запусками: `config.json` (имя приложения и каталог данных), `settings.json`, `layout.json`. Хранение в JSON выбрано из-за читаемости, переносимости и отсутствия миграций схемы БД; альтернатива SQLite отложена до появления данных, которые JSON не выражает.
+- `GlazeShell.Data` зависит только от Core и BCL: слой не знает о Win32, UI и файловой системе Windows, поэтому вся логика persistence тестируется детерминированно в `GlazeShell.Data.Tests`.
+- Пути берутся только из кода (`UserDataFileNames`), а `UserDataDirectory.GetDocumentPath` проверяет, что путь остаётся внутри корневого каталога. Значения из документов никогда не превращаются в пути.
+- Версия схемы хранится в каждом документе (`schemaVersion`) и мигрируется строго последовательно: `v1 → v2 → v3`. Пропуск версии невозможен, поэтому документ не может оказаться в неизвестном текущему коду состоянии. Миграция принадлежит конкретному типу документа (`UserDataDocumentKind`), поэтому миграция настроек не может примениться к layout.
+- Документ из будущей версии приложения не изменяется вообще: он остаётся на диске для более новой версии, а текущая работает на значениях по умолчанию. Это осознанный размен: лучше потерять настройки, чем переписать документ, который новая версия поймёт иначе.
+- Запись атомарна (временный файл, `Flush(flushToDisk)`, `File.Move(overwrite)`), а перед перезаписью при миграции создаётся резервная копия. Если копия не создана, документ не переписывается: потеря исходных данных хуже, чем отказ от миграции.
+- Повреждённый документ изолируется перемещением в `recovery`, а не удаляется. Если изоляция не удалась, файл остаётся нетронутым, а значения по умолчанию применяются только в памяти.
+- Загрузка не бросает исключений наружу: результат — `PersistenceLoadResult<T>` со статусом `Created`/`Loaded`/`Migrated`/`Recovered`/`Unsupported` и диагностикой, которую composition root пишет в лог.
+- Привязка вкладок к мониторам хранится в layout как `DesktopTab.MonitorId` (`string?`, идентификатор монитора, а не native handle). При загрузке `MonitorLayoutBinding.Reconcile` снимает привязки к недоступным мониторам, а `App` сохраняет результат, чтобы не пересчитывать его при каждом старте.
+- `MonitorLayoutBinding` находится в Core и не зависит от Windows: он принимает `IEnumerable<MonitorInfo>`, поэтому правила привязки тестируются без мониторов. Пустой или недоступный список мониторов не считается основанием снимать привязки — при отсутствии достоверных сведений настройка пользователя сохраняется.
+- `DesktopLayoutPersistenceWriter` подписывается на `DesktopChanged` и объединяет частые изменения в одну запись (400 мс), а `Flush`/`Dispose` вызываются при закрытии окна. Альтернатива (запись на каждое событие) упиралась бы в диск при массовых изменениях layout.
+- `PersistingSettingsManager` повторяет семантику `InMemorySettingsManager`, включая публикацию `SettingsChanged`, и добавляет сохранение. Ошибка записи не отменяет изменение настроек: недоступный диск не должен делать настройки только для чтения.
+- `App` читает конфигурацию один раз из каталога по умолчанию, определяет корневой каталог и уже из него загружает layout и настройки. Повторное чтение конфигурации из нового каталога создало бы там документ по умолчанию и сбросило бы настройки пользователя.
+- XAML не изменялся: Stage 7 добавляет backend и composition wiring, подключение визуального дерева остаётся за владельцем проекта.
+
 ## Границы UI
 
 UI может использовать модели, интерфейсы Application Services, events и state, не зная о native handles и Win32. Визуальный дизайн согласован: палитра (`#12151B`, `#1B1F27`, `#F4F6FA`, `#98A2B3`, `#6E7A8A`, `#4E5866`), шрифты и layout сохраняются без явного согласования изменений.
 
 ## Следующие архитектурные изменения
 
-Stage 7 (Persistence) добавит сериализацию layout, `schemaVersion`, миграции, recovery и привязку desktop layout к мониторам (распределение вкладок по дисплеям, рекомендации по DPI). Привязка перенесена сюда вместе с persistence: без сохранения layout она не имеет наблюдаемого эффекта. Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.
+Следующие стадии: Theme System (загрузка данных тем без исполняемого кода), Application Lifecycle (single-instance и автозапуск) и Stage 13 Security (общий security review с hardening boundaries). Persistence расширяется только по необходимости: если данные потребуют запросов или транзакций, будет рассмотрен переход на SQLite с явной версией схемы. Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.

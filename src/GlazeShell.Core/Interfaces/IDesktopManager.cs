@@ -31,4 +31,8 @@ public interface IDesktopManager
     bool RemoveApplication(string tabId, string itemId);
 
     bool MoveApplication(string tabId, string itemId, string? targetCategoryId = null, int newOrder = 0);
+
+    bool AssignTabToMonitor(string tabId, string? monitorId);
+
+    IReadOnlyList<DesktopTab> GetTabsForMonitor(string monitorId);
 }

@@ -2,7 +2,7 @@
 
 ## Текущий статус
 
-На Stage 2/3/4 Glaze Shell использует официальные Win32 и COM API. P/Invoke и COM-интерфейсы изолированы в `GlazeShell.Windows` (каталоги `Interop`, `Shell`, `Win32`, `Applications`, `WindowManagement`).
+На Stage 2/3/4 Glaze Shell использует официальные Win32 и COM API. P/Invoke и COM-интерфейсы изолированы в `GlazeShell.Windows` (каталоги `Interop`, `Shell`, `Win32`, `Applications`, `WindowManagement`). Слой `GlazeShell.Data`, добавленный на Stage 7, не использует Windows API: он работает через BCL (`System.Text.Json`, `System.IO`) и зависит только от Core, поэтому проверки безопасности Windows к нему не применяются.
 
 ## Целевая платформа
 

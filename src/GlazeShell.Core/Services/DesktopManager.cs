@@ -391,6 +391,42 @@ public sealed class DesktopManager : IDesktopManager
         });
     }
 
+    public bool AssignTabToMonitor(string tabId, string? monitorId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tabId);
+        if (monitorId is not null)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(monitorId);
+        }
+
+        return Mutate(layout =>
+        {
+            var index = FindTab(layout, tabId);
+            if (index < 0)
+            {
+                return null;
+            }
+
+            var tab = layout.Tabs[index];
+            if (SameId(tab.MonitorId, monitorId))
+            {
+                return null;
+            }
+
+            return ReplaceTab(layout, index, tab.WithMonitor(monitorId));
+        });
+    }
+
+    public IReadOnlyList<DesktopTab> GetTabsForMonitor(string monitorId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(monitorId);
+
+        lock (_sync)
+        {
+            return _layout.Tabs.Where(tab => SameId(tab.MonitorId, monitorId)).ToArray();
+        }
+    }
+
     private bool Mutate(Func<DesktopLayout, DesktopLayout?> mutation)
     {
         DesktopLayout updated;
