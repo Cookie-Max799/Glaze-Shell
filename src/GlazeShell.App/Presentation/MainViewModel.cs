@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
+using GlazeShell.Core.Services;
 using Microsoft.UI.Dispatching;
 
 namespace GlazeShell.App.Presentation;
@@ -105,7 +107,11 @@ public sealed class ApplicationListViewModel : INotifyPropertyChanged
 
 public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 {
-    private const int RunningPollIntervalSeconds = 3;
+    /// <summary>
+    /// Пачка событий процессов (запуск приложения поднимает несколько процессов) объединяется
+    /// в один пересчёт, и пересчитываются только те приложения, чей образ процесса совпал.
+    /// </summary>
+    private static readonly TimeSpan RunningRefreshDelay = TimeSpan.FromMilliseconds(250);
 
     private readonly IApplicationManager _applications;
     private readonly IApplicationLauncher _launcher;
@@ -113,14 +119,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly IDesktopManager _desktop;
     private readonly DispatcherQueue _dispatcher;
     private readonly IDisposable _displayChanged;
+    private readonly IDisposable _processStarted;
+    private readonly IDisposable _processExited;
     private readonly SemaphoreSlim _refreshGate = new(1, 1);
     private readonly CancellationTokenSource _runningProbe = new();
-    private readonly Timer _runningTimer;
     private readonly object _windowsRefreshGate = new();
+    private readonly object _runningRefreshGate = new();
+    private readonly HashSet<string> _pendingRunningProbe = new(StringComparer.OrdinalIgnoreCase);
     private readonly IDisposable _windowOpened;
     private readonly IDisposable _windowClosed;
     private readonly IDisposable _foregroundChanged;
     private readonly IDisposable _windowStateChanged;
+    private readonly EventCoalescer _runningRefresh;
 
     private IReadOnlyList<ApplicationListViewModel> _visible = Array.Empty<ApplicationListViewModel>();
     private IReadOnlyList<ApplicationListViewModel> _all = Array.Empty<ApplicationListViewModel>();
@@ -154,8 +164,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _foregroundChanged = events.Subscribe<ForegroundWindowChanged>(_ => QueueWindowsRefresh());
         _windowStateChanged = events.Subscribe<WindowStateChanged>(_ => QueueWindowsRefresh());
         _displayChanged = events.Subscribe<DisplayChanged>(changed => ApplyMonitors(changed.Monitors));
+        _processStarted = events.Subscribe<ProcessStarted>(changed => QueueRunningRefresh(changed.ExecutablePath, changed.ProcessName));
+        _processExited = events.Subscribe<ProcessExited>(changed => QueueRunningRefresh(changed.ExecutablePath, changed.ProcessName));
 
-        _runningTimer = new Timer(_ => _ = ProbeRunningStateAsync(_runningProbe.Token), null, Timeout.Infinite, Timeout.Infinite);
+        _runningRefresh = new EventCoalescer(
+            RunningRefreshDelay,
+            RefreshPendingRunningState,
+            static exception => Debug.WriteLine($"GlazeShell.MainViewModel: {exception}"));
 
         RefreshCommand = new AsyncCommand(() => RefreshAsync());
         LaunchCommand = new AsyncCommand(LaunchSelectedAsync, () => Selected is not null);
@@ -263,9 +278,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             var discovered = await _applications.RefreshAsync(cancellationToken).ConfigureAwait(true);
 
             ApplySnapshot(discovered);
-            _runningTimer.Change(RunningPollIntervalSeconds * 1000, RunningPollIntervalSeconds * 1000);
 
-            await ProbeRunningStateAsync(cancellationToken).ConfigureAwait(true);
+            // Полный пересчёт состояния выполняется один раз после сканирования: он задаёт
+            // базовую линию для приложений, запущенных до Glaze Shell. Дальше состояние
+            // обновляется по событиям процессов, поэтому периодического опроса нет.
+            await ProbeRunningStateAsync(_all, cancellationToken).ConfigureAwait(true);
         }
         catch (OperationCanceledException)
         {
@@ -397,36 +414,149 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    private async Task ProbeRunningStateAsync(CancellationToken cancellationToken)
+    private async Task ProbeRunningStateAsync(IReadOnlyList<ApplicationListViewModel> items, CancellationToken cancellationToken)
     {
-        var snapshot = _all;
-
-        if (snapshot.Count == 0)
+        if (items.Count == 0)
         {
             return;
         }
 
-        var states = await Task.WhenAll(snapshot.Select(ProbeAsync)).ConfigureAwait(true);
+        var states = await Task.WhenAll(items.Select(item => ProbeAsync(item, cancellationToken))).ConfigureAwait(true);
 
         await _dispatcher.EnqueueAsync(() =>
         {
-            for (var index = 0; index < snapshot.Count; index++)
+            for (var index = 0; index < items.Count; index++)
             {
-                snapshot[index].Set(states[index]);
+                items[index].Set(states[index]);
             }
         }).ConfigureAwait(true);
     }
 
-    private async Task<bool> ProbeAsync(ApplicationListViewModel item)
+    private async Task<bool> ProbeAsync(ApplicationListViewModel item, CancellationToken cancellationToken)
     {
         try
         {
-            return await _launcher.IsRunningAsync(item.Id, _runningProbe.Token).ConfigureAwait(false);
+            return await _launcher.IsRunningAsync(item.Id, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is OperationCanceledException or InvalidOperationException or Win32Exception)
         {
             return item.IsRunning;
         }
+    }
+
+    /// <summary>
+    /// Ставит в очередь адресный пересчёт состояния для приложений, которых касается
+    /// событие процесса. События приходят пачками (запуск приложения поднимает несколько
+    /// процессов), поэтому пересчёт объединяется и выполняется один раз.
+    /// </summary>
+    private void QueueRunningRefresh(string? executablePath, string? processName)
+    {
+        var targets = SelectRunningTargets(executablePath, processName);
+
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        lock (_runningRefreshGate)
+        {
+            foreach (var target in targets)
+            {
+                _pendingRunningProbe.Add(target);
+            }
+        }
+
+        _runningRefresh.Request();
+    }
+
+    private async void RefreshPendingRunningState()
+    {
+        List<ApplicationListViewModel> pending;
+
+        lock (_runningRefreshGate)
+        {
+            if (_pendingRunningProbe.Count == 0)
+            {
+                return;
+            }
+
+            var byId = _all.ToDictionary(static item => item.Id, StringComparer.OrdinalIgnoreCase);
+            pending = [];
+
+            foreach (var id in _pendingRunningProbe)
+            {
+                if (byId.TryGetValue(id, out var item))
+                {
+                    pending.Add(item);
+                }
+            }
+
+            _pendingRunningProbe.Clear();
+        }
+
+        if (pending.Count == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await ProbeRunningStateAsync(pending, _runningProbe.Token).ConfigureAwait(true);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            // Пересчёт идёт из потока таймера: неперехваченное исключение здесь завершило бы
+            // процесс, поэтому ошибка показывается в строке состояния, а не пробрасывается.
+            _ = _dispatcher.EnqueueAsync(() => SetStatus($"Не удалось обновить состояние процессов: {exception.Message}"));
+        }
+    }
+
+    /// <summary>
+    /// Выбирает приложения, которым принадлежит процесс. Сопоставление идёт по полному пути
+    /// к исполняемому файлу, а при его отсутствии — по имени образа. Приложения MSIX без
+    /// <see cref="Application.ExecutablePath"/> таким событием не определяются: их состояние
+    /// обновляется при пересчёте после сканирования.
+    /// </summary>
+    private List<string> SelectRunningTargets(string? executablePath, string? processName)
+    {
+        var matches = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(executablePath) && string.IsNullOrWhiteSpace(processName))
+        {
+            return matches;
+        }
+
+        foreach (var item in _all)
+        {
+            if (MatchesProcess(item.Application, executablePath, processName))
+            {
+                matches.Add(item.Id);
+            }
+        }
+
+        return matches;
+    }
+
+    private static bool MatchesProcess(Application application, string? executablePath, string? processName)
+    {
+        if (application.ExecutablePath is not { } target)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(executablePath) && IsSamePath(target, executablePath))
+        {
+            return true;
+        }
+
+        if (string.IsNullOrWhiteSpace(processName))
+        {
+            return false;
+        }
+
+        var imageName = Path.GetFileNameWithoutExtension(target);
+        return !string.IsNullOrWhiteSpace(imageName)
+            && string.Equals(imageName, processName, StringComparison.OrdinalIgnoreCase);
     }
 
     private void ApplySnapshot(IReadOnlyList<Application> applications)
@@ -645,8 +775,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _foregroundChanged.Dispose();
         _windowStateChanged.Dispose();
         _displayChanged.Dispose();
+        _processStarted.Dispose();
+        _processExited.Dispose();
+        _runningRefresh.Dispose();
         _runningProbe.Cancel();
-        _runningTimer.Dispose();
         _runningProbe.Dispose();
         _refreshGate.Dispose();
     }

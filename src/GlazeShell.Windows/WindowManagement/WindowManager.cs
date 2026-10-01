@@ -1,10 +1,11 @@
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
+using GlazeShell.Windows.SystemEvents;
 using GlazeShell.Windows.Win32;
 
 namespace GlazeShell.Windows.WindowManagement;
 
-public sealed class WindowManager : IWindowManager, IDisposable
+public sealed class WindowManager : IWindowManager, IWindowsEventSource
 {
     private readonly IEventManager _events;
     private readonly bool _skipOwnProcess;

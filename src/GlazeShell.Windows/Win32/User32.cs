@@ -157,6 +157,14 @@ internal static class User32
 
     internal const uint WmClose = 0x0010;
     internal const uint WmQuit = 0x0012;
+    internal const uint WmSettingChange = 0x001A;
+    internal const uint WmDeviceChange = 0x0219;
+    internal const uint WmDpiChanged = 0x02E0;
+
+    internal const uint SpiSetWorkArea = 0x005B;
+    internal const uint SpiSetLogicalDpiOverride = 0x009F;
+
+    internal const uint DevNodesChanged = 0x0007;
 
     internal const uint SwpNoSize = 0x0001;
     internal const uint SwpNoMove = 0x0002;

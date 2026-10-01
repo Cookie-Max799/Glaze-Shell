@@ -63,16 +63,24 @@ public sealed record ProcessStarted : GlazeEvent
 
 public sealed record ProcessExited : GlazeEvent
 {
-    public ProcessExited(int processId, string? processName = null)
+    public ProcessExited(int processId, string? processName = null, string? executablePath = null)
     {
         ModelValidation.NonNegative(processId, nameof(processId));
         ProcessId = processId;
         ProcessName = ModelValidation.Optional(processName, nameof(processName));
+        ExecutablePath = ModelValidation.Optional(executablePath, nameof(executablePath));
     }
 
     public int ProcessId { get; }
 
     public string? ProcessName { get; }
+
+    /// <summary>
+    /// Путь к исполняемому файлу завершившегося процесса, если он был прочитан.
+    /// Имя процесса и путь известны из предыдущего снимка, поэтому выход процесса
+    /// можно сопоставить с приложением даже после того, как процесс уже недоступен.
+    /// </summary>
+    public string? ExecutablePath { get; }
 }
 
 public sealed record DisplayChanged : GlazeEvent

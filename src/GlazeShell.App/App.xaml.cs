@@ -10,6 +10,7 @@ using GlazeShell.Infrastructure.System;
 using GlazeShell.Windows.Applications;
 using GlazeShell.Windows.DisplayManagement;
 using GlazeShell.Windows.Shell;
+using GlazeShell.Windows.SystemEvents;
 using GlazeShell.Windows.WindowManagement;
 using Microsoft.UI.Xaml;
 using DesktopLayout = GlazeShell.Core.Models.DesktopLayout;
@@ -54,18 +55,8 @@ public partial class App : Application
             new PackageInstallLocationResolver());
 
         var windowManager = new WindowManager(eventManager);
-
-        if (!windowManager.Start())
-        {
-            _logger.Write(GlazeLogLevel.Warning, "WindowManager", "Window events monitor could not be started.");
-        }
-
-        var monitorManager = new MonitorManager(eventManager);
-
-        if (!monitorManager.Start())
-        {
-            _logger.Write(GlazeLogLevel.Warning, "MonitorManager", "Display events monitor could not be started.");
-        }
+        var monitorManager = new MonitorManager(eventManager, ReportEventFailure);
+        var eventSources = new ShellEventCoordinator(eventManager, windowManager, monitorManager, errorHandler: ReportEventFailure);
 
         var desktopManager = new DesktopManager(eventManager, LoadLayout(store, monitorManager));
 
@@ -84,10 +75,15 @@ public partial class App : Application
             desktopManager,
             eventManager);
 
+        // Координатор запускается после создания окна: подписчики уже зарегистрированы,
+        // поэтому ни одно событие не теряется между подпиской и первым проходом источника.
+        ReportEventStatus(eventSources.Start());
+
         _window.Closed += (_, _) =>
         {
             layoutWriter.Flush();
             layoutWriter.Dispose();
+            eventSources.Dispose();
         };
 
         _window.Activate();
@@ -207,4 +203,29 @@ public partial class App : Application
 
     private void ReportPersistence(string message, Exception? exception) =>
         _logger.Write(GlazeLogLevel.Warning, "Persistence", message, exception);
+
+    private void ReportEventFailure(Exception exception) =>
+        _logger.Write(GlazeLogLevel.Warning, "Events", "A system event source failed.", exception);
+
+    /// <summary>
+    /// Пишет результат запуска источников системных событий. Отдельный отказ не является
+    /// поводом прерывать запуск: приложение остаётся рабочим, но соответствующие события
+    /// не приходят, поэтому причина попадает в лог как warning.
+    /// </summary>
+    private void ReportEventStatus(ShellEventStatus status)
+    {
+        foreach (var diagnostic in status.Diagnostics)
+        {
+            _logger.Write(GlazeLogLevel.Warning, "Events", diagnostic);
+        }
+
+        _logger.Write(
+            GlazeLogLevel.Information,
+            "Events",
+            $"System event sources: window events {Describe(status.WindowEventsStarted)}, " +
+            $"display events {Describe(status.DisplayEventsStarted)}, " +
+            $"process events {Describe(status.ProcessEventsStarted)}.");
+
+        static string Describe(bool started) => started ? "started" : "unavailable";
+    }
 }

@@ -1,27 +1,44 @@
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
+using GlazeShell.Core.Services;
+using GlazeShell.Windows.SystemEvents;
 
 namespace GlazeShell.Windows.DisplayManagement;
 
-public sealed class MonitorManager : IMonitorManager, IDisposable
+public sealed class MonitorManager : IMonitorManager, IWindowsEventSource
 {
-    private readonly IEventManager _events;
-    private MonitorEventMonitor? _monitor;
+    /// <summary>
+    /// Система присылает изменение дисплеев пачкой сообщений: при подключении монитора
+    /// приходят <c>WM_DEVICECHANGE</c>, <c>WM_DISPLAYCHANGE</c> и иногда <c>WM_SETTINGCHANGE</c>.
+    /// Публикация выполняется один раз после паузы, чтобы не перечислять мониторы на каждое сообщение.
+    /// </summary>
+    private static readonly TimeSpan CoalescingDelay = TimeSpan.FromMilliseconds(300);
 
-    public MonitorManager(IEventManager events)
+    private readonly IEventManager _events;
+    private readonly EventCoalescer _coalescer;
+    private MonitorEventMonitor? _monitor;
+    private bool _disposed;
+
+    public MonitorManager(IEventManager events, Action<Exception>? errorHandler = null)
     {
         _events = events ?? throw new ArgumentNullException(nameof(events));
+        _coalescer = new EventCoalescer(
+            CoalescingDelay,
+            PublishDisplayChanged,
+            errorHandler ?? EventCoalescer.FallbackErrorHandler("MonitorManager"));
     }
 
     public bool Start()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         if (_monitor is not null)
         {
             return true;
         }
 
-        var monitor = new MonitorEventMonitor(OnDisplayChanged);
+        var monitor = new MonitorEventMonitor(_coalescer.Request);
 
         if (!monitor.Start())
         {
@@ -53,9 +70,21 @@ public sealed class MonitorManager : IMonitorManager, IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        // Отложенная публикация отменяется, а не выполняется: после остановки источника
+        // подписчики не должны получать DisplayChanged.
+        _coalescer.Cancel();
+        _coalescer.Dispose();
         _monitor?.Dispose();
         _monitor = null;
     }
 
-    private void OnDisplayChanged() => _events.Publish(new DisplayChanged(NativeMonitorEnumerator.Enumerate()));
+    private void PublishDisplayChanged() =>
+        _events.Publish(new DisplayChanged(NativeMonitorEnumerator.Enumerate()));
 }

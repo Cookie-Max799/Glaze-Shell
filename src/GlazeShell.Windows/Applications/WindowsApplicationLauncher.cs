@@ -68,15 +68,15 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
             return false;
         }
 
-        var processes = FindProcesses(application);
-
-        if (processes.Count > 0)
-        {
-            return true;
-        }
-
-        return !string.IsNullOrWhiteSpace(application.ApplicationUserModelId) && IsMsixRunning(application.ApplicationUserModelId);
+        // Состояние процесса определяется по исполняемому файлу, а для MSIX — по каталогу
+        // установки пакета, где живёт исполняемый файл приложения. Проверка по AUMID не
+        // используется: она потребовала бы COM-вызова для каждого процесса (а
+        // IApplicationActivationManager здесь создаётся на отдельном STA-потоке), что
+        // несопоставимо дороже проверки по пути. Если каталог установки не разрешён,
+        // состояние считается неизвестным, а не «не запущено» в отчёт остановки.
+        return FindProcesses(application).Count > 0;
     }
+
 
     public async Task<bool> CloseAsync(string applicationId, CancellationToken cancellationToken = default)
     {
@@ -267,39 +267,5 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
         var directory = Path.GetDirectoryName(executablePath);
         return !string.IsNullOrEmpty(directory) && Directory.Exists(directory) ? directory : Environment.CurrentDirectory;
     }
-
-    private static bool IsMsixRunning(string applicationUserModelId)
-    {
-        try
-        {
-            return ComApartment.Run(() =>
-            {
-                var manager = ShellIdentifiers.CreateInstance<IApplicationActivationManager>(
-                    in ShellIdentifiers.ClassApplicationActivationManager,
-                    in ShellIdentifiers.InterfaceIApplicationActivationManager,
-                    Ole32.ClsctxInProcServer | Ole32.ClsctxLocalServer);
-
-                var result = manager.GetApplicationUserModelIdFromProcessId(Environment.ProcessId, out var raw);
-
-                if (result < 0 || raw == 0)
-                {
-                    return false;
-                }
-
-                try
-                {
-                    var currentAumid = Marshal.PtrToStringUni(raw);
-                    return string.Equals(currentAumid, applicationUserModelId, StringComparison.OrdinalIgnoreCase);
-                }
-                finally
-                {
-                    ComApartment.CoTaskMemFree(raw);
-                }
-            });
-        }
-        catch (Exception exception) when (exception is COMException or InvalidCastException or NotSupportedException or Win32Exception)
-        {
-            return false;
-        }
-    }
 }
+

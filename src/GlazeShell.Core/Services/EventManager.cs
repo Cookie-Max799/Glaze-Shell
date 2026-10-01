@@ -39,6 +39,15 @@ public sealed class EventManager : IEventManager
         return subscription;
     }
 
+    public bool HasSubscribers<TEvent>()
+        where TEvent : GlazeEvent
+    {
+        lock (_sync)
+        {
+            return _subscriptions.TryGetValue(typeof(TEvent), out var subscriptions) && subscriptions.Count > 0;
+        }
+    }
+
     public void Publish<TEvent>(TEvent glazeEvent)
         where TEvent : GlazeEvent
     {
