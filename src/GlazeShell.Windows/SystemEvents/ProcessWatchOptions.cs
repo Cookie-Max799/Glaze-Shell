@@ -14,7 +14,7 @@ public sealed record ProcessWatchOptions
     /// либо новой зависимости, либо недокументированных вызовов, поэтому источник
     /// сверяет один системный снимок за интервал. Значение по умолчанию — 2 секунды.
     /// </summary>
-    public TimeSpan Interval { get; init; } = TimeSpan.FromSeconds(2);
+    public TimeSpan Interval { get; init; } = TimeSpan.FromSeconds(1.0);
 
     public static ProcessWatchOptions Default { get; } = new();
 
