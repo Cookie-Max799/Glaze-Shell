@@ -51,8 +51,7 @@ public partial class App : Application
 
         var launcher = new WindowsApplicationLauncher(
             discovery,
-            new ProcessInspector(),
-            new PackageInstallLocationResolver());
+            new ProcessInspector());
 
         var windowManager = new WindowManager(eventManager);
         var monitorManager = new MonitorManager(eventManager, ReportEventFailure);

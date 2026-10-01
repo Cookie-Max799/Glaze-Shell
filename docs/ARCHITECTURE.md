@@ -92,9 +92,9 @@ WinUI 3 executable и composition root приложения. Содержит о
 - `Theme` с metadata, colors, fonts, dimensions, icons и анимацией;
 - `ModelValidation` — единая валидация входных данных моделей.
 
-Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `ApplicationDiscoveryOptions`, `ApplicationIdentity`, `ApplicationLaunchResult`.
+Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `ApplicationDiscoveryOptions`, `ApplicationIdentity`, `ApplicationLaunchResult`, `PackageIdentity`.
 
-Интерфейсы: `IApplicationManager`, `IApplicationLauncher`, `IApplicationDiscoverySource`, `IProcessInspector`, `IPackageLocationResolver`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IUserDataStore`, `IThemeManager`, `IEventManager`, `IMonitorManager`.
+Интерфейсы: `IApplicationManager`, `IApplicationLauncher`, `IApplicationDiscoverySource`, `IProcessInspector`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IUserDataStore`, `IThemeManager`, `IEventManager`, `IMonitorManager`.
 
 События: `WindowOpened`, `WindowClosed`, `ForegroundWindowChanged`, `WindowStateChanged`, `ProcessStarted`, `ProcessExited`, `DisplayChanged`, `DesktopChanged`, `SettingsChanged`, `ApplicationChanged`.
 
@@ -115,7 +115,7 @@ Persistence contracts: `PersistenceStatus` (`Created`/`Loaded`/`Migrated`/`Recov
 - `Shell/IShellItem*.cs`, `IShellFolder.cs`, `IShellLinkW.cs`, `IPersistFile.cs` — официальные COM-интерфейсы;
 - `Interop/ComApartment.cs` — STA-исполнение COM с балансом `CoInitializeEx`/`CoUninitialize`;
 - `Interop/IApplicationActivationManager.cs` — активация MSIX;
-- `Applications/WindowsApplicationLauncher.cs`, `ProcessInspector.cs`, `PackageInstallLocationResolver.cs` — Stage 3 launcher;
+- `Applications/WindowsApplicationLauncher.cs`, `ProcessInspector.cs` — Stage 3 launcher;
 - `Win32/Ole32.cs`, `Shell32.cs` — P/Invoke объявления.
 
 На Stage 4 добавляет:
@@ -193,7 +193,7 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - Win32 запуск использует `ProcessStartInfo` с `UseShellExecute=false` и не полагается на SHELLEXECUTE-командную строку.
 - Закрытие выполняется только через `CloseMainWindow`; принудительный `Kill` не применяется.
 - `ProcessInspector` освобождает каждый `Process` через `using` и проверяет границу каталога (а не `StartsWith` без разделителя).
-- `PackageInstallLocationResolver` строит immutable cache реестра один раз и не держит открытый `RegistryKey` после инициализации.
+- `ProcessInspector.FindProcessesByPackage` определяет пакет по разбору пути процесса (`WindowsApps\<PackageFullName>`), а не по каталогу установки из реестра.
 - `ComApartment` выполняет COM в STA и балансирует `CoInitializeEx`/`CoUninitialize`; результат исключения пробрасывается в вызывающий поток через `ExceptionDispatchInfo`.
 
 ## Решения Stage 4 — Window Manager
@@ -204,7 +204,7 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - Любое событие окон публикуется в `IEventManager` как `WindowOpened`/`WindowClosed`/`ForegroundWindowChanged`/`WindowStateChanged`; `EventManager` диспетчеризует по runtime-типу, поэтому подписка на конкретный тип не зависит от статического типа публикатора.
 - Фокус окна — best-effort: `ShowWindowAsync(SW_RESTORE)` + `SetWindowPos` + `SetForegroundWindow`, при отказе (foreground lock) применяется `AttachThreadInput` к foreground/target threads; `SendInput` не используется.
 - Управление состоянием — только `ShowWindowAsync` (не блокирует вызывающий поток), закрытие — только вежливый `WM_CLOSE` через `PostMessage`; принудительное завершение процесса не применяется.
-- Инлайн-панель окон привязана к карточке приложения по пути исполняемого файла (ordinal-ignore-case); у MSIX `ExecutablePath` не заполнен, поэтому их окна не попадают в панель — задокументированное ограничение.
+- Инлайн-панель окон привязана к карточке приложения по пути исполняемого файла (ordinal-ignore-case); у MSIX `ExecutablePath` не заполнен, поэтому их окна сопоставляются по имени семейства пакета, извлечённому из пути процесса окна.
 - UI получает события окон через `IEventManager` и выполняет единый коалесированный refresh на UI-потоке (`DispatcherQueue`), чтобы пачки событий не порождали лавину перестроений.
 
 ## Решения Stage 5 — Desktop Integration
@@ -272,11 +272,11 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - Снимок стоит одного перечисления процессов: имя и путь читаются только для новых PID, для известных используется кэш предыдущего снимка. Открытие `MainModule` на каждом процессе при каждом такте было бы заметной нагрузкой, не зависящей от числа запущенных программ.
 - `ProcessExited` публикуется раньше `ProcessStarted` в одном проходе: перезапуск приложения должен читаться как «вышел, затем открыто». Обратный порядок заставлял бы интерфейс на секунду показывать приложение выключенным после перезапуска.
 - Состояние запущенных приложений обновляется по событиям, а не опросом каждые несколько секунд. Периодический опрос перечислял процессы для всех приложений списка независимо от того, изменилось ли что-нибудь; событийный подход пересчитывает только приложения, которых касается событие. Однократный полный пересчёт сохранён как базовая линия — он необходим, потому что процессы, работавшие до запуска оболочки, не порождают событий.
-- Сопоставление события процесса с приложением идёт по полному пути к исполняемому файлу, а при его отсутствии — по имени образа. Сравнение только по имени дало бы ложные совпадения (`update.exe`, `setup.exe` у разных приложений), а полный путь у MSIX-приложений иногда не разрешается — это известное ограничение, а не ошибка.
+- Сопоставление события процесса с приложением идёт по полному пути к исполняемому файлу, а при его отсутствии — по имени образа; у MSIX-приложений без `ExecutablePath` — по имени семейства пакета, извлечённому из пути процесса (`WindowsApps\<PackageFullName>`). Сравнение только по имени образа дало бы ложные совпадения (`update.exe`, `setup.exe` у разных приложений), поэтому для Win32 полный путь остаётся основным признаком.
 - `EventCoalescer` объединяет пачку сигналов в одно действие. Система присылает изменение дисплеев несколькими сообщениями подряд, и перечисление мониторов на каждое из них было бы лишней работой, заметной при подключении монитора. Обработчик ошибок обязателен: неперехваченное исключение в потоке таймера завершило бы процесс.
 - `Cancel()` отменяет отложенную публикацию при остановке источника. Иначе источник, уже отключённый, успевал бы опубликовать `DisplayChanged` после закрытия, и подписчики получали бы данные от источника, которого больше нет.
 - Отбор оконных сообщений, означающих изменение дисплеев, намеренно узкий: `WM_DEVICECHANGE` обрабатывается только для `DBT_DEVNODES_CHANGED`, `WM_SETTINGCHANGE` — только для `SPI_SETWORKAREA` и `SPI_SETLOGICALDPIOVERRIDE`. Остальные сообщения этой группы приходят постоянно (смена клавиатуры, раскладки, темы) и не меняют ни состав, ни геометрию мониторов.
-- Определение состояния MSIX-приложения по AUMID удалено: оно сравнивало AUMID целевого приложения с AUMID собственного процесса оболочки, то есть проверяло не то приложение. Корректная альтернатива потребовала бы COM-вызова для каждого процесса (интерфейс создаётся на отдельном STA-потоке), что несопоставимо дороже проверки по каталогу установки. Состояние по каталогу установки оставлено осознанно, с документированным ограничением.
+- Определение состояния MSIX-приложения по AUMID удалено: оно сравнивало AUMID целевого приложения с AUMID собственного процесса оболочки, то есть проверяло не то приложение. Корректная альтернатива потребовала бы COM-вызова для каждого процесса (интерфейс создаётся на отдельном STA-потоке), что несопоставимо дороже проверки по каталогу установки. Пакет определяется разбором пути процесса (`PackageIdentity`), потому что каталог установки из реестра для bundle-пакетов указывает на `neutral`-вариант вместо установленного. Побочный эффект: пакеты с фоновым сервисом без окна показываются запущенными, пока сервис жив.
 
 ## Windows API
 
@@ -299,7 +299,7 @@ Glaze Shell использует только официальные Win32 и CO
 | Shortcuts | `IShellItem`, `IShellItem2` property store (`PKEY_Link_TargetParsingPath`, `PKEY_Link_Arguments`, `PKEY_Link_Name`) | `Shell/IShellItem.cs` |
 | AppsFolder | `SHCreateItemFromParsingName`, `IShellFolder`, `IShellItemArray`, `IID_IShellItemArray` `{56FDF344-FD6D-11D0-958A-006097C9A090}` | `Shell/AppsFolderSource.cs` |
 | MSIX | `IApplicationActivationManager` (`ActivateApplication`) | `Interop/IApplicationActivationManager.cs` |
-| MSIX | реестр `AppxAllUserStore\Applications` для install location | `Applications/PackageInstallLocationResolver.cs` |
+| MSIX | разбор пути процесса (`WindowsApps\<PackageFullName>`) через `PackageIdentity` | `GlazeShell.Core/Discovery/PackageIdentity.cs`, `Applications/ProcessInspector.cs` |
 | Processes | `Process.GetProcesses`, `CloseMainWindow` | `Applications/WindowsApplicationLauncher.cs`, `Applications/ProcessInspector.cs`, `SystemEvents/SystemProcessSnapshotSource.cs` |
 | COM | `CoInitializeEx`, `CoUninitialize`, `CoTaskMemFree`, `CoCreateInstance` | `Win32/Ole32.cs`, `Shell/ShellIdentifiers.cs` |
 | Windows | `EnumWindows`, `GetForegroundWindow`, `IsWindow`, `GetWindowText`, `GetClassName`, `GetWindowThreadProcessId`, `ShowWindowAsync`, `PostMessage`, `SetForegroundWindow`, `AttachThreadInput`, `GetWindowPlacement`, `SetWindowPos` | `Win32/User32.cs` |
@@ -350,7 +350,7 @@ Stage 1 добавил только framework-free Core: модели, конт�
 
 ### Stage 3 — Launcher
 
-- `PackageInstallLocationResolver` один раз строит immutable cache из реестра AppxAllUserStore и не обращается к реестру на каждый запрос.
+- `ProcessInspector.FindProcessesByPackage` разбирает пути процессов без обращения к реестру: имя семейства пакета вычисляется из имени каталога `WindowsApps\<PackageFullName>`.
 - `ProcessInspector` итерирует процессы один раз, освобождая каждый `Process` через `using`, и не копирует `Process[]` бесконечно.
 - UI проверяет фоновые процессы не чаще, чем раз в 3 секунды, и только после завершения первичного сканирования.
 - Периодический polling оправдан техническим ограничением: .NET не предоставляет событие «процесс запущен» для произвольных exe.

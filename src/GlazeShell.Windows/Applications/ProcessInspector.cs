@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using GlazeShell.Core.Discovery;
 using GlazeShell.Core.Interfaces;
 
 namespace GlazeShell.Windows.Applications;
@@ -26,6 +27,17 @@ public sealed class ProcessInspector : IProcessInspector
         var matches = new List<int>();
 
         Collect(matches, path => IsUnderDirectory(path, prefix), cancellationToken);
+
+        return matches;
+    }
+
+    public IReadOnlyList<int> FindProcessesByPackage(string packageFamilyName, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageFamilyName);
+
+        var matches = new List<int>();
+
+        Collect(matches, path => PackageIdentity.IsPathOfPackage(path, packageFamilyName), cancellationToken);
 
         return matches;
     }

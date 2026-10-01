@@ -21,20 +21,16 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
 
     private readonly IApplicationManager _applications;
     private readonly IProcessInspector _processes;
-    private readonly IPackageLocationResolver _packages;
 
     public WindowsApplicationLauncher(
         IApplicationManager applications,
-        IProcessInspector processes,
-        IPackageLocationResolver packages)
+        IProcessInspector processes)
     {
         ArgumentNullException.ThrowIfNull(applications);
         ArgumentNullException.ThrowIfNull(processes);
-        ArgumentNullException.ThrowIfNull(packages);
 
         _applications = applications;
         _processes = processes;
-        _packages = packages;
     }
 
     public async Task<ApplicationLaunchResult> LaunchAsync(string applicationId, CancellationToken cancellationToken = default)
@@ -69,11 +65,12 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
         }
 
         // Состояние процесса определяется по исполняемому файлу, а для MSIX — по каталогу
-        // установки пакета, где живёт исполняемый файл приложения. Проверка по AUMID не
-        // используется: она потребовала бы COM-вызова для каждого процесса (а
+        // установки пакета, где живёт исполняемый файл приложения. Каталог определяется
+        // разбором пути процесса (WindowsApps\<PackageFullName>), а не по значению из
+        // реестра: для bundle-пакетов реестр указывает на neutral-вариант. Проверка по AUMID
+        // не используется: она потребовала бы COM-вызова для каждого процесса (а
         // IApplicationActivationManager здесь создаётся на отдельном STA-потоке), что
-        // несопоставимо дороже проверки по пути. Если каталог установки не разрешён,
-        // состояние считается неизвестным, а не «не запущено» в отчёт остановки.
+        // несопоставимо дороже проверки по пути.
         return FindProcesses(application).Count > 0;
     }
 
@@ -128,12 +125,7 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
 
         if (!string.IsNullOrWhiteSpace(application.PackageFamilyName))
         {
-            var location = _packages.ResolveInstallLocation(application.PackageFamilyName);
-
-            if (!string.IsNullOrWhiteSpace(location))
-            {
-                return _processes.FindProcessesByDirectory(location);
-            }
+            return _processes.FindProcessesByPackage(application.PackageFamilyName);
         }
 
         return Array.Empty<int>();

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using GlazeShell.Core.Discovery;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
@@ -283,6 +284,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             // базовую линию для приложений, запущенных до Glaze Shell. Дальше состояние
             // обновляется по событиям процессов, поэтому периодического опроса нет.
             await ProbeRunningStateAsync(_all, cancellationToken).ConfigureAwait(true);
+
+            // Окна, открытые до запуска Glaze Shell, не порождают события, поэтому список
+            // окон заполняется здесь, а не только по WindowOpened.
+            RefreshWindows();
         }
         catch (OperationCanceledException)
         {
@@ -514,8 +519,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>
     /// Выбирает приложения, которым принадлежит процесс. Сопоставление идёт по полному пути
     /// к исполняемому файлу, а при его отсутствии — по имени образа. Приложения MSIX без
-    /// <see cref="Application.ExecutablePath"/> таким событием не определяются: их состояние
-    /// обновляется при пересчёте после сканирования.
+    /// <see cref="Application.ExecutablePath"/> определяются по имени семейства пакета,
+    /// извлечённому из пути процесса.
     /// </summary>
     private List<string> SelectRunningTargets(string? executablePath, string? processName)
     {
@@ -539,24 +544,27 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private static bool MatchesProcess(Application application, string? executablePath, string? processName)
     {
-        if (application.ExecutablePath is not { } target)
+        if (application.ExecutablePath is { } target)
         {
-            return false;
+            if (!string.IsNullOrWhiteSpace(executablePath) && IsSamePath(target, executablePath))
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(processName))
+            {
+                return false;
+            }
+
+            var imageName = Path.GetFileNameWithoutExtension(target);
+            return !string.IsNullOrWhiteSpace(imageName)
+                && string.Equals(imageName, processName, StringComparison.OrdinalIgnoreCase);
         }
 
-        if (!string.IsNullOrWhiteSpace(executablePath) && IsSamePath(target, executablePath))
-        {
-            return true;
-        }
-
-        if (string.IsNullOrWhiteSpace(processName))
-        {
-            return false;
-        }
-
-        var imageName = Path.GetFileNameWithoutExtension(target);
-        return !string.IsNullOrWhiteSpace(imageName)
-            && string.Equals(imageName, processName, StringComparison.OrdinalIgnoreCase);
+        // У приложений MSIX нет ExecutablePath: пакет опознаётся по каталогу установки,
+        // в котором живёт исполняемый файл процесса (WindowsApps\<PackageFullName>).
+        return application.PackageFamilyName is { } packageFamilyName
+            && PackageIdentity.IsPathOfPackage(executablePath, packageFamilyName);
     }
 
     private void ApplySnapshot(IReadOnlyList<Application> applications)
@@ -755,10 +763,23 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         foreach (var application in _all)
         {
-            var path = application.Application.ExecutablePath;
-            var matching = path is null
-                ? Array.Empty<WindowInfo>()
-                : windows.Where(window => IsSamePath(path, window.ExecutablePath)).ToArray();
+            var model = application.Application;
+            WindowInfo[] matching;
+
+            if (model.ExecutablePath is { } path)
+            {
+                matching = windows.Where(window => IsSamePath(path, window.ExecutablePath)).ToArray();
+            }
+            else if (model.PackageFamilyName is { } packageFamilyName)
+            {
+                matching = windows
+                    .Where(window => PackageIdentity.IsPathOfPackage(window.ExecutablePath, packageFamilyName))
+                    .ToArray();
+            }
+            else
+            {
+                matching = Array.Empty<WindowInfo>();
+            }
 
             application.SetWindows(matching, _windows);
         }

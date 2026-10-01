@@ -32,10 +32,10 @@ Stage 9 — Windows Events завершён. Источники системны
 - обнаружение MSIX/Store-приложений через AppsFolder (`IShellItemArray`, `PKEY_AppUserModelID`);
 - агрегация кандидатов, dedup по launch identity, предупреждения диагностики по каждому источнику;
 - запуск: MSIX через `IApplicationActivationManager`, Win32 через `ProcessStartInfo`;
-- проверка состояния и закрытие через `CloseMainWindow` (без принудительного kill);
+- проверка состояния и закрытие через `CloseMainWindow` (без принудительного kill); MSIX-пакет определяется по каталогу установки, извлечённому из пути процесса (`WindowsApps\<PackageFullName>`);
 - UI лаунчера: поиск, список с virtualization, статус выполнения, клавиатурная навигация (↑/↓, Enter, Space, F5, Esc), обновление по событиям процессов вместо периодического опроса фоновых процессов;
 - window manager: перечисление видимых top-level окон, события `WindowOpened`/`WindowClosed`/`ForegroundWindowChanged`/`WindowStateChanged` через `SetWinEventHook`, фокус с best-effort и fallback через `AttachThreadInput`, `ShowWindowAsync` (свернуть/развернуть/восстановить) и вежливое закрытие через `WM_CLOSE`;
-- инлайн-панель окон в карточке запущенного приложения: заголовок, состояние, активное окно и кнопки «Фокус/Свернуть/Развернуть/Закрыть»;
+- инлайн-панель окон в карточке запущенного приложения: заголовок, состояние, активное окно и кнопки «Фокус/Свернуть/Развернуть/Закрыть»; Win32-окна сопоставляются по пути исполняемого файла, MSIX — по имени семейства пакета;
 - фильтрация окон: только видимые, не cloak-нутые (DWM `DWMWA_CLOAKED`) и не tool-windows;
 - monitor/DPI integration: перечисление мониторов (`EnumDisplayMonitors`), bounds и working area, primary-флаг, scale factor (`GetDpiForMonitor`/`GetDpiForSystem`), refresh rate и ориентация (`EnumDisplaySettingsW`), `MonitorFromWindow`/`MonitorFromPoint`;
 - display events: уведомление об изменении конфигурации дисплеев через hidden message window (`WM_DISPLAYCHANGE`, `WM_DEVICECHANGE`/`DBT_DEVNODES_CHANGED`, `WM_SETTINGCHANGE`/`SPI_SETWORKAREA` и `SPI_SETLOGICALDPIOVERRIDE`, `WM_DPICHANGED`) и публикация `DisplayChanged`; отбор сообщений вынесен в `DisplaySignal`, а пачка сигналов объединяется `EventCoalescer` (300 мс) вместо перечисления мониторов на каждое сообщение;
@@ -140,7 +140,7 @@ dotnet test --configuration Release
 
 `Windows.Tests` использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо COM `IShellLinkW.Save`, который в текущем окружении возвращает `0x80070002`.
 
-Текущий статус: 220/221 tests green в Debug и Release (`Core.Tests` 121/121, `Data.Tests` 64/64, `Windows.Tests` 35 passed), build — 0 warnings / 0 errors. `FocusBringsWindowToForegroundOrIsDeniedBySystem` — единственный environment-tolerant skip: результат зависит от foreground lock текущей сессии (в отдельных прогонах он проходит, давая 221/221).
+Текущий статус: 274 tests (`Core.Tests` 146/146, `Data.Tests` 64/64, `Windows.Tests` 63/64) в Debug и Release; build — 0 warnings / 0 errors. Единственный провал — environment-tolerant flake `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` (см. ниже): при его прохождении — 274/274.
 
 Остальные environment-tolerant тесты не падают из-за недоступных API, а завершаются `Inconclusive` с объясняющим warning: `AppsFolderSourceTests` и `MonitorManagerTests`. `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` зависит от доставки `EVENT_OBJECT_DESTROY` для собственного процесса и потому чувствителен к параллелизму прогонов: таймаут ожидания события истекает, когда тестовые сборки запускаются одновременно. Поведение воспроизводится и на commit до Stage 7, то есть не связано с persistence или темами; изолированный запуск `GlazeShell.Windows.Tests` проходит стабильно.
 
@@ -177,7 +177,7 @@ App project собирается только под `x64` (значение `An
 - В текущей среде `CLSID_ShellLink` зарегистрирован не в `shell32.dll`, поэтому `IShellLinkW.Load` реальных `.lnk` возвращает `0x00000001`, а `Save` — `0x80070002`. Классические `.lnk` резолвятся managed-парсером `ShellLinkData` (LinkInfo/relative path); через property store и `IShellLinkW` — в зависимости от здоровья среды.
 - `IShellItemArray` AppsFolder в текущей среде возвращает `0x800401E5`, поэтому MSIX-источник может сообщить warning вместо списка приложений. Это environment-specific limitation и не считается ошибкой продукта.
 
-- Окна MSIX-приложений не привязываются к карточкам приложений: у MSIX-приложения `ExecutablePath` не заполнен, поэтому его окна не попадают в инлайн-панель. Окна остальных (Win32) приложений привязываются по пути исполняемого файла.
+- Окна MSIX-приложений сопоставляются с карточками по имени семейства пакета, извлечённому из пути процесса окна (`WindowsApps\<PackageFullName>`); каталог установки из реестра для bundle-пакетов указывает на `neutral`-вариант и для этой цели не используется. Побочный эффект: пакет с фоновым сервисом без окна показывается запущенным, пока сервис жив.
 - Фокусировка окна — best-effort: при отказе `SetForegroundWindow` (foreground lock) используется fallback через `AttachThreadInput`; в окружениях с жёстким foreground lock команда может не сработать.
 - Используется системный title bar, поэтому его оформление не следует тёмной палитре контента; кастомный title bar запланирован вместе с Theme System.
 - Лицензия проекта ещё не выбрана владельцем проекта; файл `LICENSE` не предоставляет юридических прав до утверждения лицензии.

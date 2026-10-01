@@ -47,6 +47,11 @@ public sealed class MonitorManager : IMonitorManager, IWindowsEventSource
         }
 
         _monitor = monitor;
+
+        // Текущая конфигурация публикуется сразу: иначе подписчики не видят мониторы,
+        // пока система не пришлёт первое изменение дисплеев.
+        PublishDisplayChanged();
+
         return true;
     }
 

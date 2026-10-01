@@ -32,7 +32,11 @@ internal sealed class StubProcessInspector : IProcessInspector
 
     internal IReadOnlyList<int> ByDirectory { get; set; } = Array.Empty<int>();
 
+    internal IReadOnlyList<int> ByPackage { get; set; } = Array.Empty<int>();
+
     public IReadOnlyList<int> FindProcessesByPath(string executablePath, CancellationToken cancellationToken = default) => ByPath;
 
     public IReadOnlyList<int> FindProcessesByDirectory(string directory, CancellationToken cancellationToken = default) => ByDirectory;
+
+    public IReadOnlyList<int> FindProcessesByPackage(string packageFamilyName, CancellationToken cancellationToken = default) => ByPackage;
 }

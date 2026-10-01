@@ -104,11 +104,19 @@ public sealed class WindowsApplicationLauncherTests
     }
 
     [TestMethod]
-    public void PackageResolverReturnsNullForUnknownFamily()
+    public async Task IsRunningUsesThePackageLocationForMsixApplications()
     {
-        var resolver = new PackageInstallLocationResolver();
+        var app = new Application(
+            "msix:test",
+            "Test",
+            ApplicationType.Msix,
+            packageFamilyName: "Contoso.Example_1234567890abc",
+            applicationUserModelId: "Contoso.Example_1234567890abc!App");
 
-        Assert.IsNull(resolver.ResolveInstallLocation("GlazeShell.Unknown_1234567890abc"));
+        var inspector = new StubProcessInspector { ByPackage = [4242] };
+        var launcher = CreateLauncher(new FakeApplicationManager().Add(app), inspector);
+
+        Assert.IsTrue(await launcher.IsRunningAsync("msix:test"));
     }
 
     private static WindowsApplicationLauncher CreateLauncher(
@@ -117,7 +125,6 @@ public sealed class WindowsApplicationLauncherTests
     {
         return new WindowsApplicationLauncher(
             manager,
-            inspector ?? new ProcessInspector(),
-            new PackageInstallLocationResolver());
+            inspector ?? new ProcessInspector());
     }
 }
