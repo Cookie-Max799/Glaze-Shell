@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 
@@ -29,6 +28,7 @@ namespace GlazeShell.Windows.SystemEvents;
 internal sealed class ProcessEventMonitor : IDisposable
 {
     private readonly IEventManager _events;
+    private readonly IProcessSnapshotSource _source;
     private readonly Action<Exception> _errorHandler;
     private readonly TimeSpan _interval;
     private readonly Dictionary<int, ProcessEntry> _snapshot = [];
@@ -40,9 +40,19 @@ internal sealed class ProcessEventMonitor : IDisposable
     private bool _disposed;
 
     internal ProcessEventMonitor(IEventManager events, ProcessWatchOptions options, Action<Exception> errorHandler)
+        : this(events, options, errorHandler, new SystemProcessSnapshotSource())
+    {
+    }
+
+    internal ProcessEventMonitor(
+        IEventManager events,
+        ProcessWatchOptions options,
+        Action<Exception> errorHandler,
+        IProcessSnapshotSource source)
     {
         _events = events ?? throw new ArgumentNullException(nameof(events));
         _errorHandler = errorHandler ?? throw new ArgumentNullException(nameof(errorHandler));
+        _source = source ?? throw new ArgumentNullException(nameof(source));
         _interval = (options ?? throw new ArgumentNullException(nameof(options))).Validate().Interval;
         _timer = new Timer(OnTick, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
@@ -168,37 +178,17 @@ internal sealed class ProcessEventMonitor : IDisposable
     {
         var current = new Dictionary<int, ProcessEntry>();
 
-        foreach (var process in Process.GetProcesses())
+        foreach (var entry in _source.Capture())
         {
-            using (process)
+            // Кэш избавляет от повторного чтения имени и пути для уже известных процессов,
+            // но не влияет на состав снимка: событие публикуется для любого нового PID.
+            if (TryGetCached(entry.ProcessId, out var cached))
             {
-                int processId;
-                try
-                {
-                    processId = process.Id;
-                }
-                catch (Exception exception) when (IsRecoverable(exception))
-                {
-                    continue;
-                }
-
-                if (TryGetCached(processId, out var cached))
-                {
-                    current[processId] = cached;
-                    continue;
-                }
-
-                var name = ReadName(process);
-
-                if (name.Length == 0)
-                {
-                    // Процесс закрылся или недоступен для чтения (например, системный):
-                    // в снимке он учитывается, но событие о нём не публикуется.
-                    continue;
-                }
-
-                current[processId] = new ProcessEntry(name, ReadPath(process));
+                current[entry.ProcessId] = cached;
+                continue;
             }
+
+            current[entry.ProcessId] = new ProcessEntry(entry.Name, entry.ExecutablePath);
         }
 
         return current;
@@ -221,31 +211,6 @@ internal sealed class ProcessEventMonitor : IDisposable
             {
                 _snapshot[entry.Key] = entry.Value;
             }
-        }
-    }
-
-    private static string ReadName(Process process)
-    {
-        try
-        {
-            return process.ProcessName ?? string.Empty;
-        }
-        catch (Exception exception) when (IsRecoverable(exception))
-        {
-            return string.Empty;
-        }
-    }
-
-    private static string? ReadPath(Process process)
-    {
-        try
-        {
-            var path = process.MainModule?.FileName;
-            return string.IsNullOrWhiteSpace(path) ? null : path;
-        }
-        catch (Exception exception) when (IsRecoverable(exception))
-        {
-            return null;
         }
     }
 

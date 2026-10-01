@@ -87,4 +87,15 @@ public sealed class MonitorManager : IMonitorManager, IWindowsEventSource
 
     private void PublishDisplayChanged() =>
         _events.Publish(new DisplayChanged(NativeMonitorEnumerator.Enumerate()));
+
+    /// <summary>
+    /// Имитирует сигнал об изменении конфигурации дисплеев: ставит в очередь
+    /// коалесцированную публикацию так же, как это делает оконная процедура.
+    /// </summary>
+    /// <remarks>
+    /// Существует для тестов. Рассылка сообщений по всей системе (<c>HWND_BROADCAST</c>)
+    /// влияет на другие процессы и на параллельные тесты окон, поэтому коалесцирование
+    /// проверяется через ту же точку входа, не затрагивая ничего, кроме этого менеджера.
+    /// </remarks>
+    internal void RequestDisplayRefresh() => _coalescer.Request();
 }

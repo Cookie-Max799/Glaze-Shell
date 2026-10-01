@@ -31,15 +31,17 @@ public sealed record ShellEventStatus
 /// <see cref="ShellEventStatus.Diagnostics"/>, а подписки на его события просто не приходят.
 /// </para>
 /// <para>
-/// Координатор получает <see cref="IWindowManager"/> и <see cref="IMonitorManager"/> во владение:
-/// <see cref="Dispose"/> освобождает и их. Сервисы нужно создать отдельно только затем,
-/// что они передаются в UI как источники запросов.
+/// Координатор принимает источники во владение: <see cref="Dispose"/> освобождает и их.
+/// Источники создаются отдельно и передаются в UI как исполнители запросов состояния:
+/// <see cref="IWindowManager"/> и <see cref="IMonitorManager"/> расширяют
+/// <see cref="IWindowsEventSource"/>, поэтому один и тот же объект одновременно является
+/// источником событий и поставщиком данных для интерфейса.
 /// </para>
 /// </remarks>
 public sealed class ShellEventCoordinator : IDisposable
 {
-    private readonly IWindowManager _windows;
-    private readonly IMonitorManager _monitors;
+    private readonly IWindowsEventSource _windows;
+    private readonly IWindowsEventSource _monitors;
     private readonly ProcessEventMonitor _processes;
     private readonly Action<Exception> _errorHandler;
     private readonly object _sync = new();
@@ -49,8 +51,8 @@ public sealed class ShellEventCoordinator : IDisposable
 
     public ShellEventCoordinator(
         IEventManager events,
-        IWindowManager windows,
-        IMonitorManager monitors,
+        IWindowsEventSource windows,
+        IWindowsEventSource monitors,
         ProcessWatchOptions? processWatch = null,
         Action<Exception>? errorHandler = null)
     {
@@ -84,13 +86,13 @@ public sealed class ShellEventCoordinator : IDisposable
         var windowEvents = TryStart(
             "window events",
             "Window events will not be published: the WinEvent hook could not be installed.",
-            _windows.Start,
+            () => _windows.Start(),
             diagnostics);
 
         var displayEvents = TryStart(
             "display events",
             "Display events will not be published: the message window could not be created.",
-            _monitors.Start,
+            () => _monitors.Start(),
             diagnostics);
 
         var processEvents = TryStart(

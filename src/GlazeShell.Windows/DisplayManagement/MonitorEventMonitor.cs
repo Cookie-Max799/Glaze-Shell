@@ -121,7 +121,7 @@ internal sealed class MonitorEventMonitor : IDisposable
 
     private nint OnWindowMessage(nint hwnd, uint message, nint wParam, nint lParam)
     {
-        if (IsDisplaySignal(message, wParam))
+        if (DisplaySignal.IsDisplaySignal(message, wParam))
         {
             _displayChanged();
             return 0;
@@ -133,33 +133,6 @@ internal sealed class MonitorEventMonitor : IDisposable
         }
 
         return User32.DefWindowProc(hwnd, message, wParam, lParam);
-    }
-
-    /// <summary>
-    /// Определяет, что сообщение означает изменение конфигурации дисплеев.
-    /// <c>WM_DISPLAYCHANGE</c> приходит при смене разрешения, <c>WM_DEVICECHANGE</c>
-    /// с <c>DBT_DEVNODES_CHANGED</c> — при подключении и отключении монитора,
-    /// <c>WM_SETTINGCHANGE</c> — при смене рабочей области или логического DPI,
-    /// а <c>WM_DPICHANGED</c> — при смене масштаба монитора с окном.
-    /// </summary>
-    private static bool IsDisplaySignal(uint message, nint wParam)
-    {
-        switch (message)
-        {
-            case User32.WmDisplayChange:
-            case User32.WmDpiChanged:
-                return true;
-
-            case User32.WmDeviceChange:
-                return unchecked((uint)wParam) == User32.DevNodesChanged;
-
-            case User32.WmSettingChange:
-                var action = unchecked((uint)wParam);
-                return action is User32.SpiSetWorkArea or User32.SpiSetLogicalDpiOverride;
-
-            default:
-                return false;
-        }
     }
 
     private bool RegisterClass()

@@ -261,6 +261,23 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - Идентификаторы тем сравниваются без учёта регистра: идентификатор попадает в `settings.json`, который пользователь читает и правит вручную, и `Midnight`/`midnight` не должны оказаться двумя разными темами под одним именем.
 - XAML не изменялся: Stage 8 добавляет только backend. Как именно применить цвета, шрифты и размеры, решает UI, поэтому `IThemeManager` отдаёт значения, а не ресурсы XAML.
 
+## Решения Stage 9 — Windows Events
+
+- Источники системных событий запускаются из одного места (`ShellEventCoordinator`), а не каждый из `App.xaml.cs`. Причина: у каждого источника есть хук или message window, которые нужно установить ровно один раз и гарантированно снять при закрытии окна. Разбросанный запуск допускал двойной старт и оставшиеся хуки.
+- Отказ одного источника не отменяет запуск остальных. `Start()` возвращает `ShellEventStatus` с флагом на источник и списком `Diagnostics`; подписчики на события неработающего источника просто не получают событий. Иначе неисправность `MonitorManager` выключала бы оболочку целиком, хотя остальные источники работают.
+- `IWindowsEventSource` живёт в `GlazeShell.Windows`, а не в Core. Контракт описывает запуск и остановку WinEvent hooks и message windows, о которых Core не знает и которыми не владеет; выносить его в Core означало бы втащить понятие жизненного цикла источника в слой, где источников нет.
+- События процессов получаются сравнением снимков списка процессов, а не подпиской на системное событие: события «процесс запущен» в Windows нет. `SetWinEventHook` работает с окнами, ETW требует трассировки с правами администратора, WMI требует службы, которая на пользовательской машине часто отключена. Разница снимков — единственный вариант без новых зависимостей и без привилегий.
+- Первый снимок `ProcessEventMonitor` — базовый и событий не порождает. Иначе все процессы, работавшие до запуска Glaze Shell, выглядели бы как только что запущенные, а интерфейс показывал бы десятки «запущенных» приложений, которые пользователь не открывал.
+- Если на `ProcessStarted`/`ProcessExited` никто не подписан, снимок не выполняется вовсе (`IEventManager.HasSubscribers<TEvent>`). Фоновая работа не должна продолжаться, когда её результат никто не слушает; проверка на каждом такте дешевле самого перечисления.
+- Снимок стоит одного перечисления процессов: имя и путь читаются только для новых PID, для известных используется кэш предыдущего снимка. Открытие `MainModule` на каждом процессе при каждом такте было бы заметной нагрузкой, не зависящей от числа запущенных программ.
+- `ProcessExited` публикуется раньше `ProcessStarted` в одном проходе: перезапуск приложения должен читаться как «вышел, затем открыто». Обратный порядок заставлял бы интерфейс на секунду показывать приложение выключенным после перезапуска.
+- Состояние запущенных приложений обновляется по событиям, а не опросом каждые несколько секунд. Периодический опрос перечислял процессы для всех приложений списка независимо от того, изменилось ли что-нибудь; событийный подход пересчитывает только приложения, которых касается событие. Однократный полный пересчёт сохранён как базовая линия — он необходим, потому что процессы, работавшие до запуска оболочки, не порождают событий.
+- Сопоставление события процесса с приложением идёт по полному пути к исполняемому файлу, а при его отсутствии — по имени образа. Сравнение только по имени дало бы ложные совпадения (`update.exe`, `setup.exe` у разных приложений), а полный путь у MSIX-приложений иногда не разрешается — это известное ограничение, а не ошибка.
+- `EventCoalescer` объединяет пачку сигналов в одно действие. Система присылает изменение дисплеев несколькими сообщениями подряд, и перечисление мониторов на каждое из них было бы лишней работой, заметной при подключении монитора. Обработчик ошибок обязателен: неперехваченное исключение в потоке таймера завершило бы процесс.
+- `Cancel()` отменяет отложенную публикацию при остановке источника. Иначе источник, уже отключённый, успевал бы опубликовать `DisplayChanged` после закрытия, и подписчики получали бы данные от источника, которого больше нет.
+- Отбор оконных сообщений, означающих изменение дисплеев, намеренно узкий: `WM_DEVICECHANGE` обрабатывается только для `DBT_DEVNODES_CHANGED`, `WM_SETTINGCHANGE` — только для `SPI_SETWORKAREA` и `SPI_SETLOGICALDPIOVERRIDE`. Остальные сообщения этой группы приходят постоянно (смена клавиатуры, раскладки, темы) и не меняют ни состав, ни геометрию мониторов.
+- Определение состояния MSIX-приложения по AUMID удалено: оно сравнивало AUMID целевого приложения с AUMID собственного процесса оболочки, то есть проверяло не то приложение. Корректная альтернатива потребовала бы COM-вызова для каждого процесса (интерфейс создаётся на отдельном STA-потоке), что несопоставимо дороже проверки по каталогу установки. Состояние по каталогу установки оставлено осознанно, с документированным ограничением.
+
 ## Windows API
 
 ### Текущий статус
@@ -281,16 +298,16 @@ Glaze Shell использует только официальные Win32 и CO
 | Shortcuts | `IShellLinkW` (Load/Get*), `IPersistFile` (Load) | `Shell/IShellLinkW.cs`, `Shell/ShellIdentifiers.cs` |
 | Shortcuts | `IShellItem`, `IShellItem2` property store (`PKEY_Link_TargetParsingPath`, `PKEY_Link_Arguments`, `PKEY_Link_Name`) | `Shell/IShellItem.cs` |
 | AppsFolder | `SHCreateItemFromParsingName`, `IShellFolder`, `IShellItemArray`, `IID_IShellItemArray` `{56FDF344-FD6D-11D0-958A-006097C9A090}` | `Shell/AppsFolderSource.cs` |
-| MSIX | `IApplicationActivationManager` (`ActivateApplication`, `GetApplicationUserModelIdFromProcessId`) | `Interop/IApplicationActivationManager.cs` |
+| MSIX | `IApplicationActivationManager` (`ActivateApplication`) | `Interop/IApplicationActivationManager.cs` |
 | MSIX | реестр `AppxAllUserStore\Applications` для install location | `Applications/PackageInstallLocationResolver.cs` |
-| Processes | `Process.GetProcesses`, `CloseMainWindow` | `Applications/WindowsApplicationLauncher.cs`, `Applications/ProcessInspector.cs` |
+| Processes | `Process.GetProcesses`, `CloseMainWindow` | `Applications/WindowsApplicationLauncher.cs`, `Applications/ProcessInspector.cs`, `SystemEvents/SystemProcessSnapshotSource.cs` |
 | COM | `CoInitializeEx`, `CoUninitialize`, `CoTaskMemFree`, `CoCreateInstance` | `Win32/Ole32.cs`, `Shell/ShellIdentifiers.cs` |
 | Windows | `EnumWindows`, `GetForegroundWindow`, `IsWindow`, `GetWindowText`, `GetClassName`, `GetWindowThreadProcessId`, `ShowWindowAsync`, `PostMessage`, `SetForegroundWindow`, `AttachThreadInput`, `GetWindowPlacement`, `SetWindowPos` | `Win32/User32.cs` |
 | Windows events | `SetWinEventHook`/`UnhookWinEvent`, `GetMessage`/`TranslateMessage`/`DispatchMessage` (0x0003–0x0017, 0x8000–0x8017) | `Win32/User32.cs`, `WindowManagement/WindowEventMonitor.cs` |
 | Window cloak | `DwmGetWindowAttribute` (`DWMWA_CLOAKED`) | `Win32/Dwmapi.cs`, `WindowManagement/NativeWindowEnumerator.cs` |
 | Monitors | `EnumDisplayMonitors`, `EnumDisplaySettingsW`, `MonitorFromWindow`, `MonitorFromPoint` | `Win32/User32.cs`, `DisplayManagement/NativeMonitorEnumerator.cs` |
 | DPI | `GetDpiForMonitor` (`MDT_EFFECTIVE_DPI`), `GetDpiForSystem`, `GetDpiForWindow` | `Win32/Shcore.cs`, `Win32/User32.cs` |
-| Display events | `WM_DISPLAYCHANGE` (`0x007E`) в hidden message window, `DisplayChanged` | `DisplayManagement/MonitorEventMonitor.cs`, `Win32/User32.cs` |
+| Display events | `WM_DISPLAYCHANGE` (`0x007E`), `WM_DEVICECHANGE` (`0x0219`), `WM_SETTINGCHANGE` (`0x001A`), `WM_DPICHANGED` (`0x02E0`) в hidden message window, `DisplayChanged` | `DisplayManagement/MonitorEventMonitor.cs`, `DisplayManagement/DisplaySignal.cs`, `Win32/User32.cs` |
 | Known folders | `SHGetKnownFolderPath`, `SHGetKnownFolderItem` | `Win32/Shell32.cs` |
 | Threads | `GetCurrentThreadId` | `Win32/Kernel32.cs` |
 

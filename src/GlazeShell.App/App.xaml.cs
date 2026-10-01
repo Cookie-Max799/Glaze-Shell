@@ -77,7 +77,18 @@ public partial class App : Application
 
         // Координатор запускается после создания окна: подписчики уже зарегистрированы,
         // поэтому ни одно событие не теряется между подпиской и первым проходом источника.
-        ReportEventStatus(eventSources.Start());
+        try
+        {
+            ReportEventStatus(eventSources.Start());
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception or System.Runtime.InteropServices.COMException)
+        {
+            _logger.Write(GlazeLogLevel.Warning, "Events", "System event sources failed to start.", exception);
+        }
+        catch (Exception exception)
+        {
+            _logger.Write(GlazeLogLevel.Error, "Events", "Unexpected failure while starting system event sources.", exception);
+        }
 
         _window.Closed += (_, _) =>
         {

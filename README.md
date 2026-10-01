@@ -22,6 +22,8 @@ Stage 7 — Persistence завершён. Реализовано сохране�
 
 Stage 8 — Theme System завершён. Реализован backend тем: `ThemeManager` хранит набор тем, выбирает действующую тему (по `UserSettings.ActiveThemeId`) и публикует `ThemeChanged`; `ThemeStore` читает пользовательские темы из каталога `themes` в каталоге данных приложения. Тема содержит только данные оформления (`metadata`, `colors`, `fonts`, `dimensions`, `icons`, `wallpaper`, `effects`): исполняемые ассеты, пути вне каталога темы и нечисловые выражения цвета отклоняются, непригодная тема отбрасывается по отдельности и не портит остальные, а при отсутствии тем применяется встроенная тема `glaze-default`. Решение о том, как отображать значения темы, остаётся за UI.
 
+Stage 9 — Windows Events завершён. Источники системных событий запускаются из одной точки (`ShellEventCoordinator`): оконные события (`SetWinEventHook`), события дисплеев (hidden message window) и события процессов (`ProcessEventMonitor`). Отказ отдельного источника не прерывает запуск остальных — диагностика попадает в `ShellEventStatus.Diagnostics` и лог, а `Start()` возвращает флаг по каждому источнику. Состояние запущенных приложений обновляется по событиям `ProcessStarted`/`ProcessExited` вместо опроса каждые 3 секунды, а пачка событий одного запуска объединяется вместо пересчёта на каждое событие.
+
 ## Возможности
 
 Реализовано на текущем этапе:
@@ -31,12 +33,14 @@ Stage 8 — Theme System завершён. Реализован backend тем: 
 - агрегация кандидатов, dedup по launch identity, предупреждения диагностики по каждому источнику;
 - запуск: MSIX через `IApplicationActivationManager`, Win32 через `ProcessStartInfo`;
 - проверка состояния и закрытие через `CloseMainWindow` (без принудительного kill);
-- UI лаунчера: поиск, список с virtualization, статус выполнения, клавиатурная навигация (↑/↓, Enter, Space, F5, Esc), периодическая проверка фоновых процессов;
+- UI лаунчера: поиск, список с virtualization, статус выполнения, клавиатурная навигация (↑/↓, Enter, Space, F5, Esc), обновление по событиям процессов вместо периодического опроса фоновых процессов;
 - window manager: перечисление видимых top-level окон, события `WindowOpened`/`WindowClosed`/`ForegroundWindowChanged`/`WindowStateChanged` через `SetWinEventHook`, фокус с best-effort и fallback через `AttachThreadInput`, `ShowWindowAsync` (свернуть/развернуть/восстановить) и вежливое закрытие через `WM_CLOSE`;
 - инлайн-панель окон в карточке запущенного приложения: заголовок, состояние, активное окно и кнопки «Фокус/Свернуть/Развернуть/Закрыть»;
 - фильтрация окон: только видимые, не cloak-нутые (DWM `DWMWA_CLOAKED`) и не tool-windows;
 - monitor/DPI integration: перечисление мониторов (`EnumDisplayMonitors`), bounds и working area, primary-флаг, scale factor (`GetDpiForMonitor`/`GetDpiForSystem`), refresh rate и ориентация (`EnumDisplaySettingsW`), `MonitorFromWindow`/`MonitorFromPoint`;
-- display events: уведомление об изменении конфигурации дисплеев (`WM_DISPLAYCHANGE` через hidden message window) и публикация `DisplayChanged`;
+- display events: уведомление об изменении конфигурации дисплеев через hidden message window (`WM_DISPLAYCHANGE`, `WM_DEVICECHANGE`/`DBT_DEVNODES_CHANGED`, `WM_SETTINGCHANGE`/`SPI_SETWORKAREA` и `SPI_SETLOGICALDPIOVERRIDE`, `WM_DPICHANGED`) и публикация `DisplayChanged`; отбор сообщений вынесен в `DisplaySignal`, а пачка сигналов объединяется `EventCoalescer` (300 мс) вместо перечисления мониторов на каждое сообщение;
+- windows events: единый `ShellEventCoordinator` запускает оконные, дисплейные и процессовые источники и владеет их жизненным циклом; отказ одного источника не блокирует остальные, диагностика возвращается в `ShellEventStatus` и пишется в лог;
+- process events: `ProcessEventMonitor` публикует `ProcessStarted`/`ProcessExited` по разнице снимков списка процессов (интервал по умолчанию 1 с); первый снимок базовый, имя и путь читаются только для новых PID, а при отсутствии подписчиков перечисление не выполняется вовсе;
 - desktop layout: полный backend рабочего пространства через `DesktopManager` — вкладки (`CreateTab`/`RemoveTab`/`RenameTab`/`MoveTab`/`ActivateTab`), категории (`CreateCategory`/`RemoveCategory`/`RenameCategory`/`MoveCategory`) и приложения (`AddApplication`/`RemoveApplication`/`MoveApplication`, в том числе перенос между категориями); событие `DesktopChanged`; канонический `Order` нормализуется на каждом уровне, layout нормализуется при установке;
 - UI-панель вкладок и категорий не подключена: подключение визуального дерева выполняет владелец проекта.
 - панель «Мониторы» в футере UI со сводкой, списком устройств (разрешение, DPI, refresh rate, ориентация) и автообновлением по display events;
@@ -49,8 +53,6 @@ Stage 8 — Theme System завершён. Реализован backend тем: 
 Планируемые возможности:
 
 - кастомизация рабочего стола;
-- пользовательские темы и обои;
-- системные события Windows;
 - автозапуск приложения при входе в систему;
 - будущая система виджетов и расширений.
 
@@ -65,7 +67,7 @@ Stage 8 — Theme System завершён. Реализован backend тем: 
 7. Tabs and Categories — вкладки, категории, размещение приложений и порядок элементов. ✅
 8. Persistence — JSON, layout, settings, schema migrations и recovery. Включает привязку desktop layout к мониторам. ✅
 9. Theme System — безопасная загрузка данных тем без исполняемого кода. ✅
-10. Windows Events — централизованная event-driven модель.
+10. Windows Events — централизованная event-driven модель. ✅
 11. Application Lifecycle — startup, shutdown и single-instance.
 12. Performance — profiling и оптимизация фоновых ресурсов.
 13. Security — security review и hardening boundaries.
