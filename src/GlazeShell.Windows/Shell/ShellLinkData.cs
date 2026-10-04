@@ -1,4 +1,5 @@
 using System.Text;
+using GlazeShell.Windows.Win32;
 
 namespace GlazeShell.Windows.Shell;
 
@@ -231,12 +232,14 @@ internal sealed class ShellLinkData
 
         var size = ReadUInt16(bytes, offset);
 
-        if (size < 2 || offset + size > bytes.Length)
+        // IDListSize описывает только содержимое IDList, а перед ним лежит само
+        // 2-байтовое поле размера, поэтому пропустить нужно 2 + size байт.
+        if (size < 2 || offset + 2 + size > bytes.Length)
         {
             return false;
         }
 
-        offset += size;
+        offset += 2 + size;
         return true;
     }
 

@@ -42,6 +42,25 @@ public sealed class ShellLinkResolverTests
     }
 
     [TestMethod]
+    public void ResolvesTargetWhenShortcutHasTargetIdList()
+    {
+        var target = TestShortcutFactory.SelfExecutablePath;
+        var shortcut = Path.Combine(_root, "IdList.lnk");
+
+        var builder = ShellLinkBuilder.WithLinkInfoAndTargetIdList();
+        builder.Name = "Id List";
+        builder.Arguments = "--flag";
+        builder.WriteTo(shortcut, target);
+
+        Assert.IsTrue(ShellLinkResolver.TryResolve(shortcut, out var resolved, out var error), error);
+        Assert.IsNotNull(resolved);
+        Assert.AreEqual(target, resolved!.Path, ignoreCase: true);
+        Assert.AreEqual("Id List", resolved.Name);
+        Assert.AreEqual("--flag", resolved.Arguments);
+        Assert.AreEqual(ShellLinkResolutionStrategy.ManagedLinkInfo, resolved.Strategy);
+    }
+
+    [TestMethod]
     public void ResolvesTargetFromRelativePath()
     {
         var target = TestShortcutFactory.SelfExecutablePath;

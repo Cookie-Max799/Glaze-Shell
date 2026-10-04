@@ -7,6 +7,7 @@ internal sealed class ShellLinkBuilder
     private const int HeaderSize = 0x4C;
     private const int LinkInfoHeaderSize = 0x1C;
 
+    private const uint FlagHasLinkTargetIdList = 0x00000001;
     private const uint FlagHasLinkInfo = 0x00000002;
     private const uint FlagHasName = 0x00000004;
     private const uint FlagHasRelativePath = 0x00000008;
@@ -17,11 +18,13 @@ internal sealed class ShellLinkBuilder
 
     private readonly bool _useRelativePath;
     private readonly bool _includeTarget;
+    private readonly bool _includeTargetIdList;
 
-    private ShellLinkBuilder(bool useRelativePath, bool includeTarget)
+    private ShellLinkBuilder(bool useRelativePath, bool includeTarget, bool includeTargetIdList = false)
     {
         _useRelativePath = useRelativePath;
         _includeTarget = includeTarget;
+        _includeTargetIdList = includeTargetIdList;
     }
 
     public string? Name { get; set; }
@@ -35,6 +38,8 @@ internal sealed class ShellLinkBuilder
     public int IconIndex { get; set; }
 
     public static ShellLinkBuilder WithLinkInfo() => new(false, true);
+
+    public static ShellLinkBuilder WithLinkInfoAndTargetIdList() => new(false, true, includeTargetIdList: true);
 
     public static ShellLinkBuilder WithRelativePath() => new(true, true);
 
@@ -55,6 +60,7 @@ internal sealed class ShellLinkBuilder
         var relativePath = _useRelativePath && _includeTarget ? targetPath : null;
 
         var flags = FlagIsUnicode
+                    | (_includeTargetIdList ? FlagHasLinkTargetIdList : 0u)
                     | (!_includeTarget ? 0u : _useRelativePath ? 0u : FlagHasLinkInfo)
                     | FlagHasName
                     | (!_includeTarget || !_useRelativePath ? 0u : FlagHasRelativePath)
@@ -63,6 +69,11 @@ internal sealed class ShellLinkBuilder
                     | (iconPath is null ? 0u : FlagHasIconLocation);
 
         var body = new List<byte>();
+
+        if (_includeTargetIdList)
+        {
+            body.AddRange(BuildTargetIdList());
+        }
 
         if (_includeTarget && !_useRelativePath)
         {
@@ -87,6 +98,18 @@ internal sealed class ShellLinkBuilder
 
         body.CopyTo(file, HeaderSize);
         return file;
+    }
+
+    private static byte[] BuildTargetIdList()
+    {
+        const int itemIdSize = 0x14;
+        const int idListSize = itemIdSize + 2;
+
+        var idList = new byte[2 + idListSize];
+        WriteUInt16(idList, 0, idListSize);
+        idList[2] = 0x1F;
+        WriteUInt16(idList, 2 + itemIdSize, 0);
+        return idList;
     }
 
     private static byte[] BuildLinkInfo(string localBasePath)
@@ -129,6 +152,12 @@ internal sealed class ShellLinkBuilder
         }
 
         target.AddRange(ToUnicode(value));
+    }
+
+    private static void WriteUInt16(byte[] bytes, int offset, int value)
+    {
+        bytes[offset] = (byte)value;
+        bytes[offset + 1] = (byte)(value >> 8);
     }
 
     private static void WriteUInt32(Span<byte> span, int offset, uint value)
