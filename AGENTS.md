@@ -92,3 +92,8 @@ You are permitted to make file changes, run shell commands, and utilize your ars
 3. **Перейти к Stage 12** (Performance) — профилировать по реальным сценариям и править **только найденные bottlenecks**, а не вслепую.
 
 Эта последовательность отражена в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) в разделе «Производительность».
+
+
+## 23. Правила коммитов
+
+Все сообщения коммитов должны быть написаны на русском языке в свободной форме, как в фактической истории проекта.
