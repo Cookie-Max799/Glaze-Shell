@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="GlazeShell.Windows.Tests" />
+    <InternalsVisibleTo Include="GlazeShell.App" />
   </ItemGroup>
 
 </Project>

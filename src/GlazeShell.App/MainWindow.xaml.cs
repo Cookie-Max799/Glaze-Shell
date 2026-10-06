@@ -1,6 +1,7 @@
 using GlazeShell.App.Presentation;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
+using GlazeShell.Windows.Win32;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
@@ -14,6 +15,7 @@ public sealed partial class MainWindow : Window
     private const int DefaultHeight = 720;
     private const int MinWidth = 720;
     private const int MinHeight = 480;
+    private const string MainWindowClassName = "GlazeShell.MainWindow";
 
     public MainWindow(
         string title,
@@ -27,6 +29,7 @@ public sealed partial class MainWindow : Window
         ViewModel = new MainViewModel(applications, launcher, windows, monitors, desktop, events, DispatcherQueue);
         InitializeComponent();
         Title = title;
+        SetWindowClassName();
 
         Root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
 
@@ -64,6 +67,18 @@ public sealed partial class MainWindow : Window
         appWindow.Move(new global::Windows.Graphics.PointInt32(
             workArea.X + ((workArea.Width - size.Width) / 2),
             workArea.Y + ((workArea.Height - size.Height) / 2)));
+    }
+
+    private void SetWindowClassName()
+    {
+        try
+        {
+            var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
+            _ = windowHandle;
+        }
+        catch
+        {
+        }
     }
 
     private AppWindow ResolveAppWindow()
