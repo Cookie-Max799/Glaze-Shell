@@ -140,10 +140,9 @@ internal delegate bool EnumWindowsProc(nint hwnd, nint parameter);
 [UnmanagedFunctionPointer(CallingConvention.Winapi)]
 internal delegate void WinEventProc(nint hook, uint winEvent, nint hwnd, uint objectId, uint childId, uint eventThread, uint eventTime);
 
-public static class User32
+internal static class User32
 {
     internal const int GwOwner = 4;
-
     internal const long GwlStyle = -16;
     internal const long GwlExStyle = -20;
 
@@ -165,17 +164,6 @@ public static class User32
     internal const uint SpiSetLogicalDpiOverride = 0x009F;
 
     internal const uint DevNodesChanged = 0x0007;
-
-    internal const int GclpHwndParent = -8;
-    internal const int GclCbWndExtra = -18;
-    internal const int GclCbClsExtra = -20;
-    internal const int GclStyle = -26;
-    internal const int GclWndProc = -24;
-    internal const int GclHIcon = -14;
-    internal const int GclHIconSm = -34;
-    internal const int GclHModule = -16;
-    internal const int GclHbrBackground = -10;
-    internal const int GclMenuname = -8;
 
     internal const uint SwpNoSize = 0x0001;
     internal const uint SwpNoMove = 0x0002;
@@ -252,12 +240,6 @@ public static class User32
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern nint GetForegroundWindow();
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
-    internal static extern int SetClassLong(nint hwnd, int index, string value);
-
-    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "SetClassLongPtrW")]
-    internal static extern nint SetClassLongPtr(nint hwnd, int index, string value);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]

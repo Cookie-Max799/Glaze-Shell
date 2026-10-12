@@ -9,12 +9,11 @@ using GlazeShell.Infrastructure.Logging;
 using GlazeShell.Infrastructure.System;
 using GlazeShell.Windows.Applications;
 using GlazeShell.Windows.DisplayManagement;
+using GlazeShell.Windows.Lifecycle;
 using GlazeShell.Windows.Shell;
 using GlazeShell.Windows.SystemEvents;
 using GlazeShell.Windows.WindowManagement;
-using GlazeShell.App.SingleInstance;
 using Microsoft.UI.Xaml;
-using System.Threading;
 using DesktopLayout = GlazeShell.Core.Models.DesktopLayout;
 
 namespace GlazeShell.App;
@@ -23,7 +22,7 @@ public partial class App : Application
 {
     private readonly FileLogger _logger;
     private Window? _window;
-    private Mutex? _singleInstanceMutex;
+    private SingleInstanceLease? _singleInstanceLease;
 
     /// <summary>
     /// Активная тема хранится в поле, а не в локальной переменной: менеджер должен
@@ -33,7 +32,8 @@ public partial class App : Application
 
     public App()
     {
-        if (!SingleInstanceHelper.IsFirstInstance())
+        _singleInstanceLease = SingleInstanceHelper.Acquire();
+        if (_singleInstanceLease is null)
         {
             SingleInstanceHelper.ActivateExistingInstance();
             Environment.Exit(0);
@@ -104,8 +104,8 @@ public partial class App : Application
             layoutWriter.Flush();
             layoutWriter.Dispose();
             eventSources.Dispose();
-            _singleInstanceMutex?.Dispose();
-            _singleInstanceMutex = null;
+            _singleInstanceLease?.Dispose();
+            _singleInstanceLease = null;
         };
 
         _window.Activate();

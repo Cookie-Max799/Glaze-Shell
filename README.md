@@ -24,6 +24,8 @@ Stage 8 — Theme System завершён. Реализован backend тем: 
 
 Stage 9 — Windows Events завершён. Источники системных событий запускаются из одной точки (`ShellEventCoordinator`): оконные события (`SetWinEventHook`), события дисплеев (hidden message window) и события процессов (`ProcessEventMonitor`). Отказ отдельного источника не прерывает запуск остальных — диагностика попадает в `ShellEventStatus.Diagnostics` и лог, а `Start()` возвращает флаг по каждому источнику. Состояние запущенных приложений обновляется по событиям `ProcessStarted`/`ProcessExited` вместо опроса каждые 3 секунды, а пачка событий одного запуска объединяется вместо пересчёта на каждое событие.
 
+Stage 10 — Application Lifecycle завершён. Реализован единый жизненный цикл экземпляра приложения: одиночность запуска через именованный mutex, который удерживается весь срок работы (`SingleInstanceLease`), а повторный запуск находит окно уже работающего экземпляра, поднимает его и завершает новый процесс. При закрытии окна освобождаются layout-writer, источники событий и сам mutex (последним), поэтому экземпляр можно запустить заново; окно, созданное другим процессом, сопоставляется по владеющему процессу, а не по пути модуля.
+
 ## Возможности
 
 Реализовано на текущем этапе:
@@ -41,6 +43,7 @@ Stage 9 — Windows Events завершён. Источники системны
 - display events: уведомление об изменении конфигурации дисплеев через hidden message window (`WM_DISPLAYCHANGE`, `WM_DEVICECHANGE`/`DBT_DEVNODES_CHANGED`, `WM_SETTINGCHANGE`/`SPI_SETWORKAREA` и `SPI_SETLOGICALDPIOVERRIDE`, `WM_DPICHANGED`) и публикация `DisplayChanged`; отбор сообщений вынесен в `DisplaySignal`, а пачка сигналов объединяется `EventCoalescer` (300 мс) вместо перечисления мониторов на каждое сообщение;
 - windows events: единый `ShellEventCoordinator` запускает оконные, дисплейные и процессовые источники и владеет их жизненным циклом; отказ одного источника не блокирует остальные, диагностика возвращается в `ShellEventStatus` и пишется в лог;
 - process events: `ProcessEventMonitor` публикует `ProcessStarted`/`ProcessExited` по разнице снимков списка процессов (интервал по умолчанию 1 с); первый снимок базовый, имя и путь читаются только для новых PID, а при отсутствии подписчиков перечисление не выполняется вовсе;
+- application lifecycle: одиночный экземпляр через именованный mutex (`SingleInstanceHelper`/`SingleInstanceLease`), который удерживается весь срок работы; повторный запуск находит окно уже работающего экземпляра, восстанавливает его из свёрнутого состояния и завершает новый процесс. Окно сопоставляется по владеющему процессу (сравнение пути исполняемого файла), а при закрытии окна освобождаются подписки событий, layout-writer, настройки и mutex;
 - desktop layout: полный backend рабочего пространства через `DesktopManager` — вкладки (`CreateTab`/`RemoveTab`/`RenameTab`/`MoveTab`/`ActivateTab`), категории (`CreateCategory`/`RemoveCategory`/`RenameCategory`/`MoveCategory`) и приложения (`AddApplication`/`RemoveApplication`/`MoveApplication`, в том числе перенос между категориями); событие `DesktopChanged`; канонический `Order` нормализуется на каждом уровне, layout нормализуется при установке;
 - UI-панель вкладок и категорий не подключена: подключение визуального дерева выполняет владелец проекта.
 - панель «Мониторы» в футере UI со сводкой, списком устройств (разрешение, DPI, refresh rate, ориентация) и автообновлением по display events;
@@ -58,20 +61,20 @@ Stage 9 — Windows Events завершён. Источники системны
 
 ## Roadmap
 
-1. Foundation — структура решения, сборка, логирование и базовая конфигурация. ✅
-2. Core — доменные модели, интерфейсы и события. ✅
-3. Application Discovery — обнаружение установленных приложений. ✅
-4. Application Launcher — запуск, проверка состояния и закрытие приложений. ✅
-5. Window Manager — управление окнами и события окон. ✅
-6. Desktop Integration — мониторы, DPI и display configuration. ✅
-7. Tabs and Categories — вкладки, категории, размещение приложений и порядок элементов. ✅
-8. Persistence — JSON, layout, settings, schema migrations и recovery. Включает привязку desktop layout к мониторам. ✅
-9. Theme System — безопасная загрузка данных тем без исполняемого кода. ✅
-10. Windows Events — централизованная event-driven модель. ✅
-11. Application Lifecycle — startup, shutdown и single-instance.
-12. Performance — profiling и оптимизация фоновых ресурсов.
-13. Security — security review и hardening boundaries.
-14. Testing и Release — расширенное покрытие и первый релиз.
+0. Foundation — структура решения, сборка, логирование и базовая конфигурация. ✅
+1. Core — доменные модели, интерфейсы и события. ✅
+2. Application Discovery — обнаружение установленных приложений. ✅
+3. Application Launcher — запуск, проверка состояния и закрытие приложений. ✅
+4. Window Manager — управление окнами и события окон. ✅
+5. Desktop Integration — мониторы, DPI и display configuration. ✅
+6. Tabs and Categories — вкладки, категории, размещение приложений и порядок элементов. ✅
+7. Persistence — JSON, layout, settings, schema migrations и recovery. Включает привязку desktop layout к мониторам. ✅
+8. Theme System — безопасная загрузка данных тем без исполняемого кода. ✅
+9. Windows Events — централизованная event-driven модель. ✅
+10. Application Lifecycle — startup, shutdown и single-instance. ✅
+11. Performance — profiling и оптимизация фоновых ресурсов.
+12. Security — security review и hardening boundaries.
+13. Testing и Release — расширенное покрытие и первый релиз.
 
 ## Требования
 
@@ -136,11 +139,11 @@ dotnet test --configuration Release
 
 - `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service, `DesktopManager`, `MonitorLayoutBinding`, `UserDataDirectoryName`, `ThemeManager`.
 - `tests/GlazeShell.Data.Tests` — `JsonUserDataStoreTests`, `SchemaMigrationRunnerTests`, `PersistenceServicesTests`, `ThemeStoreTests`; каждый тест работает в собственном временном каталоге (`TempUserData`), который удаляется после теста.
-- `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`, `WindowManagerTests`, `MonitorManagerTests`.
+- `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`, `WindowManagerTests`, `MonitorManagerTests`, `ProcessEventMonitorTests`, `ShellEventCoordinatorTests`, `SingleInstanceHelperTests`.
 
 `Windows.Tests` использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо COM `IShellLinkW.Save`, который в текущем окружении возвращает `0x80070002`.
 
-Текущий статус: 274 tests (`Core.Tests` 146/146, `Data.Tests` 64/64, `Windows.Tests` 63/64) в Debug и Release; build — 0 warnings / 0 errors. Единственный провал — environment-tolerant flake `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` (см. ниже): при его прохождении — 274/274.
+Текущий статус: 284 tests (`Core.Tests` 146/146, `Data.Tests` 64/64, `Windows.Tests` 74/74 при изолированном запуске) в Debug и Release; build — 0 warnings / 0 errors. В общем прогоне допустим единственный провал — environment-tolerant flake `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` (см. ниже); изолированный запуск `GlazeShell.Windows.Tests` даёт 74/74.
 
 Остальные environment-tolerant тесты не падают из-за недоступных API, а завершаются `Inconclusive` с объясняющим warning: `AppsFolderSourceTests` и `MonitorManagerTests`. `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` зависит от доставки `EVENT_OBJECT_DESTROY` для собственного процесса и потому чувствителен к параллелизму прогонов: таймаут ожидания события истекает, когда тестовые сборки запускаются одновременно. Поведение воспроизводится и на commit до Stage 7, то есть не связано с persistence или темами; изолированный запуск `GlazeShell.Windows.Tests` проходит стабильно.
 
@@ -169,7 +172,7 @@ App project собирается только под `x64` (значение `An
 6. Проверить diff.
 7. Создать отдельный commit в стиле проекта.
 
-Сообщения коммитов пишутся на русском языке в свободной форме — это фактический стиль истории проекта (см. `git log`). Release workflow появится на Stage 14; до его утверждения нельзя публиковать installer или собранные binaries как релиз.
+Сообщения коммитов пишутся на русском языке в свободной форме — это фактический стиль истории проекта (см. `git log`). Release workflow появится на Stage 13; до его утверждения нельзя публиковать installer или собранные binaries как релиз.
 
 ## Known issues
 

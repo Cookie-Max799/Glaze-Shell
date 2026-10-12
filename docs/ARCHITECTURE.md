@@ -43,6 +43,7 @@ GlazeShell/
 │       ├── Applications/
 │       ├── DisplayManagement/
 │       ├── Interop/
+│       ├── Lifecycle/
 │       ├── Shell/
 │       ├── Win32/
 │       └── WindowManagement/
@@ -77,7 +78,7 @@ Core не должен содержать P/Invoke, `HWND`, `HMONITOR`, `HANDLE`
 
 ### GlazeShell.App
 
-WinUI 3 executable и composition root приложения. Содержит окно с явно заданным размером и центрированием на экране. На Stage 3 подключает `ApplicationDiscoveryService` и `WindowsApplicationLauncher`: создаёт реальный лаунчер-UI с поиском, списком приложений, статусной строкой и клавиатурной навигацией. На Stage 4 подключает `WindowManager` и события окон: UI-слой (`Presentation/MainViewModel`, `ApplicationListViewModel`, `WindowListItemViewModel`, `AsyncCommand`, `DispatcherQueueExtensions`) общается только с Core-интерфейсами. На Stage 7 создаёт `JsonUserDataStore`, читает конфигурацию один раз из каталога по умолчанию, определяет каталог данных, загружает layout с привязкой мониторов и настройки, подключает `DesktopLayoutPersistenceWriter` и `PersistingSettingsManager` и сбрасывает writer при закрытии окна.
+WinUI 3 executable и composition root приложения. Содержит окно с явно заданным размером и центрированием на экране. На Stage 3 подключает `ApplicationDiscoveryService` и `WindowsApplicationLauncher`: создаёт реальный лаунчер-UI с поиском, списком приложений, статусной строкой и клавиатурной навигацией. На Stage 4 подключает `WindowManager` и события окон: UI-слой (`Presentation/MainViewModel`, `ApplicationListViewModel`, `WindowListItemViewModel`, `AsyncCommand`, `DispatcherQueueExtensions`) общается только с Core-интерфейсами. На Stage 7 создаёт `JsonUserDataStore`, читает конфигурацию один раз из каталога по умолчанию, определяет каталог данных, загружает layout с привязкой мониторов и настройки, подключает `DesktopLayoutPersistenceWriter` и `PersistingSettingsManager` и сбрасывает writer при закрытии окна. На Stage 10 удерживает `SingleInstanceLease`: в конструкторе захватывает именованный mutex, при повторном запуске активирует окно работающего экземпляра и завершает процесс, а при закрытии окна освобождает lease вместе с остальными ресурсами.
 
 ### GlazeShell.Core
 
@@ -134,6 +135,16 @@ Persistence contracts: `PersistenceStatus` (`Created`/`Loaded`/`Migrated`/`Recov
 - `DisplayManagement/MonitorManager.cs` — реализация `IMonitorManager` (`Start`/`Dispose` по паттерну `WindowManager`), публикация `DisplayChanged`;
 - `Win32/Shcore.cs` — `GetDpiForMonitor`; display P/Invoke добавлены в `Win32/User32.cs` (`EnumDisplayMonitors`, `GetMonitorInfoW`, `MonitorFrom*`, `EnumDisplaySettingsW`, `RegisterClassW`, `CreateWindowExW`, `DefWindowProc`), расширен `Win32/Kernel32.cs` (`GetModuleHandle`).
 
+На Stage 9 добавляет:
+
+- `SystemEvents/ShellEventCoordinator.cs` — единая точка запуска источников системных событий с диагностикой отказов;
+- `SystemEvents/ProcessEventMonitor.cs`, `SystemEvents/ProcessWatchOptions.cs` — события процессов по разнице снимков;
+- контракт `IWindowsEventSource` (`SystemEvents/IWindowsEventSource.cs`) — `Start()` + `IDisposable` для источников Windows-событий.
+
+На Stage 10 добавляет:
+
+- `Lifecycle/SingleInstanceHelper.cs` — `SingleInstanceHelper` и `SingleInstanceLease`: именованный mutex, удерживаемый весь срок работы, и активация окна уже работающего экземпляра (`FindOwnVisibleWindow`, `ActivateExistingInstance`).
+
 ### GlazeShell.Data
 
 Слой хранения и сериализации. Реализует JSON persistence пользовательских данных: `JsonUserDataStore` (`IUserDataStore`) читает и пишет `config.json`, `settings.json` и `layout.json`; `JsonDocumentPipeline` выполняет общий путь загрузки (лимит размера, разбор, миграции, маппинг, recovery); `SchemaMigrationRunner` применяет цепочку миграций одного типа документа; `UserDataDirectory` реализует атомарную запись, резервные копии и изоляцию повреждённых документов. Подкаталог `Themes/` отвечает за чтение пользовательских тем: `ThemeStore` читает `themes/*.json` и возвращает `ThemeLoadResult` с темами и диагностикой, `ThemeDocumentMapper` проверяет документ темы. Слой зависит только от Core и `System.Text.Json`, поэтому тестируется без Windows и без UI. SQLite в текущем дизайне не используется: документы пользователя малы и должны оставаться читаемыми и переносимыми.
@@ -152,7 +163,7 @@ MSTest test project. Проверяет `JsonUserDataStore` (round-trip, соз�
 
 ### GlazeShell.Windows.Tests
 
-MSTest test project. Проверяет managed резолвер `.lnk` (`ShellLinkResolverTests`), источники Start Menu и AppsFolder, `WindowsApplicationLauncher`, window manager (`WindowManagerTests` с окном-фикстурой `Win32TestWindow` на pumping-потоке) и monitor manager (`MonitorManagerTests`: перечисление мониторов, primary, геометрия, DPI и событие `DisplayChanged` через `HWND_BROADCAST`). Использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо сломанного в окружении COM `IShellLinkW.Save`; environment-зависимые проверки (foreground lock, мониторы) завершаются `Inconclusive`, а не падают.
+MSTest test project. Проверяет managed резолвер `.lnk` (`ShellLinkResolverTests`), источники Start Menu и AppsFolder, `WindowsApplicationLauncher`, window manager (`WindowManagerTests` с окном-фикстурой `Win32TestWindow` на pumping-потоке), monitor manager (`MonitorManagerTests`: перечисление мониторов, primary, геометрия, DPI и событие `DisplayChanged` через `HWND_BROADCAST`), источники событий (`ProcessEventMonitorTests`, `ShellEventCoordinatorTests`) и lifecycle (`SingleInstanceHelperTests`: захват и освобождение lease, отказ второму экземпляру, поиск и активация собственного окна). Использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо сломанного в окружении COM `IShellLinkW.Save`; environment-зависимые проверки (foreground lock, мониторы) завершаются `Inconclusive`, а не падают.
 
 ## Решения Stage 0
 
@@ -278,11 +289,22 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - Отбор оконных сообщений, означающих изменение дисплеев, намеренно узкий: `WM_DEVICECHANGE` обрабатывается только для `DBT_DEVNODES_CHANGED`, `WM_SETTINGCHANGE` — только для `SPI_SETWORKAREA` и `SPI_SETLOGICALDPIOVERRIDE`. Остальные сообщения этой группы приходят постоянно (смена клавиатуры, раскладки, темы) и не меняют ни состав, ни геометрию мониторов.
 - Определение состояния MSIX-приложения по AUMID удалено: оно сравнивало AUMID целевого приложения с AUMID собственного процесса оболочки, то есть проверяло не то приложение. Корректная альтернатива потребовала бы COM-вызова для каждого процесса (интерфейс создаётся на отдельном STA-потоке), что несопоставимо дороже проверки по каталогу установки. Пакет определяется разбором пути процесса (`PackageIdentity`), потому что каталог установки из реестра для bundle-пакетов указывает на `neutral`-вариант вместо установленного. Побочный эффект: пакеты с фоновым сервисом без окна показываются запущенными, пока сервис жив.
 
+## Решения Stage 10 — Application Lifecycle
+
+- Одиночность экземпляра обеспечивается именованным mutex (`SingleInstanceHelper.Acquire`), а не поиском процесса по имени exe: несколько процессов одного имени могут существовать по разным причинам, а mutex — единственный объект ядра, который живёт ровно столько, сколько живёт экземпляр, и не переживает аварийное завершение как «занятый».
+- `SingleInstanceLease` удерживает mutex всё время работы и освобождается только на потоке-владельце: мутекс имеет thread affinity, поэтому освобождение с другого потока невозможно. `Dispose` идемпотентен, а при повторном запуске `Acquire` возвращает `null`, и вызывающий код завершает процесс — новый экземпляр не создаёт второй hook-поток и второе окно.
+- `AbandonedMutexException` трактуется как «экземпляр свободен»: это означает, что предыдущий процесс завершился аварийно, не освободив mutex. Считать такой mutex занятым означало бы навсегда запретить запуск после падения.
+- Активация существующего экземпляра (`ActivateExistingInstance`) — best-effort: окно восстанавливается через `ShowWindowAsync(SW_RESTORE)` и выводится на передний план через `SetForegroundWindow`. При foreground lock система может отклонить перевод на передний план; это не ошибка и не повод завершать новый процесс с ошибкой.
+- Окно собственного экземпляра ищется по владеющему процессу (`GetWindowThreadProcessId` + сравнение пути процесса с `Environment.ProcessPath`), а не по пути модуля окна. `GetWindowModuleFileNameW` для чужого окна возвращает модуль вызывающего процесса, поэтому по нему нельзя понять, кто владеет окном, — сопоставление по процессу не имеет этого дефекта и не требует знать класс окна.
+- Название класса окна больше не задаётся: каркас использовал `SetClassLongPtr` для установки имени класса и поиска окна по этому имени, но фактически ничего не менял, а поиск никогда не совпадал. Единственная точка истины — владеющий процесс окна.
+- Освобождение ресурсов при выходе упорядочено: при закрытии окна сначала сбрасывается и освобождается `DesktopLayoutPersistenceWriter`, затем освобождается `ShellEventCoordinator` (источники событий и хуки), и последним — lease. Mutex освобождается только после остановки хуков и записи layout, поэтому новый экземпляр не поднимается раньше, чем предыдущий отпустил системные ресурсы.
+- Stage 10 не реализует автозапуск при входе в систему: lifecycle здесь ограничен startup/shutdown и single-instance; автозапуск остаётся отдельной задачей.
+
 ## Windows API
 
 ### Текущий статус
 
-Glaze Shell использует только официальные Win32 и COM API. P/Invoke и COM-интерфейсы изолированы в `GlazeShell.Windows` (каталоги `Interop`, `Shell`, `Win32`, `Applications`, `WindowManagement`, `DisplayManagement`); `GlazeShell.Core` и `GlazeShell.Data` Windows API не используют: Core не содержит native типов, а Data работает через BCL (`System.Text.Json`, `System.IO`) и зависит только от Core, поэтому проверки безопасности Windows к этим слоям не применяются.
+Glaze Shell использует только официальные Win32 и COM API. P/Invoke и COM-интерфейсы изолированы в `GlazeShell.Windows` (каталоги `Interop`, `Shell`, `Win32`, `Applications`, `WindowManagement`, `DisplayManagement`, `SystemEvents`, `Lifecycle`); `GlazeShell.Core` и `GlazeShell.Data` Windows API не используют: Core не содержит native типов, а Data работает через BCL (`System.Text.Json`, `System.IO`) и зависит только от Core, поэтому проверки безопасности Windows к этим слоям не применяются.
 
 ### Целевая платформа и версии API
 
@@ -300,10 +322,11 @@ Glaze Shell использует только официальные Win32 и CO
 | AppsFolder | `SHCreateItemFromParsingName`, `IShellFolder`, `IShellItemArray`, `IID_IShellItemArray` `{56FDF344-FD6D-11D0-958A-006097C9A090}` | `Shell/AppsFolderSource.cs` |
 | MSIX | `IApplicationActivationManager` (`ActivateApplication`) | `Interop/IApplicationActivationManager.cs` |
 | MSIX | разбор пути процесса (`WindowsApps\<PackageFullName>`) через `PackageIdentity` | `GlazeShell.Core/Discovery/PackageIdentity.cs`, `Applications/ProcessInspector.cs` |
-| Processes | `Process.GetProcesses`, `CloseMainWindow` | `Applications/WindowsApplicationLauncher.cs`, `Applications/ProcessInspector.cs`, `SystemEvents/SystemProcessSnapshotSource.cs` |
+| Processes | `Process.GetProcesses`, `CloseMainWindow` | `Applications/WindowsApplicationLauncher.cs`, `Applications/ProcessInspector.cs`, `SystemEvents/ProcessEventMonitor.cs` |
 | COM | `CoInitializeEx`, `CoUninitialize`, `CoTaskMemFree`, `CoCreateInstance` | `Win32/Ole32.cs`, `Shell/ShellIdentifiers.cs` |
 | Windows | `EnumWindows`, `GetForegroundWindow`, `IsWindow`, `GetWindowText`, `GetClassName`, `GetWindowThreadProcessId`, `ShowWindowAsync`, `PostMessage`, `SetForegroundWindow`, `AttachThreadInput`, `GetWindowPlacement`, `SetWindowPos` | `Win32/User32.cs` |
 | Windows events | `SetWinEventHook`/`UnhookWinEvent`, `GetMessage`/`TranslateMessage`/`DispatchMessage` (0x0003–0x0017, 0x8000–0x8017) | `Win32/User32.cs`, `WindowManagement/WindowEventMonitor.cs` |
+| Lifecycle | именованный mutex (BCL `System.Threading.Mutex`), `EnumWindows`, `IsWindowVisible`, `GetWindowThreadProcessId`, `IsIconic`, `ShowWindowAsync`, `SetForegroundWindow` | `Lifecycle/SingleInstanceHelper.cs`, `Win32/User32.cs` |
 | Window cloak | `DwmGetWindowAttribute` (`DWMWA_CLOAKED`) | `Win32/Dwmapi.cs`, `WindowManagement/NativeWindowEnumerator.cs` |
 | Monitors | `EnumDisplayMonitors`, `EnumDisplaySettingsW`, `MonitorFromWindow`, `MonitorFromPoint` | `Win32/User32.cs`, `DisplayManagement/NativeMonitorEnumerator.cs` |
 | DPI | `GetDpiForMonitor` (`MDT_EFFECTIVE_DPI`), `GetDpiForSystem`, `GetDpiForWindow` | `Win32/Shcore.cs`, `Win32/User32.cs` |
@@ -382,6 +405,13 @@ Stage 1 добавил только framework-free Core: модели, конт�
 - `ThemeManager` отдаёт неизменяемый снимок, поэтому подписчики `ThemeChanged` не перестраивают набор тем и не копируют его на каждое обращение.
 - Смена темы не пишет на диск: выбор темы меняет только состояние в памяти, а `ActiveThemeId` сохраняется вместе с настройками обычным путём.
 
+### Stage 10 — Application Lifecycle
+
+- Проверка одиночности не создаёт фоновой работы: именованный mutex удерживается без потока и таймера, а его цена — один объект ядра на процесс.
+- Перечисление окон (`EnumWindows`) выполняется только при повторном запуске и только до первого совпадения: в обычном сценарии первого экземпляра оно не запускается вовсе.
+- Активация существующего экземпляра использует `ShowWindowAsync` и не блокирует вызывающий поток; отказ `SetForegroundWindow` не приводит к повторным попыткам или опросу.
+- Освобождение lease происходит на штатном пути закрытия окна, поэтому ресурс не копится между запусками и не требует отдельного монитора процессов.
+
 ### Принципы проектирования
 
 - Использовать Windows events и callbacks вместо постоянных polling loops.
@@ -412,4 +442,4 @@ UI может использовать модели, интерфейсы Applic
 
 ## Следующие архитектурные изменения
 
-Следующие стадии: Windows Events (централизованная event-driven модель), Application Lifecycle (single-instance и автозапуск) и Stage 13 Security (общий security review с hardening boundaries). Persistence расширяется только по необходимости: если данные потребуют запросов или транзакций, будет рассмотрен переход на SQLite с явной версией схемы. Система тем расширяется в сторону каталога тем и в сторону UI: загрузчик уже ограничен лимитами и проверками, а применение темы к визуальному дереву остаётся за владельцем проекта. Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.
+Следующие стадии: Stage 11 Performance (профилирование и оптимизация фоновых ресурсов), Stage 12 Security (общий security review с hardening boundaries) и Stage 13 Testing и Release (расширенное покрытие и первый релиз). Application Lifecycle реализован на Stage 10 (single-instance и корректный startup/shutdown); автозапуск при входе в систему остаётся отдельной задачей. Persistence расширяется только по необходимости: если данные потребуют запросов или транзакций, будет рассмотрен переход на SQLite с явной версией схемы. Система тем расширяется в сторону каталога тем и в сторону UI: загрузчик уже ограничен лимитами и проверками, а применение темы к визуальному дереву остаётся за владельцем проекта. Перед добавлением каждого P/Invoke или Windows hook будут проверены поддержка Windows, permissions, lifetime ресурсов и альтернативы.

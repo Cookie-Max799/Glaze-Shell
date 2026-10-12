@@ -6,6 +6,17 @@
 
 ### Added
 
+#### Stage 10 — Application Lifecycle
+
+- Реализован `SingleInstanceHelper`/`SingleInstanceLease` (`GlazeShell.Windows/Lifecycle`) — единый жизненный цикл экземпляра приложения. `Acquire` создаёт именованный mutex (`GlazeShell.SingleInstance.v1`) и удерживает его на всё время работы процесса; если mutex уже занят, возвращается `null`, и вызывающий код завершает запуск. `SingleInstanceLease` — `IDisposable` с идемпотентным освобождением: повторный `Dispose` не делает ничего, а освобождение выполняется только на потоке-владельце mutex.
+- Заброшенный mutex (`AbandonedMutexException`) трактуется как «первый экземпляр»: аварийно завершившийся предыдущий процесс не должен мешать запуску нового.
+- `ActivateExistingInstance` находит окно уже работающего экземпляра и поднимает его: восстанавливает из свёрнутого состояния (`ShowWindowAsync(SW_RESTORE)`) и best-effort выводит на передний план (`SetForegroundWindow`); отказ системы при foreground lock не считается ошибкой.
+- `FindOwnVisibleWindow` ищет видимое top-level окно своего экземпляра через `EnumWindows` с `IsWindowVisible`, определяя владельца окна по `GetWindowThreadProcessId` и сравнению пути процесса с `Environment.ProcessPath`. Идентификация по владеющему процессу, а не по пути модуля окна (`GetWindowModuleFileNameW`): для чужих окон функция возвращает модуль вызывающего процесса и потому для сопоставления непригодна.
+- `App.xaml.cs` удерживает lease в поле: `Acquire()` вызывается в конструкторе до создания окна; при повторном запуске окно существующего экземпляра активируется, а процесс завершается через `Environment.Exit(0)`. При закрытии окна lease освобождается последним — после `Flush`/`Dispose` layout-writer и `Dispose` источников событий, поэтому mutex освобождается и приложение можно запустить заново.
+- Удалён нерабочий каркас single-instance: mutex освобождался сразу в `using`, `SetClassLongPtr`-взаимодействие с названием класса окна было no-op, а поиск окна по классу никогда не совпадал. Поиск окна больше не зависит от класса окна, поэтому `MainWindow` перестал задавать имя класса.
+- Добавлены тесты Stage 10 (`SingleInstanceHelperTests`): первый экземпляр получает lease, второй (с другого потока — named mutex реентерабелен внутри потока) получает `null`, повторный захват после освобождения, идемпотентность `Dispose`, независимость разных имён, поиск собственного окна и отсутствие исключений при активации.
+- Результат: 284 tests (`GlazeShell.Core.Tests` 146/146, `GlazeShell.Data.Tests` 64/64, `GlazeShell.Windows.Tests` 74/74 при изолированном запуске). Debug и Release build — 0 warnings / 0 errors.
+
 #### Stage 9 — Windows Events
 
 - Реализован `ShellEventCoordinator` (`GlazeShell.Windows/SystemEvents`) — единая точка запуска источников системных событий: оконные события (`SetWinEventHook`), события дисплеев (скрытое message window) и события процессов. Источники запускаются из одного места, поэтому ни один не поднимается дважды и ни один не остаётся работать после закрытия приложения.
