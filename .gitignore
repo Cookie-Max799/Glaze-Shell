@@ -17,7 +17,7 @@ UserData/
 *.jfm
 *.log
 
-# Secrets and credentials must never be committed
+# Секреты и учётные данные не должны попадать в репозиторий
 .env
 .env.*
 *.pfx
@@ -30,5 +30,8 @@ UserData/
 *.secret
 secrets.json
 
-# Local development instructions (not part of the repository)
+# Локальные инструкции разработки (не часть репозитория)
 AGENTS.md
+
+# Локальная входная папка для исходных визуальных ассетов (кладётся вручную, раскладывается по пути)
+assets-src/

@@ -19,10 +19,12 @@ GlazeShell/
 ├── .gitattributes
 ├── .gitignore
 ├── docs/
+│   ├── assets/
 │   ├── ARCHITECTURE.md
 │   └── SECURITY.md
 ├── src/
 │   ├── GlazeShell.App/
+│   │   ├── Assets/
 │   │   └── Presentation/
 │   ├── GlazeShell.Core/
 │   │   ├── Configuration/
@@ -51,7 +53,6 @@ GlazeShell/
     ├── GlazeShell.Core.Tests/
     ├── GlazeShell.Data.Tests/
     └── GlazeShell.Windows.Tests/
-```
 ```
 
 ## Dependency flow

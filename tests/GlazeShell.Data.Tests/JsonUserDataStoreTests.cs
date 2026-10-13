@@ -119,7 +119,7 @@ public sealed class JsonUserDataStoreTests
         Assert.HasCount(1, isolated);
         StringAssert.StartsWith(isolated[0], UserDataFileNames.Settings);
 
-        // The document is rewritten with defaults, so the next start is clean.
+        // Документ перезаписан значениями по умолчанию, поэтому следующий запуск чист.
         Assert.AreEqual(PersistenceStatus.Loaded, data.CreateStore().LoadSettings().Status);
         StringAssert.StartsWith(data.Read(UserDataFileNames.Settings), "{");
     }
@@ -356,7 +356,7 @@ public sealed class JsonUserDataStoreTests
         Assert.ThrowsExactly<PersistenceLimitExceededException>(
             () => store.SaveLayout(TempUserData.CreateLayout(oversized)));
 
-        // The previously written document stays intact.
+        // Ранее записанный документ остаётся нетронутым.
         Assert.AreEqual(PersistenceStatus.Loaded, data.CreateStore().LoadLayout().Status);
     }
 

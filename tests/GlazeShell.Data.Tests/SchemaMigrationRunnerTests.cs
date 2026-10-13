@@ -83,7 +83,7 @@ public sealed class SchemaMigrationRunnerTests
     {
         var runner = new SchemaMigrationRunner(2, UserDataDocumentKind.Layout, [new Migration(1, "second")]);
 
-        // The chain is built for a single document, so a foreign migration cannot silently migrate it.
+        // Цепочка строится для одного документа, поэтому чужая миграция не может молча мигрировать его.
         Assert.ThrowsExactly<PersistenceException>(
             () => runner.ParseAndMigrate("""{ "schemaVersion": 1 }""", 1));
     }

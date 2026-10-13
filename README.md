@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.png">
+    <img alt="Glaze Shell — глубокая персонализация рабочего окружения" src="docs/assets/banner-dark.png" width="100%">
+  </picture>
+</p>
+
 # Glaze Shell
 
 [![platform](https://img.shields.io/badge/platform-Windows%2010%2B-0078D4?logo=windows&logoColor=white)](#требования)
@@ -157,21 +165,20 @@ UI → ViewModels и Application Services → Core → Interfaces → Windows In
 GlazeShell/
 ├── src/
 │   ├── GlazeShell.App/            # WinUI 3 приложение (UI, композиция, точка входа)
+│   │   └── Assets/                # иконка (app.ico) и логотипы приложения
 │   ├── GlazeShell.Core/           # доменные модели, контракты, события (framework-free)
 │   ├── GlazeShell.Data/           # persistence (JSON, миграции, пользовательские данные)
 │   ├── GlazeShell.Infrastructure/ # логирование, пути, диагностика
 │   └── GlazeShell.Windows/        # Win32/COM P/Invoke, хуки, нативные интеграции
-├── tests/
-│   ├── GlazeShell.Core.Tests/
-│   ├── GlazeShell.Data.Tests/
-│   └── GlazeShell.Windows.Tests/
+├── tests/                         # тестовые проекты (*.Tests)
 ├── docs/
+│   ├── assets/                    # баннеры и логотипы для README/GitHub
 │   ├── ARCHITECTURE.md
 │   └── SECURITY.md
 ├── GlazeShell.slnx
+├── global.json
 ├── Directory.Build.props
 ├── Directory.Packages.props
-├── global.json
 ├── README.md
 └── CHANGELOG.md
 ```
