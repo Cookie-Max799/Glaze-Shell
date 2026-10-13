@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using GlazeShell.Windows.Win32;
 
@@ -6,6 +7,8 @@ namespace GlazeShell.Windows.Shell;
 internal sealed class ShellLinkData
 {
     internal const int HeaderSize = 0x4C;
+
+    private static readonly Encoding AnsiEncoding = ResolveAnsiEncoding();
 
     private const uint FlagHasLinkTargetIdList = 0x00000001;
     private const uint FlagHasLinkInfo = 0x00000002;
@@ -107,7 +110,7 @@ internal sealed class ShellLinkData
 
         if ((flags & FlagHasLinkInfo) != 0 && (flags & FlagForceNoLinkInfo) == 0)
         {
-            ReadLinkInfo(bytes, ref offset, unicode, out localBasePath, out commonPathSuffix);
+            ReadLinkInfo(bytes, ref offset, out localBasePath, out commonPathSuffix);
         }
 
         string? name = null;
@@ -160,7 +163,7 @@ internal sealed class ShellLinkData
     {
         if (!string.IsNullOrWhiteSpace(LocalBasePath))
         {
-            return ExpandEnvironment(LocalBasePath);
+            return CombineBasePath(ExpandEnvironment(LocalBasePath), CommonPathSuffix);
         }
 
         if (!string.IsNullOrWhiteSpace(RelativePath))
@@ -179,6 +182,21 @@ internal sealed class ShellLinkData
         }
 
         return null;
+    }
+
+    private static string CombineBasePath(string basePath, string? suffix)
+    {
+        if (string.IsNullOrWhiteSpace(suffix))
+        {
+            return basePath;
+        }
+
+        var expandedSuffix = ExpandEnvironment(suffix);
+
+        // Windows часто дублирует конец пути в суффиксе, поэтому повторное добавление пропускается.
+        return basePath.EndsWith(expandedSuffix, StringComparison.OrdinalIgnoreCase)
+            ? basePath
+            : basePath + expandedSuffix;
     }
 
     internal static string ExpandEnvironment(string path)
@@ -246,7 +264,6 @@ internal sealed class ShellLinkData
     private static void ReadLinkInfo(
         byte[] bytes,
         ref int offset,
-        bool unicode,
         out string? localBasePath,
         out string? commonPathSuffix)
     {
@@ -259,25 +276,51 @@ internal sealed class ShellLinkData
         }
 
         var linkInfoSize = ReadUInt32(bytes, offset);
-        var localBasePathOffset = ReadUInt32(bytes, offset + 0x10);
-        var commonPathSuffixOffset = ReadUInt32(bytes, offset + 0x14);
 
         if (linkInfoSize < 0x1C || linkInfoSize > bytes.Length - offset)
         {
             return;
         }
 
-        if (localBasePathOffset != 0 && offset + (int)localBasePathOffset < bytes.Length)
-        {
-            localBasePath = ReadString(bytes, offset + (int)localBasePathOffset, unicode);
-        }
+        var linkInfoHeaderSize = ReadUInt32(bytes, offset + 0x04);
 
-        if (commonPathSuffixOffset != 0 && offset + (int)commonPathSuffixOffset < bytes.Length)
+        // Строки LinkInfo, на которые указывают ANSI-смещения, всегда кодируются ANSI,
+        // даже когда в заголовке ярлыка выставлен флаг IsUnicode: Unicode-варианты лежат
+        // по отдельным смещениям (+0x1C и +0x20) и присутствуют, только если заголовок
+        // LinkInfo имеет размер не меньше 0x24 (MS-SHLLINK, раздел LinkInfo).
+        var localBasePathOffset = ReadUInt32(bytes, offset + 0x10);
+        var commonPathSuffixOffset = ReadUInt32(bytes, offset + 0x18);
+
+        if (linkInfoHeaderSize >= 0x24 && offset + 0x24 <= bytes.Length)
         {
-            commonPathSuffix = ReadString(bytes, offset + (int)commonPathSuffixOffset, unicode);
+            localBasePath = ReadLinkInfoString(
+                bytes, offset, linkInfoSize, ReadUInt32(bytes, offset + 0x1C), unicode: true)
+                ?? ReadLinkInfoString(bytes, offset, linkInfoSize, localBasePathOffset, unicode: false);
+
+            commonPathSuffix = ReadLinkInfoString(
+                bytes, offset, linkInfoSize, ReadUInt32(bytes, offset + 0x20), unicode: true)
+                ?? ReadLinkInfoString(bytes, offset, linkInfoSize, commonPathSuffixOffset, unicode: false);
+        }
+        else
+        {
+            localBasePath = ReadLinkInfoString(bytes, offset, linkInfoSize, localBasePathOffset, unicode: false);
+            commonPathSuffix = ReadLinkInfoString(bytes, offset, linkInfoSize, commonPathSuffixOffset, unicode: false);
         }
 
         offset += (int)linkInfoSize;
+    }
+
+    private static string? ReadLinkInfoString(byte[] bytes, int linkInfoOffset, uint linkInfoSize, uint stringOffset, bool unicode)
+    {
+        // Нулевое смещение означает отсутствие строки; строка обязана лежать внутри LinkInfo.
+        if (stringOffset == 0 || stringOffset >= linkInfoSize)
+        {
+            return null;
+        }
+
+        var absolute = linkInfoOffset + (int)stringOffset;
+
+        return absolute >= bytes.Length ? null : ReadString(bytes, absolute, unicode);
     }
 
     private static bool DetectDarwinData(byte[] bytes, int offset)
@@ -291,10 +334,27 @@ internal sealed class ShellLinkData
         return signature == 0xA0000001;
     }
 
+    /// <summary>
+    /// ANSI-строки LinkInfo записаны в активной кодовой странице системы (ACP),
+    /// а не в UTF-8 и не в Latin1: на русской Windows это, например, CP1251.
+    /// </summary>
+    private static Encoding ResolveAnsiEncoding()
+    {
+        try
+        {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            return Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+        {
+            return Encoding.Latin1;
+        }
+    }
+
     private static string? ReadString(byte[] bytes, int offset, bool unicode) =>
         unicode
             ? Encoding.Unicode.GetString(bytes, offset, FindTerminator(bytes, offset, 2) - offset)
-            : Encoding.Latin1.GetString(bytes, offset, FindTerminator(bytes, offset, 1) - offset);
+            : AnsiEncoding.GetString(bytes, offset, FindTerminator(bytes, offset, 1) - offset);
 
     private static string? ReadString(byte[] bytes, ref int offset, bool unicode)
     {
@@ -308,7 +368,7 @@ internal sealed class ShellLinkData
         var end = FindTerminator(bytes, start, unicode ? 2 : 1);
         var value = unicode
             ? Encoding.Unicode.GetString(bytes, start, end - start)
-            : Encoding.Latin1.GetString(bytes, start, end - start);
+            : AnsiEncoding.GetString(bytes, start, end - start);
         offset = end + (unicode ? 2 : 1);
         return value;
     }

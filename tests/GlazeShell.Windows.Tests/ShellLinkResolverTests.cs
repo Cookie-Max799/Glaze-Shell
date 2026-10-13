@@ -121,4 +121,23 @@ public sealed class ShellLinkResolverTests
         Assert.IsNull(resolved);
         Assert.IsNotNull(error);
     }
+
+    [TestMethod]
+    public void ResolvesRealWindowsShortcutWithAnsiLinkInfo()
+    {
+        // Fixture создан самими Windows: LinkInfoHeaderSize = 0x1C, а LocalBasePath
+        // записан однобайтовой (ANSI) строкой, несмотря на установленный флаг IsUnicode.
+        var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "real-linkinfo-ansi.lnk");
+
+        Assert.IsTrue(File.Exists(fixture), $"Fixture was not copied to the output: {fixture}");
+
+        var expected = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.System),
+            "notepad.exe");
+
+        Assert.IsTrue(ShellLinkResolver.TryResolve(fixture, out var resolved, out var error), error);
+        Assert.IsNotNull(resolved);
+        Assert.AreEqual(expected, resolved!.Path, ignoreCase: true);
+        Assert.AreEqual(ShellLinkResolutionStrategy.ManagedLinkInfo, resolved.Strategy);
+    }
 }

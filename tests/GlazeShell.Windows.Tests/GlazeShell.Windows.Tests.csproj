@@ -24,4 +24,8 @@
     <Using Include="Microsoft.VisualStudio.TestTools.UnitTesting" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Fixtures\**\*.lnk" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

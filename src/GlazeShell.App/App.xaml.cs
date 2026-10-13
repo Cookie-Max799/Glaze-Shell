@@ -59,6 +59,10 @@ public partial class App : Application
             eventManager,
             options);
 
+        // Отказ источника не прерывает запуск, но раньше о нём не оставалось следа:
+        // предупреждения обнаружения попадают в лог, чтобы пустой список был объясним.
+        discovery.DiscoveryCompleted += (_, report) => ReportDiscovery(report);
+
         var launcher = new WindowsApplicationLauncher(
             discovery,
             new ProcessInspector());
@@ -207,6 +211,14 @@ public partial class App : Application
             $"Theme '{active.Id}' is active, {manager.GetThemes().Count} user theme(s) are loaded.");
 
         return manager;
+    }
+
+    private void ReportDiscovery(DiscoveryReport report)
+    {
+        foreach (var warning in report.Warnings)
+        {
+            _logger.Write(GlazeLogLevel.Warning, "Discovery", warning);
+        }
     }
 
     private void ReportPersistenceStatus<T>(PersistenceLoadResult<T> result)

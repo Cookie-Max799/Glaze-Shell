@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
@@ -14,7 +15,7 @@ namespace GlazeShell.Windows.Applications;
 public sealed class WindowsApplicationLauncher : IApplicationLauncher
 {
     private const uint NoErrorDialog = 0x00004004;
-    private const int CloseTimeoutMilliseconds = 5000;
+    private const int CloseTimeoutMilliseconds = 15000;
     private const int RestartDelayMilliseconds = 350;
 
     private static readonly TimeSpan ClosePollInterval = TimeSpan.FromMilliseconds(120);
@@ -75,7 +76,7 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
     }
 
 
-    public async Task<bool> CloseAsync(string applicationId, CancellationToken cancellationToken = default)
+public async Task<bool> CloseAsync(string applicationId, CancellationToken cancellationToken = default)
     {
         var application = await ResolveAsync(applicationId, cancellationToken).ConfigureAwait(false);
 
@@ -91,21 +92,20 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
             return false;
         }
 
-        var closed = false;
-
         foreach (var processId in processes)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            closed |= TryClose(processId);
+            TryClose(processId);
         }
 
-        return closed;
+        PostCloseToWindows(processes);
+
+        return await WaitForExitAsync(applicationId, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ApplicationLaunchResult> RestartAsync(string applicationId, CancellationToken cancellationToken = default)
     {
         await CloseAsync(applicationId, cancellationToken).ConfigureAwait(false);
-        await WaitForExitAsync(applicationId, cancellationToken).ConfigureAwait(false);
 
         if (cancellationToken.IsCancellationRequested)
         {
@@ -131,19 +131,23 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
         return Array.Empty<int>();
     }
 
-    private async Task WaitForExitAsync(string applicationId, CancellationToken cancellationToken)
+private async Task<bool> WaitForExitAsync(string applicationId, CancellationToken cancellationToken)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(CloseTimeoutMilliseconds);
 
         while (DateTime.UtcNow < deadline)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+
             if (!await IsRunningAsync(applicationId, cancellationToken).ConfigureAwait(false))
             {
-                return;
+                return true;
             }
 
             await Task.Delay(ClosePollInterval, cancellationToken).ConfigureAwait(false);
         }
+
+        return false;
     }
 
     private async Task<Application?> ResolveAsync(string applicationId, CancellationToken cancellationToken)
@@ -152,7 +156,7 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
         return await _applications.GetAsync(applicationId, cancellationToken).ConfigureAwait(false);
     }
 
-    private static bool TryClose(int processId)
+private static bool TryClose(int processId)
     {
         try
         {
@@ -163,6 +167,27 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
         {
             return false;
         }
+    }
+
+    private static void PostCloseToWindows(IReadOnlyList<int> processIds)
+    {
+        var targetProcesses = new HashSet<int>(processIds);
+
+        // CloseMainWindow() находит только «главное» окно процесса. Некоторые приложения
+        // (например, Acrobat) держат UI в отдельном top-level окне, поэтому дополнительно
+        // отправим WM_CLOSE каждому видимому окну процесса — это гарантирует, что запрос
+        // на закрытие дойдёт до приложения, даже если главное окно не нашлось.
+        User32.EnumWindows((hwnd, parameter) =>
+        {
+            _ = User32.GetWindowThreadProcessId(hwnd, out uint processId);
+
+            if (targetProcesses.Contains((int)processId))
+            {
+                _ = User32.PostMessage(hwnd, User32.WmClose, 0, 0);
+            }
+
+            return true;
+        }, 0);
     }
 
     private static ApplicationLaunchResult LaunchMsix(Application application, string applicationUserModelId)

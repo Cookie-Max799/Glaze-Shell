@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 
 namespace GlazeShell.Windows.Tests;
@@ -6,6 +7,8 @@ internal sealed class ShellLinkBuilder
 {
     private const int HeaderSize = 0x4C;
     private const int LinkInfoHeaderSize = 0x1C;
+
+    private static readonly Encoding AnsiEncoding = ResolveAnsiEncoding();
 
     private const uint FlagHasLinkTargetIdList = 0x00000001;
     private const uint FlagHasLinkInfo = 0x00000002;
@@ -114,26 +117,51 @@ internal sealed class ShellLinkBuilder
 
     private static byte[] BuildLinkInfo(string localBasePath)
     {
-        var suffix = Path.GetFileName(localBasePath);
-        var basePathBytes = ToUnicode(localBasePath);
-        var suffixBytes = ToUnicode(suffix);
+        // Windows хранит LocalBasePath по ANSI-смещению в однобайтовой кодировке,
+        // а CommonPathSuffix оставляет пустым (MS-SHLLINK, раздел LinkInfo).
+        var basePathBytes = ToAnsi(localBasePath);
+        var suffixBytes = new byte[] { 0 };
 
-        var total = LinkInfoHeaderSize + basePathBytes.Length + suffixBytes.Length;
+        var basePathOffset = LinkInfoHeaderSize;
+        var suffixOffset = basePathOffset + basePathBytes.Length;
+        var total = suffixOffset + suffixBytes.Length;
+
         var info = new byte[total];
         var span = info.AsSpan();
 
         WriteUInt32(span, 0x00, (uint)total);
         WriteUInt32(span, 0x04, LinkInfoHeaderSize);
-        WriteUInt32(span, 0x08, 0);
+        WriteUInt32(span, 0x08, 0x1);
         WriteUInt32(span, 0x0C, 0);
-        WriteUInt32(span, 0x10, LinkInfoHeaderSize);
+        WriteUInt32(span, 0x10, (uint)basePathOffset);
         WriteUInt32(span, 0x14, 0);
-        WriteUInt32(span, 0x18, (uint)(LinkInfoHeaderSize + basePathBytes.Length));
+        WriteUInt32(span, 0x18, (uint)suffixOffset);
 
-        basePathBytes.CopyTo(info.AsSpan(LinkInfoHeaderSize));
-        suffixBytes.CopyTo(info.AsSpan(LinkInfoHeaderSize + basePathBytes.Length));
+        basePathBytes.CopyTo(info.AsSpan(basePathOffset));
+        suffixBytes.CopyTo(info.AsSpan(suffixOffset));
 
         return info;
+    }
+
+    private static byte[] ToAnsi(string value)
+    {
+        var bytes = AnsiEncoding.GetBytes(value);
+        var result = new byte[bytes.Length + 1];
+        bytes.CopyTo(result, 0);
+        return result;
+    }
+
+    private static Encoding ResolveAnsiEncoding()
+    {
+        try
+        {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+            return Encoding.GetEncoding(CultureInfo.CurrentCulture.TextInfo.ANSICodePage);
+        }
+        catch (Exception exception) when (exception is ArgumentException or NotSupportedException)
+        {
+            return Encoding.Latin1;
+        }
     }
 
     private static byte[] ToUnicode(string value)

@@ -191,6 +191,7 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 ## Решения Stage 2 — Discovery
 
 - Managed парсер `ShellLinkData` является первичным путём для `.lnk`: он не требует COM и работает в повреждённом окружении, где `CLSID_ShellLink` зарегистрирован не в `shell32.dll`.
+- Строки `LinkInfo` разбираются по MS-SHLLINK в их фактической кодировке: `LocalBasePath`/`CommonPathSuffix` на ANSI-офсетах (`0x10`/`0x18`) декодируются в ANSI-кодировке системы (`ANSICodePage` через `CodePagesEncodingProvider`, с fallback на Latin1), а Unicode-варианты (`0x1C`/`0x20`) читаются только при `LinkInfoHeaderSize >= 0x24`. Опора на флаг `IsUnicode` из `LinkFlags` была ошибкой: реальные ярлыки имеют `LinkInfoHeaderSize = 0x1C` и ANSI-строки, поэтому декодирование их как Unicode давало мусорный непустой путь, из-за чего managed-резолвер формально «успевал» и все ярлыки отбрасывались как неразрешимые (пустой список приложений).
 - `ShellLinkResolver` возвращает enum-стратегию резолва; failure возвращает описание для диагностики, а не исключение.
 - CORP-отказ от сообщений: неразрешённые `.lnk` пропускаются с warning в `ApplicationDiscoveryResult`, discovery не падает целиком.
 - Nodes/reparse points, `.url`, `explorer.exe` и targets без `RequireExistingTarget`-проверки отфильтровываются на уровне источника.
@@ -202,7 +203,7 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 
 - `IApplicationActivationManager` реализует корректную vtable: `GetApplicationUserModelId` принимает process handle, а для PID используется `GetApplicationUserModelIdFromProcessId`.
 - Win32 запуск использует `ProcessStartInfo` с `UseShellExecute=false` и не полагается на SHELLEXECUTE-командную строку.
-- Закрытие выполняется только через `CloseMainWindow`; принудительный `Kill` не применяется.
+- Закрытие выполняется вежливо: `CloseMainWindow`, а если главное окно процесса не найдено — `WM_CLOSE` по всем top-level окнам процесса через `PostMessage`. Принудительный `Kill`/`TerminateProcess` не применяется никогда. Результат определяется не фактом отправки сообщения, а фактическим завершением процесса: после запроса метод ждёт выхода до `CloseTimeoutMilliseconds` и сообщает «закрыто» только тогда, когда приложение действительно завершилось (у части приложений, например Acrobat, `CloseMainWindow` возвращает `false`/закрывается медленно, хотя запрос отрабатывает).
 - `ProcessInspector` освобождает каждый `Process` через `using` и проверяет границу каталога (а не `StartsWith` без разделителя).
 - `ProcessInspector.FindProcessesByPackage` определяет пакет по разбору пути процесса (`WindowsApps\<PackageFullName>`), а не по каталогу установки из реестра.
 - `ComApartment` выполняет COM в STA и балансирует `CoInitializeEx`/`CoUninitialize`; результат исключения пробрасывается в вызывающий поток через `ExceptionDispatchInfo`.
