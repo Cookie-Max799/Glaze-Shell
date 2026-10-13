@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using GlazeShell.Core.Models;
+using GlazeShell.Windows.DisplayManagement;
 using GlazeShell.Windows.Win32;
 
 namespace GlazeShell.Windows.WindowManagement;
@@ -10,6 +11,7 @@ internal static class NativeWindowEnumerator
 {
     private const int MaxWindowText = 512;
     private const int MaxClassName = 256;
+    private const uint MonitorDefaultToNull = 0;
 
     internal static IReadOnlyList<WindowInfo> Enumerate()
     {
@@ -59,7 +61,14 @@ internal static class NativeWindowEnumerator
             state: ReadState(hwnd),
             isForeground: User32.GetForegroundWindow() == hwnd,
             ownerId: GetOwnerId(hwnd),
-            canResize: (User32.GetWindowLongPtr(hwnd, User32.GwlStyle) & User32.WsThickFrame) != 0);
+            canResize: (User32.GetWindowLongPtr(hwnd, User32.GwlStyle) & User32.WsThickFrame) != 0,
+            monitorId: GetMonitorId(hwnd));
+    }
+
+    private static string? GetMonitorId(nint hwnd)
+    {
+        var hmonitor = User32.MonitorFromWindow(hwnd, MonitorDefaultToNull);
+        return hmonitor == 0 ? null : NativeMonitorEnumerator.CreateId(hmonitor);
     }
 
     internal static string CreateId(nint hwnd) =>

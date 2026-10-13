@@ -18,6 +18,8 @@ public sealed class ApplicationListViewModel : INotifyPropertyChanged
     private string _typeBadge = string.Empty;
     private bool _isRunning;
     private bool _hasWindows;
+    private bool _isSelected;
+    private bool _isLaunching;
 
     public ApplicationListViewModel(Application application)
     {
@@ -74,9 +76,41 @@ public sealed class ApplicationListViewModel : INotifyPropertyChanged
         private set => Set(ref _hasWindows, value);
     }
 
+    /// <summary>
+    /// Выбран ли элемент в списке. Управляется из <see cref="MainViewModel.Selected"/>:
+    /// так карточка получает яркое выделение и акцентный индикатор независимо от
+    /// визуальных состояний <c>ListViewItem</c>.
+    /// </summary>
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set => Set(ref _isSelected, value);
+    }
+
+    /// <summary>
+    /// Приложение сейчас запускается: карточка показывает круговой индикатор вместо
+    /// значка состояния.
+    /// </summary>
+    public bool IsLaunching
+    {
+        get => _isLaunching;
+        set
+        {
+            if (Set(ref _isLaunching, value))
+            {
+                OnPropertyChanged(nameof(IsNotLaunching));
+            }
+        }
+    }
+
+    public bool IsNotLaunching => !_isLaunching;
+
     public void Set(bool isRunning) => IsRunning = isRunning;
 
-    public void SetWindows(IReadOnlyList<WindowInfo> windows, IWindowManager windowManager)
+    public void SetWindows(
+        IReadOnlyList<WindowInfo> windows,
+        IWindowManager windowManager,
+        Func<string?, string?>? monitorName = null)
     {
         ArgumentNullException.ThrowIfNull(windowManager);
 
@@ -84,7 +118,7 @@ public sealed class ApplicationListViewModel : INotifyPropertyChanged
 
         foreach (var window in windows)
         {
-            Windows.Add(new WindowListItemViewModel(window, windowManager));
+            Windows.Add(new WindowListItemViewModel(window, windowManager, monitorName));
         }
 
         HasWindows = Windows.Count > 0;
@@ -114,9 +148,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// </summary>
     private static readonly TimeSpan RunningRefreshDelay = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>Логический размер холста карты мониторов; панель масштабирует его через <c>Viewbox</c>.</summary>
+    private const double MonitorMapCanvasWidth = 260;
+
+    private const double MonitorMapCanvasHeight = 118;
+
     private readonly IApplicationManager _applications;
     private readonly IApplicationLauncher _launcher;
     private readonly IWindowManager _windows;
+    private readonly IMonitorManager _monitors;
     private readonly IDesktopManager _desktop;
     private readonly DispatcherQueue _dispatcher;
     private readonly IDisposable _displayChanged;
@@ -135,6 +175,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private IReadOnlyList<ApplicationListViewModel> _visible = Array.Empty<ApplicationListViewModel>();
     private IReadOnlyList<ApplicationListViewModel> _all = Array.Empty<ApplicationListViewModel>();
+    private IReadOnlyList<WindowInfo> _lastWindows = Array.Empty<WindowInfo>();
     private ApplicationListViewModel? _selected;
     private string _searchText = string.Empty;
     private string _statusText = "Готово к загрузке";
@@ -155,11 +196,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _applications = applications ?? throw new ArgumentNullException(nameof(applications));
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _windows = windows ?? throw new ArgumentNullException(nameof(windows));
+        _monitors = monitors ?? throw new ArgumentNullException(nameof(monitors));
         _desktop = desktop ?? throw new ArgumentNullException(nameof(desktop));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
 
         ArgumentNullException.ThrowIfNull(events);
-        ArgumentNullException.ThrowIfNull(monitors);
         _windowOpened = events.Subscribe<WindowOpened>(_ => QueueWindowsRefresh());
         _windowClosed = events.Subscribe<WindowClosed>(_ => QueueWindowsRefresh());
         _foregroundChanged = events.Subscribe<ForegroundWindowChanged>(_ => QueueWindowsRefresh());
@@ -177,6 +218,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         LaunchCommand = new AsyncCommand(LaunchSelectedAsync, () => Selected is not null);
         CloseCommand = new AsyncCommand(CloseSelectedAsync, () => Selected is not null);
         RestartCommand = new AsyncCommand(RestartSelectedAsync, () => Selected is not null);
+        TerminateCommand = new AsyncCommand(TerminateSelectedAsync, () => Selected is not null);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -195,6 +237,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public AsyncCommand RestartCommand { get; }
 
+    public AsyncCommand TerminateCommand { get; }
+
     public string SearchText
     {
         get => _searchText;
@@ -212,10 +256,20 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         get => _selected;
         set
         {
-            if (Set(ref _selected, value))
+            var previous = _selected;
+
+            if (!Set(ref _selected, value))
             {
-                RaiseActionState();
+                return;
             }
+
+            if (previous is not null)
+            {
+                previous.IsSelected = false;
+            }
+
+            value?.IsSelected = true;
+            RaiseActionState();
         }
     }
 
@@ -265,6 +319,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         LaunchCommand.RaiseCanExecuteChanged();
         CloseCommand.RaiseCanExecuteChanged();
         RestartCommand.RaiseCanExecuteChanged();
+        TerminateCommand.RaiseCanExecuteChanged();
     }
 
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
@@ -313,20 +368,29 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
 
-        await RunAsync($"Запуск {target.Name}…", async token =>
-        {
-            var result = await _launcher.LaunchAsync(target.Id, token).ConfigureAwait(true);
+        target.IsLaunching = true;
 
-            if (result.Started)
+        try
+        {
+            await RunAsync($"Запуск {target.Name}…", async token =>
             {
-                target.Set(true);
-                SetStatus(result.ProcessId is { } pid ? $"Запущено, PID {pid}" : $"Запущено: {target.Name}");
-            }
-            else
-            {
-                SetStatus(result.Error ?? $"Не удалось запустить {target.Name}");
-            }
-        }).ConfigureAwait(true);
+                var result = await _launcher.LaunchAsync(target.Id, token).ConfigureAwait(true);
+
+                if (result.Started)
+                {
+                    target.Set(true);
+                    SetStatus(result.ProcessId is { } pid ? $"Запущено, PID {pid}" : $"Запущено: {target.Name}");
+                }
+                else
+                {
+                    SetStatus(result.Error ?? $"Не удалось запустить {target.Name}");
+                }
+            }).ConfigureAwait(true);
+        }
+        finally
+        {
+            target.IsLaunching = false;
+        }
     }
 
     public async Task CloseSelectedAsync()
@@ -375,6 +439,31 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             else
             {
                 SetStatus(result.Error ?? $"Не удалось перезапустить {target.Name}");
+            }
+        }).ConfigureAwait(true);
+    }
+
+    public async Task TerminateSelectedAsync()
+    {
+        var target = Selected;
+
+        if (target is null)
+        {
+            return;
+        }
+
+        await RunAsync($"Принудительное завершение {target.Name}…", async token =>
+        {
+            var terminated = await _launcher.TerminateAsync(target.Id, token).ConfigureAwait(true);
+
+            if (terminated)
+            {
+                target.Set(false);
+                SetStatus($"Завершено принудительно: {target.Name}");
+            }
+            else
+            {
+                SetStatus($"Не удалось завершить {target.Name}");
             }
         }).ConfigureAwait(true);
     }
@@ -594,9 +683,12 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _all = models;
         IsLoaded = true;
         ApplyFilter(_searchText);
+
+        // Отметка времени делает результат обновления заметным даже тогда, когда список
+        // не изменился: иначе повторное сканирование выглядело бы как «кнопка не работает».
         SetStatus(models.Count == 0
-            ? "Приложения не найдены"
-            : $"Найдено приложений: {models.Count}");
+            ? $"Приложения не найдены · обновлено {DateTime.Now:HH:mm:ss}"
+            : $"Найдено приложений: {models.Count} · обновлено {DateTime.Now:HH:mm:ss}");
     }
 
     private void ApplyFilter(string query)
@@ -702,7 +794,52 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                     Monitors.Add(new MonitorListItemViewModel(monitor));
                 }
             }
+
+            ApplyMonitorMap(monitors);
+            AssignWindowsToMonitors(monitors);
         });
+    }
+
+    /// <summary>
+    /// Раскладывает мониторы на схематичной карте с сохранением их взаимного расположения.
+    /// </summary>
+    private void ApplyMonitorMap(IReadOnlyList<MonitorInfo> monitors)
+    {
+        var placements = MonitorMapLayout.Compute(monitors, MonitorMapCanvasWidth, MonitorMapCanvasHeight, padding: 4);
+        var byId = placements.ToDictionary(static placement => placement.MonitorId, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var monitor in Monitors)
+        {
+            if (byId.TryGetValue(monitor.Id, out var placement))
+            {
+                monitor.SetPlacement(placement.Left, placement.Top, placement.Width, placement.Height);
+            }
+        }
+    }
+
+    private static Func<string?, string?> BuildMonitorNameResolver(IReadOnlyList<MonitorInfo> monitors)
+    {
+        var names = monitors.ToDictionary(static monitor => monitor.Id, static monitor => monitor.DeviceName, StringComparer.OrdinalIgnoreCase);
+        return monitorId => monitorId is not null && names.TryGetValue(monitorId, out var name) ? name : null;
+    }
+
+    /// <summary>
+    /// Раскладывает окна по мониторам для панели мониторов: у каждого монитора
+    /// показываются окна, находящиеся на нём.
+    /// </summary>
+    private void AssignWindowsToMonitors(IReadOnlyList<MonitorInfo> monitors)
+    {
+        var resolveMonitor = BuildMonitorNameResolver(monitors);
+
+        foreach (var monitor in Monitors)
+        {
+            var matching = _lastWindows
+                .Where(window => string.Equals(window.MonitorId, monitor.Id, StringComparison.OrdinalIgnoreCase))
+                .Select(window => new WindowListItemViewModel(window, _windows, resolveMonitor))
+                .ToArray();
+
+            monitor.SetWindows(matching);
+        }
     }
 
     private static string BuildMonitorSummary(IReadOnlyList<MonitorInfo> monitors)
@@ -761,6 +898,21 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
 
+        _lastWindows = windows;
+
+        IReadOnlyList<MonitorInfo> monitors;
+
+        try
+        {
+            monitors = _monitors.GetMonitors();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            monitors = Array.Empty<MonitorInfo>();
+        }
+
+        var resolveMonitor = BuildMonitorNameResolver(monitors);
+
         foreach (var application in _all)
         {
             var model = application.Application;
@@ -781,8 +933,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 matching = Array.Empty<WindowInfo>();
             }
 
-            application.SetWindows(matching, _windows);
+            application.SetWindows(matching, _windows, resolveMonitor);
         }
+
+        AssignWindowsToMonitors(monitors);
     }
 
     private static bool IsSamePath(string expected, string? actual) =>

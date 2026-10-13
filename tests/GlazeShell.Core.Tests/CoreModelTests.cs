@@ -89,4 +89,14 @@ public sealed class CoreModelTests
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new MonitorBounds(0, 0, 0, 1080));
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new MonitorBounds(0, 0, 1920, 0));
     }
+
+    [TestMethod]
+    public void WindowInfoStoresOptionalMonitorId()
+    {
+        var withMonitor = new WindowInfo("10001", "Example", 42, monitorId: "01A2B3C4");
+        var withoutMonitor = new WindowInfo("10002", "Example", 42);
+
+        Assert.AreEqual("01A2B3C4", withMonitor.MonitorId);
+        Assert.IsNull(withoutMonitor.MonitorId);
+    }
 }

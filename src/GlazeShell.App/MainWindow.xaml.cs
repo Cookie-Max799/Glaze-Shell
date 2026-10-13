@@ -1,8 +1,10 @@
+using System.ComponentModel;
 using GlazeShell.App.Presentation;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
 
@@ -29,6 +31,7 @@ public sealed partial class MainWindow : Window
         Title = title;
 
         Root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
+        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
 
         ApplyInitialSizeAndPosition();
         Activate();
@@ -50,6 +53,52 @@ public sealed partial class MainWindow : Window
 
     private void OnRestartClick(object sender, RoutedEventArgs e) =>
         ViewModel.RestartCommand.Execute(null);
+
+    private async void OnTerminateClick(object sender, RoutedEventArgs e)
+    {
+        var target = ViewModel.Selected;
+
+        if (target is null)
+        {
+            return;
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = "Завершить принудительно?",
+            Content = $"Приложение «{target.Name}» и его фоновые процессы будут сняты без сохранения данных. Продолжить?",
+            PrimaryButtonText = "Завершить",
+            CloseButtonText = "Отмена",
+            DefaultButton = ContentDialogButton.Close,
+            XamlRoot = Root.XamlRoot,
+        };
+
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+        {
+            await ViewModel.TerminateSelectedAsync();
+        }
+    }
+
+    /// <summary>
+    /// WinUI ListView не подносит элемент к видимой области при программной смене
+    /// SelectedItem, поэтому прокрутку выполняем сами. Вызов откладывается на диспетчер,
+    /// чтобы привязка SelectedItem успела примениться до ScrollIntoView.
+    /// </summary>
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(MainViewModel.Selected))
+        {
+            return;
+        }
+
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            if (ViewModel.Selected is { } selected)
+            {
+                ApplicationList.ScrollIntoView(selected);
+            }
+        });
+    }
 
     private void ApplyInitialSizeAndPosition()
     {

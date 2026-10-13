@@ -7,7 +7,19 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
-        <Style x:Key="ApplicationCardStyle" TargetType="ListViewItem">
+
+            <!--
+                Стандартная подсветка выбранного элемента списка почти незаметна на тёмном
+                фоне. Кисти заданы прямо в корневом словаре: он ищется раньше влитых
+                XamlControlsResources, поэтому перекрывает значения темы.
+            -->
+            <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#232B39" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#2A3345" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#2F3A4C" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#354156" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#3A475D" />
+
+            <Style x:Key="ApplicationCardStyle" TargetType="ListViewItem">
             <Setter Property="Background" Value="#1B1F27" />
             <Setter Property="CornerRadius" Value="12" />
             <Setter Property="Margin" Value="0,0,0,8" />

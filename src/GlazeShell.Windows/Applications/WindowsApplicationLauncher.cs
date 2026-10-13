@@ -16,6 +16,7 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
 {
     private const uint NoErrorDialog = 0x00004004;
     private const int CloseTimeoutMilliseconds = 15000;
+    private const int ForceStopTimeoutMilliseconds = 3000;
     private const int RestartDelayMilliseconds = 350;
 
     private static readonly TimeSpan ClosePollInterval = TimeSpan.FromMilliseconds(120);
@@ -76,7 +77,7 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
     }
 
 
-public async Task<bool> CloseAsync(string applicationId, CancellationToken cancellationToken = default)
+    public async Task<bool> CloseAsync(string applicationId, CancellationToken cancellationToken = default)
     {
         var application = await ResolveAsync(applicationId, cancellationToken).ConfigureAwait(false);
 
@@ -100,16 +101,55 @@ public async Task<bool> CloseAsync(string applicationId, CancellationToken cance
 
         PostCloseToWindows(processes);
 
-        return await WaitForExitAsync(applicationId, cancellationToken).ConfigureAwait(false);
+        return await WaitForExitAsync(applicationId, CloseTimeoutMilliseconds, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<bool> TerminateAsync(string applicationId, CancellationToken cancellationToken = default)
+    {
+        var application = await ResolveAsync(applicationId, cancellationToken).ConfigureAwait(false);
+
+        if (application is null)
+        {
+            return false;
+        }
+
+        var targets = CollectTerminationTargets(application);
+
+        if (targets.Count == 0)
+        {
+            return false;
+        }
+
+        foreach (var processId in targets)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            KillProcessTree(processId);
+        }
+
+        return await WaitForExitAsync(applicationId, ForceStopTimeoutMilliseconds, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<ApplicationLaunchResult> RestartAsync(string applicationId, CancellationToken cancellationToken = default)
     {
-        await CloseAsync(applicationId, cancellationToken).ConfigureAwait(false);
+        // Сначала вежливое закрытие: приложение успевает сохранить данные. Если оно
+        // не завершилось (многопроцессные приложения вроде Acrobat держат фоновые
+        // процессы), остатки снимаются принудительно — иначе перезапуск поднял бы
+        // второй экземпляр рядом с незакрытым первым.
+        var closed = await CloseAsync(applicationId, cancellationToken).ConfigureAwait(false);
+
+        if (!closed)
+        {
+            await TerminateAsync(applicationId, cancellationToken).ConfigureAwait(false);
+        }
 
         if (cancellationToken.IsCancellationRequested)
         {
             return ApplicationLaunchResult.Failure("Restart was cancelled.");
+        }
+
+        if (await IsRunningAsync(applicationId, cancellationToken).ConfigureAwait(false))
+        {
+            return ApplicationLaunchResult.Failure("The application could not be stopped for restart.");
         }
 
         await Task.Delay(RestartDelayMilliseconds, cancellationToken).ConfigureAwait(false);
@@ -131,9 +171,72 @@ public async Task<bool> CloseAsync(string applicationId, CancellationToken cance
         return Array.Empty<int>();
     }
 
-private async Task<bool> WaitForExitAsync(string applicationId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Собирает процессы, подлежащие принудительному завершению. Кроме процессов
+    /// приложения по точному пути добиваются фоновые процессы из каталога установки
+    /// (например, <c>AcroCEF.exe</c> у Acrobat): они запускаются отдельно от дерева
+    /// основного процесса и иначе переживут снятие задачи.
+    /// </summary>
+    private HashSet<int> CollectTerminationTargets(Application application)
     {
-        var deadline = DateTime.UtcNow.AddMilliseconds(CloseTimeoutMilliseconds);
+        var targets = new HashSet<int>(FindProcesses(application));
+
+        // Расширение по каталогу подключается только для безопасных каталогов:
+        // для приложений из C:\Windows (например, notepad.exe) оно снесло бы
+        // процессы всей системы.
+        if (!string.IsNullOrWhiteSpace(application.ExecutablePath)
+            && Path.GetDirectoryName(application.ExecutablePath) is { Length: > 0 } directory
+            && IsSafeInstallDirectory(directory))
+        {
+            foreach (var processId in _processes.FindProcessesByDirectory(directory))
+            {
+                targets.Add(processId);
+            }
+        }
+
+        return targets;
+    }
+
+    /// <summary>
+    /// Каталог считается безопасным для расширенного завершения, если это не корень диска
+    /// и не системный каталог Windows или его подкаталоги.
+    /// </summary>
+    private static bool IsSafeInstallDirectory(string directory)
+    {
+        if (directory.Length <= 3)
+        {
+            return false;
+        }
+
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+        return string.IsNullOrWhiteSpace(windows) || !IsUnderDirectory(directory, windows);
+    }
+
+    private static bool IsUnderDirectory(string path, string directory)
+    {
+        var prefix = directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return path.Length > prefix.Length
+            && path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            && (path[prefix.Length] == Path.DirectorySeparatorChar || path[prefix.Length] == Path.AltDirectorySeparatorChar);
+    }
+
+    private static void KillProcessTree(int processId)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(processId);
+            process.Kill(entireProcessTree: true);
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or Win32Exception or NotSupportedException)
+        {
+            // Процесс уже завершился или недоступен: повторная попытка ничего не изменит.
+        }
+    }
+
+    private async Task<bool> WaitForExitAsync(string applicationId, int timeoutMilliseconds, CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMilliseconds);
 
         while (DateTime.UtcNow < deadline)
         {
@@ -156,7 +259,7 @@ private async Task<bool> WaitForExitAsync(string applicationId, CancellationToke
         return await _applications.GetAsync(applicationId, cancellationToken).ConfigureAwait(false);
     }
 
-private static bool TryClose(int processId)
+    private static bool TryClose(int processId)
     {
         try
         {

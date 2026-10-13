@@ -10,12 +10,17 @@ namespace GlazeShell.App.Presentation;
 public sealed class WindowListItemViewModel : INotifyPropertyChanged
 {
     private readonly IWindowManager _windows;
+    private readonly Func<string?, string?>? _monitorName;
     private WindowInfo _window;
 
-    public WindowListItemViewModel(WindowInfo window, IWindowManager windows)
+    public WindowListItemViewModel(
+        WindowInfo window,
+        IWindowManager windows,
+        Func<string?, string?>? monitorName = null)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
         _windows = windows ?? throw new ArgumentNullException(nameof(windows));
+        _monitorName = monitorName;
 
         FocusCommand = new AsyncCommand(FocusAsync);
         MinimizeCommand = new AsyncCommand(MinimizeAsync);
@@ -37,6 +42,13 @@ public sealed class WindowListItemViewModel : INotifyPropertyChanged
     public string? ProcessName => _window.ProcessName;
 
     public string? ExecutablePath => _window.ExecutablePath;
+
+    /// <summary>
+    /// Дружелюбное имя монитора, на котором открыто окно. Пусто, если монитор не определён.
+    /// </summary>
+    public string? MonitorLabel => string.IsNullOrEmpty(_window.MonitorId) ? null : _monitorName?.Invoke(_window.MonitorId);
+
+    public bool HasMonitor => !string.IsNullOrEmpty(MonitorLabel);
 
     public bool IsActive => _window.IsForeground;
 
@@ -74,6 +86,8 @@ public sealed class WindowListItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ProcessId));
         OnPropertyChanged(nameof(ProcessName));
         OnPropertyChanged(nameof(ExecutablePath));
+        OnPropertyChanged(nameof(MonitorLabel));
+        OnPropertyChanged(nameof(HasMonitor));
         OnPropertyChanged(nameof(IsActive));
         OnPropertyChanged(nameof(ActiveGlyph));
         OnPropertyChanged(nameof(StateText));

@@ -12,7 +12,8 @@ public sealed record WindowInfo
         WindowState state = WindowState.None,
         bool isForeground = false,
         string? ownerId = null,
-        bool canResize = true)
+        bool canResize = true,
+        string? monitorId = null)
     {
         Id = ModelValidation.Required(id, nameof(id));
         ArgumentNullException.ThrowIfNull(title);
@@ -26,6 +27,7 @@ public sealed record WindowInfo
         IsForeground = isForeground;
         OwnerId = ModelValidation.Optional(ownerId, nameof(ownerId));
         CanResize = canResize;
+        MonitorId = ModelValidation.Optional(monitorId, nameof(monitorId));
     }
 
     public string Id { get; }
@@ -47,4 +49,10 @@ public sealed record WindowInfo
     public string? OwnerId { get; }
 
     public bool CanResize { get; }
+
+    /// <summary>
+    /// Идентификатор монитора, на котором находится окно (совпадает с <see cref="MonitorInfo.Id"/>).
+    /// Может быть <see langword="null"/>, если окно не привязано к монитору.
+    /// </summary>
+    public string? MonitorId { get; }
 }

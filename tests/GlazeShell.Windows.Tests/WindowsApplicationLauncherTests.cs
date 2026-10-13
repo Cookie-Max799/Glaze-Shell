@@ -94,6 +94,49 @@ public sealed class WindowsApplicationLauncherTests
     }
 
     [TestMethod]
+    public async Task TerminateStopsARunningProcessThatHasNoWindow()
+    {
+        var comspec = Environment.GetEnvironmentVariable("ComSpec");
+
+        if (string.IsNullOrWhiteSpace(comspec) || !File.Exists(comspec))
+        {
+            Assert.Inconclusive("ComSpec is unavailable.");
+            return;
+        }
+
+        // Копия cmd.exe в уникальном каталоге: путь исполняемого файла не совпадает
+        // с другими cmd.exe, поэтому инспектор найдёт ровно наш процесс, а живучесть
+        // без окна (ping держит консоль) делает вежливое закрытие неприменимым — как раз
+        // сценарий принудительного завершения.
+        var copy = Path.Combine(_root, "glaze-terminate-test.exe");
+        File.Copy(comspec, copy);
+
+        using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(copy, "/c ping -n 30 127.0.0.1")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        });
+
+        Assert.IsNotNull(process);
+
+        var application = new Application("app:terminate", "Terminate", ApplicationType.Win32, copy);
+        var launcher = CreateLauncher(new FakeApplicationManager().Add(application));
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!await launcher.IsRunningAsync("app:terminate") && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(100);
+        }
+
+        Assert.IsTrue(await launcher.IsRunningAsync("app:terminate"), "The helper process should be detected by path.");
+
+        var terminated = await launcher.TerminateAsync("app:terminate");
+
+        Assert.IsTrue(terminated, "The process should be gone after forced termination.");
+        Assert.IsTrue(process!.WaitForExit(5000), "The process should have exited.");
+    }
+
+    [TestMethod]
     public void ProcessInspectorFindsTheCurrentProcessByPath()
     {
         var inspector = new ProcessInspector();
