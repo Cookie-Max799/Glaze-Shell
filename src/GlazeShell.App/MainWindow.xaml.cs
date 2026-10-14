@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.IO;
 using GlazeShell.App.Presentation;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
@@ -6,16 +7,17 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
 
 namespace GlazeShell.App;
 
 public sealed partial class MainWindow : Window
 {
-    private const int DefaultWidth = 1120;
-    private const int DefaultHeight = 720;
-    private const int MinWidth = 720;
-    private const int MinHeight = 480;
+    private const int DefaultWidth = 1280;
+    private const int DefaultHeight = 760;
+    private const int MinWidth = 960;
+    private const int MinHeight = 520;
 
     public MainWindow(
         string title,
@@ -24,15 +26,17 @@ public sealed partial class MainWindow : Window
         IWindowManager windows,
         IMonitorManager monitors,
         IDesktopManager desktop,
+        ISettingsManager settings,
         IEventManager events)
     {
-        ViewModel = new MainViewModel(applications, launcher, windows, monitors, desktop, events, DispatcherQueue);
+        ViewModel = new MainViewModel(applications, launcher, windows, monitors, desktop, settings, events, DispatcherQueue);
         InitializeComponent();
         Title = title;
 
         Root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
 
+        ApplyWindowIcon();
         ApplyInitialSizeAndPosition();
         Activate();
 
@@ -53,6 +57,20 @@ public sealed partial class MainWindow : Window
 
     private void OnRestartClick(object sender, RoutedEventArgs e) =>
         ViewModel.RestartCommand.Execute(null);
+
+    private void OnCopyPathClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: ApplicationListViewModel { Path.Length: > 0 } item })
+        {
+            return;
+        }
+
+        var package = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
+        package.SetText(item.Path);
+        Clipboard.SetContent(package);
+
+        ViewModel.NotifyPathCopied(item.Path);
+    }
 
     private async void OnTerminateClick(object sender, RoutedEventArgs e)
     {
@@ -76,6 +94,49 @@ public sealed partial class MainWindow : Window
         if (await dialog.ShowAsync() == ContentDialogResult.Primary)
         {
             await ViewModel.TerminateSelectedAsync();
+        }
+    }
+
+    /// <summary>
+    /// Переименование дисплея. «Сохранить» задаёт пользовательское имя, «Сбросить» возвращает
+    /// имя по умолчанию, «Отмена» ничего не меняет.
+    /// </summary>
+    private async void OnRenameMonitorClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: MonitorListItemViewModel monitor })
+        {
+            return;
+        }
+
+        var input = new TextBox
+        {
+            Text = monitor.DisplayName,
+            MaxLength = 64,
+            SelectionStart = monitor.DisplayName.Length,
+        };
+
+        var dialog = new ContentDialog
+        {
+            Title = "Имя дисплея",
+            Content = input,
+            PrimaryButtonText = "Сохранить",
+            SecondaryButtonText = "Сбросить",
+            CloseButtonText = "Отмена",
+            DefaultButton = ContentDialogButton.Primary,
+            XamlRoot = Root.XamlRoot,
+        };
+
+        var result = await dialog.ShowAsync();
+
+        switch (result)
+        {
+            case ContentDialogResult.Primary:
+                ViewModel.RenameMonitor(monitor, input.Text);
+                break;
+
+            case ContentDialogResult.Secondary:
+                ViewModel.RenameMonitor(monitor, null);
+                break;
         }
     }
 
@@ -120,6 +181,27 @@ public sealed partial class MainWindow : Window
         var windowHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
         var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(windowHandle);
         return AppWindow.GetFromWindowId(windowId);
+    }
+
+    /// <summary>
+    /// Ставит иконку окна и панели задач из вложенного app.ico. Если файл недоступен,
+    /// окно продолжает работать со стандартной иконкой, а причина не прерывает запуск.
+    /// </summary>
+    private void ApplyWindowIcon()
+    {
+        try
+        {
+            var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico");
+
+            if (File.Exists(iconPath))
+            {
+                ResolveAppWindow().SetIcon(iconPath);
+            }
+        }
+        catch (Exception)
+        {
+            // Иконка — оформление, а не функция: её сбой не должен мешать работе окна.
+        }
     }
 
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)

@@ -39,6 +39,12 @@ public static class PersistenceLimits
     /// </summary>
     public const int MaxThemes = 64;
 
+    /// <summary>
+    /// Максимальное число пользовательских имён дисплеев. Реальных мониторов заведомо меньше,
+    /// а лимит не даёт подменённому документу раздуть карту имён.
+    /// </summary>
+    public const int MaxMonitorNames = 64;
+
     public const int MaxColorsPerTheme = 256;
 
     public const int MaxFontsPerTheme = 64;

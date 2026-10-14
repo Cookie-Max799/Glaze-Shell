@@ -59,6 +59,69 @@ public sealed class JsonUserDataStoreTests
     }
 
     [TestMethod]
+    public void SettingsRoundTripPreservesMonitorNames()
+    {
+        using var data = new TempUserData();
+        var store = data.CreateStore();
+        var expected = TempUserData.CreateSettings(monitorNames: new Dictionary<string, string>
+        {
+            ["00010001"] = "Left",
+            ["00010002"] = "Right"
+        });
+
+        store.SaveSettings(expected);
+
+        var loaded = data.CreateStore().LoadSettings();
+
+        Assert.AreEqual(PersistenceStatus.Loaded, loaded.Status);
+        Assert.HasCount(2, loaded.Value.MonitorNames);
+        Assert.AreEqual("Left", loaded.Value.MonitorNames["00010001"]);
+        Assert.AreEqual("Right", loaded.Value.MonitorNames["00010002"]);
+    }
+
+    [TestMethod]
+    public void EmptyMonitorNamesAreNotWrittenToTheDocument()
+    {
+        using var data = new TempUserData();
+        var store = data.CreateStore();
+
+        store.SaveSettings(TempUserData.CreateSettings());
+
+        Assert.IsFalse(data.Read(UserDataFileNames.Settings).Contains("monitorNames", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void MonitorNameIdentifierWithControlCharactersIsRejected()
+    {
+        using var data = new TempUserData();
+        data.Write(
+            UserDataFileNames.Settings,
+            """{ "schemaVersion": 1, "language": "en-US", "monitorNames": { "bad\nid": "Left" } }""");
+
+        var result = data.CreateStore().LoadSettings();
+
+        Assert.AreEqual(PersistenceStatus.Recovered, result.Status);
+        Assert.IsEmpty(result.Value.MonitorNames);
+    }
+
+    [TestMethod]
+    public void MonitorNamesAboveTheLimitAreRejected()
+    {
+        using var data = new TempUserData();
+        var entries = string.Join(
+            ",",
+            Enumerable.Range(0, PersistenceLimits.MaxMonitorNames + 1)
+                .Select(static index => $"\"0001{index:D4}\": \"Monitor {index}\""));
+        data.Write(
+            UserDataFileNames.Settings,
+            $$"""{ "schemaVersion": 1, "language": "en-US", "monitorNames": { {{entries}} } }""");
+
+        var result = data.CreateStore().LoadSettings();
+
+        Assert.AreEqual(PersistenceStatus.Recovered, result.Status);
+    }
+
+    [TestMethod]
     public void ConfigurationRoundTripPreservesValues()
     {
         using var data = new TempUserData();

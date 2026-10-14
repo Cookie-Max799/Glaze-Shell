@@ -79,14 +79,16 @@ public partial class App : Application
 
         _themeManager = CreateThemeManager(store, eventManager, settingsManager.GetSettings().ActiveThemeId);
 
-        _window = new MainWindow(
+        var window = new MainWindow(
             configuration.ApplicationName,
             discovery,
             launcher,
             windowManager,
             monitorManager,
             desktopManager,
+            settingsManager,
             eventManager);
+        _window = window;
 
         // Координатор запускается после создания окна: подписчики уже зарегистрированы,
         // поэтому ни одно событие не теряется между подпиской и первым проходом источника.
@@ -103,16 +105,46 @@ public partial class App : Application
             _logger.Write(GlazeLogLevel.Error, "Events", "Unexpected failure while starting system event sources.", exception);
         }
 
-        _window.Closed += (_, _) =>
+        window.Closed += (_, _) => Shutdown(layoutWriter, eventSources);
+
+        window.Activate();
+    }
+
+    /// <summary>
+    /// Освобождает ресурсы при закрытии окна. Каждый шаг изолирован: сбой одной очистки
+    /// не должен мешать остальным и не должен удерживать процесс в памяти, из-за чего
+    /// закрытое окно выглядело бы как «незакрывающееся» приложение. Сбой логируется.
+    /// </summary>
+    private void Shutdown(DesktopLayoutPersistenceWriter layoutWriter, ShellEventCoordinator eventSources)
+    {
+        _logger.Write(GlazeLogLevel.Information, "App", "Application window closed, releasing resources.");
+
+        TryShutdownStep("layout writer", () =>
         {
             layoutWriter.Flush();
             layoutWriter.Dispose();
-            eventSources.Dispose();
+        });
+
+        TryShutdownStep("event sources", eventSources.Dispose);
+        TryShutdownStep("single-instance lease", () =>
+        {
             _singleInstanceLease?.Dispose();
             _singleInstanceLease = null;
-        };
+        });
 
-        _window.Activate();
+        _logger.Write(GlazeLogLevel.Information, "App", "Application resources released.");
+    }
+
+    private void TryShutdownStep(string name, Action step)
+    {
+        try
+        {
+            step();
+        }
+        catch (Exception exception)
+        {
+            _logger.Write(GlazeLogLevel.Warning, "App", $"Releasing the {name} failed while closing.", exception);
+        }
     }
 
     /// <summary>

@@ -8,424 +8,452 @@
     xmlns:p="using:GlazeShell.App.Presentation"
     mc:Ignorable="d">
 
-    <Grid x:Name="Root" Background="#12151B" RowSpacing="0">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <Grid x:Name="Root" Background="#131316">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="360" />
+        </Grid.ColumnDefinitions>
 
-        <Border
-            Padding="36,30,36,22"
-            Background="#1B1F27">
-            <Grid ColumnSpacing="16">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Spacing="8">
-                    <TextBlock
-                        FontSize="30"
-                        FontWeight="SemiBold"
-                        Foreground="#F4F6FA"
-                        Text="Glaze Shell" />
-                    <TextBlock
-                        FontSize="14"
-                        Foreground="#98A2B3"
-                        Text="Запуск установленных приложений: меню «Пуск» и пакеты MSIX."
-                        TextWrapping="Wrap" />
-                </StackPanel>
-
-                <ProgressRing
-                    Grid.Column="1"
-                    Width="26"
-                    Height="26"
-                    Foreground="#98A2B3"
-                    IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
-            </Grid>
-        </Border>
-
-        <Grid
-            Grid.Row="1"
-            Padding="36,18,36,10"
-            ColumnSpacing="12">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
-            <AutoSuggestBox
-                x:Name="SearchBox"
-                PlaceholderText="Поиск по названию, пути или AUMID"
-                QueryIcon="Find"
-                Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-
-            <Button
-                Grid.Column="1"
-                MinWidth="120"
-                Click="OnRefreshClick"
-                Content="Обновить"
-                IsEnabled="{x:Bind ViewModel.IsIdle, Mode=OneWay}" />
-        </Grid>
-
-        <Grid Grid.Row="2" Margin="36,0,36,0">
+        <!--  Левая колонка: шапка, список приложений, подвал.  -->
+        <Grid Grid.Column="0">
             <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-                <ListView
-                    x:Name="ApplicationList"
-                    Background="Transparent"
-                    ItemContainerStyle="{StaticResource ApplicationCardStyle}"
-                    ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
-                    SelectedItem="{x:Bind ViewModel.Selected, Mode=TwoWay}"
-                    SelectionMode="Single"
-                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                    ScrollViewer.VerticalScrollBarVisibility="Auto">
-                <ListView.ItemTemplate>
-                    <DataTemplate x:DataType="p:ApplicationListViewModel">
-                        <Grid>
-                            <Grid Padding="20,16" ColumnSpacing="14">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
+            <Border
+                Grid.Row="0"
+                Padding="36,30,36,22"
+                Background="#1C1C1E">
+                <Grid ColumnSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
 
-                                <Grid
-                                    Width="22"
-                                    Height="22"
-                                    VerticalAlignment="Center">
-                                    <TextBlock
-                                        HorizontalAlignment="Center"
-                                        VerticalAlignment="Center"
-                                        FontSize="18"
-                                        Foreground="#4E5866"
-                                        Text="{x:Bind RunningGlyph, Mode=OneWay}"
-                                        Visibility="{x:Bind IsNotLaunching, Mode=OneWay}" />
-                                    <ProgressRing
-                                        Width="20"
-                                        Height="20"
-                                        Foreground="#4A90E2"
-                                        IsActive="{x:Bind IsLaunching, Mode=OneWay}"
-                                        Visibility="{x:Bind IsLaunching, Mode=OneWay}" />
+                    <StackPanel Spacing="8">
+                        <TextBlock
+                            FontSize="30"
+                            FontWeight="SemiBold"
+                            Foreground="#F5F5F7"
+                            Text="Glaze Shell" />
+                        <TextBlock
+                            FontSize="14"
+                            Foreground="#A1A1AA"
+                            Text="Запуск установленных приложений: меню «Пуск» и пакеты MSIX."
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ProgressRing
+                        Grid.Column="1"
+                        Width="26"
+                        Height="26"
+                        Foreground="#8E8CFF"
+                        IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+                </Grid>
+            </Border>
+
+            <Grid
+                Grid.Row="1"
+                Padding="36,18,36,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <AutoSuggestBox
+                        x:Name="SearchBox"
+                        PlaceholderText="Поиск по названию, пути или AUMID"
+                        QueryIcon="Find"
+                        Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+
+                    <Button
+                        Grid.Column="1"
+                        MinWidth="120"
+                        Click="OnRefreshClick"
+                        Content="Обновить"
+                        IsEnabled="{x:Bind ViewModel.IsIdle, Mode=OneWay}" />
+                </Grid>
+
+                <Grid Grid.Row="1">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <ListView
+                        x:Name="ApplicationList"
+                        Background="Transparent"
+                        ItemContainerStyle="{StaticResource ApplicationCardStyle}"
+                        ItemsSource="{x:Bind ViewModel.Items, Mode=OneWay}"
+                        ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                        ScrollViewer.VerticalScrollBarVisibility="Auto"
+                        SelectedItem="{x:Bind ViewModel.Selected, Mode=TwoWay}"
+                        SelectionMode="Single">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="p:ApplicationListViewModel">
+                                <Grid>
+                                    <Grid Padding="20,16" ColumnSpacing="14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <Grid
+                                            Width="22"
+                                            Height="22"
+                                            VerticalAlignment="Center">
+                                            <TextBlock
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                FontSize="18"
+                                                Foreground="#5A5A63"
+                                                Text="{x:Bind RunningGlyph, Mode=OneWay}"
+                                                Visibility="{x:Bind IsNotLaunching, Mode=OneWay}" />
+                                            <ProgressRing
+                                                Width="20"
+                                                Height="20"
+                                                Foreground="#8E8CFF"
+                                                IsActive="{x:Bind IsLaunching, Mode=OneWay}"
+                                                Visibility="{x:Bind IsLaunching, Mode=OneWay}" />
+                                        </Grid>
+
+                                        <StackPanel Grid.Column="1" Spacing="8">
+                                            <StackPanel Spacing="3">
+                                                <TextBlock
+                                                    FontSize="15"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="#F5F5F7"
+                                                    Text="{x:Bind Name, Mode=OneWay}"
+                                                    TextTrimming="CharacterEllipsis" />
+                                                <Grid ColumnSpacing="8">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock
+                                                        FontSize="12"
+                                                        Foreground="#A1A1AA"
+                                                        Text="{x:Bind Description, Mode=OneWay}"
+                                                        TextTrimming="CharacterEllipsis"
+                                                        ToolTipService.ToolTip="{x:Bind Path, Mode=OneWay}" />
+                                                    <Button
+                                                        Grid.Column="1"
+                                                        MinWidth="0"
+                                                        Padding="6,2"
+                                                        Click="OnCopyPathClick"
+                                                        ToolTipService.ToolTip="Копировать путь в буфер обмена"
+                                                        Visibility="{x:Bind HasPath, Mode=OneWay}">
+                                                        <FontIcon FontSize="12" Glyph="&#xE8C8;" />
+                                                    </Button>
+                                                </Grid>
+                                            </StackPanel>
+
+                                            <ItemsControl
+                                                ItemsSource="{x:Bind Windows, Mode=OneWay}"
+                                                Visibility="{x:Bind HasWindows, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="p:WindowListItemViewModel">
+                                                        <Border
+                                                            Margin="0,2,0,0"
+                                                            Padding="10,6"
+                                                            Background="#232326"
+                                                            CornerRadius="6">
+                                                            <Grid ColumnSpacing="8">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+
+                                                                <TextBlock
+                                                                    VerticalAlignment="Center"
+                                                                    FontSize="14"
+                                                                    Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
+                                                                    Text="{x:Bind ActiveGlyph, Mode=OneWay}" />
+
+                                                                <StackPanel Grid.Column="1" Spacing="2">
+                                                                    <TextBlock
+                                                                        FontSize="12.5"
+                                                                        FontWeight="SemiBold"
+                                                                        Foreground="#F5F5F7"
+                                                                        Text="{x:Bind Title, Mode=OneWay}"
+                                                                        TextTrimming="CharacterEllipsis" />
+                                                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                                                        <TextBlock
+                                                                            FontSize="11"
+                                                                            Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
+                                                                            Text="{x:Bind StateText, Mode=OneWay}" />
+                                                                        <TextBlock
+                                                                            FontSize="11"
+                                                                            Foreground="#6E6E76"
+                                                                            Text="{x:Bind MonitorLabel, Mode=OneWay}"
+                                                                            Visibility="{x:Bind HasMonitor, Mode=OneWay}" />
+                                                                    </StackPanel>
+                                                                </StackPanel>
+
+                                                                <StackPanel
+                                                                    Grid.Column="2"
+                                                                    Orientation="Horizontal"
+                                                                    Spacing="6"
+                                                                    VerticalAlignment="Center">
+                                                                    <Button
+                                                                        MinWidth="64"
+                                                                        Padding="10,4"
+                                                                        FontSize="11"
+                                                                        Command="{x:Bind FocusCommand}"
+                                                                        Content="Фокус" />
+                                                                    <Button
+                                                                        MinWidth="68"
+                                                                        Padding="10,4"
+                                                                        FontSize="11"
+                                                                        Command="{x:Bind MinimizeCommand}"
+                                                                        Content="Свернуть" />
+                                                                    <Button
+                                                                        MinWidth="76"
+                                                                        Padding="10,4"
+                                                                        FontSize="11"
+                                                                        Command="{x:Bind MaximizeCommand}"
+                                                                        Content="Развернуть" />
+                                                                    <Button
+                                                                        MinWidth="64"
+                                                                        Padding="10,4"
+                                                                        FontSize="11"
+                                                                        Command="{x:Bind CloseCommand}"
+                                                                        Content="Закрыть" />
+                                                                </StackPanel>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+
+                                        <Border
+                                            Grid.Column="2"
+                                            Padding="10,3"
+                                            VerticalAlignment="Center"
+                                            Background="#232326"
+                                            CornerRadius="6">
+                                            <TextBlock
+                                                FontSize="11"
+                                                Foreground="#6E6E76"
+                                                Text="{x:Bind TypeBadge, Mode=OneWay}" />
+                                        </Border>
+                                    </Grid>
+
+                                    <Border
+                                        Width="4"
+                                        HorizontalAlignment="Left"
+                                        Background="#8E8CFF"
+                                        CornerRadius="12,0,0,12"
+                                        Visibility="{x:Bind IsSelected, Mode=OneWay}" />
                                 </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
 
-                                <StackPanel Grid.Column="1" Spacing="8">
-                                    <StackPanel Spacing="3">
-                                        <TextBlock
-                                            FontSize="15"
-                                            FontWeight="SemiBold"
-                                            Foreground="#F4F6FA"
-                                            Text="{x:Bind Name, Mode=OneWay}"
-                                            TextTrimming="CharacterEllipsis" />
-                                        <TextBlock
-                                            FontSize="12"
-                                            Foreground="#98A2B3"
-                                            Text="{x:Bind Description, Mode=OneWay}"
-                                            TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
+                    <TextBlock
+                        Margin="0,40,0,0"
+                        HorizontalAlignment="Center"
+                        FontSize="14"
+                        Foreground="#6E6E76"
+                        Text="Приложения не найдены"
+                        Visibility="{x:Bind ViewModel.IsEmpty, Mode=OneWay}" />
 
-                                    <ItemsControl
-                                        ItemsSource="{x:Bind Windows, Mode=OneWay}"
-                                        Visibility="{x:Bind HasWindows, Mode=OneWay}">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate x:DataType="p:WindowListItemViewModel">
+                    <ProgressBar
+                        Grid.Row="1"
+                        Padding="0,8,0,0"
+                        IsIndeterminate="True"
+                        Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+
+                    <StackPanel
+                        Grid.Row="1"
+                        Padding="0,14,0,0"
+                        HorizontalAlignment="Right"
+                        Orientation="Horizontal"
+                        Spacing="10">
+                        <Button
+                            MinWidth="100"
+                            Click="OnLaunchClick"
+                            Content="Запустить" />
+                        <Button
+                            MinWidth="100"
+                            Click="OnCloseClick"
+                            Content="Закрыть" />
+                        <Button
+                            MinWidth="100"
+                            Click="OnRestartClick"
+                            Content="Перезапустить" />
+                        <Button
+                            MinWidth="150"
+                            Click="OnTerminateClick"
+                            Content="Завершить принудительно" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+
+            <Border
+                Grid.Row="2"
+                Padding="36,14,36,20"
+                Background="#1C1C1E">
+                <StackPanel Spacing="8">
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="#A1A1AA"
+                        Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis" />
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="#5A5A63"
+                        Text="Логи и данные: %LOCALAPPDATA%\GlazeShell" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!--  Правая колонка: панель мониторов на всю высоту окна.  -->
+        <Border
+            Grid.Column="1"
+            Padding="20,24,20,20"
+            Background="#1C1C1E"
+            BorderBrush="#26262B"
+            BorderThickness="1,0,0,0">
+            <Grid RowSpacing="10">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <TextBlock
+                    FontSize="12"
+                    FontWeight="SemiBold"
+                    Foreground="#F5F5F7"
+                    Text="МОНИТОРЫ" />
+                <TextBlock
+                    Grid.Row="1"
+                    FontSize="14"
+                    FontWeight="SemiBold"
+                    Foreground="#F5F5F7"
+                    Text="{x:Bind ViewModel.MonitorSummary, Mode=OneWay}"
+                    TextWrapping="Wrap" />
+
+                <ScrollViewer
+                    Grid.Row="2"
+                    HorizontalScrollBarVisibility="Disabled"
+                    VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{x:Bind ViewModel.Monitors, Mode=OneWay}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="p:MonitorListItemViewModel">
+                                <Border
+                                    Margin="0,0,0,10"
+                                    Padding="12"
+                                    Background="#232326"
+                                    CornerRadius="8">
+                                    <StackPanel Spacing="6">
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <FontIcon
+                                                VerticalAlignment="Center"
+                                                FontSize="15"
+                                                Foreground="#8E8CFF"
+                                                Glyph="&#xE7F4;" />
+                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                <TextBlock
+                                                    FontSize="15"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="#F5F5F7"
+                                                    Text="{x:Bind DisplayName, Mode=OneWay}"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    ToolTipService.ToolTip="{x:Bind DeviceName, Mode=OneWay}" />
+                                                <TextBlock
+                                                    FontSize="12"
+                                                    Foreground="#A1A1AA"
+                                                    Text="{x:Bind Label, Mode=OneWay}"
+                                                    TextTrimming="CharacterEllipsis" />
+                                                <TextBlock
+                                                    FontSize="12"
+                                                    Foreground="#6E6E76"
+                                                    Text="{x:Bind Summary, Mode=OneWay}" />
+                                            </StackPanel>
+                                            <StackPanel
+                                                Grid.Column="2"
+                                                Spacing="6"
+                                                VerticalAlignment="Center">
                                                 <Border
-                                                    Margin="0,2,0,0"
-                                                    Padding="10,6"
-                                                    Background="#232833"
-                                                    CornerRadius="6">
-                                                    <Grid ColumnSpacing="8">
+                                                    Padding="8,2"
+                                                    HorizontalAlignment="Right"
+                                                    Background="#1C1C1E"
+                                                    CornerRadius="4">
+                                                    <TextBlock
+                                                        FontSize="11"
+                                                        Foreground="#A1A1AA"
+                                                        Text="{x:Bind Badge, Mode=OneWay}" />
+                                                </Border>
+                                                <Button
+                                                    MinWidth="0"
+                                                    Padding="8,2"
+                                                    HorizontalAlignment="Right"
+                                                    Click="OnRenameMonitorClick"
+                                                    Content="Имя"
+                                                    FontSize="11"
+                                                    ToolTipService.ToolTip="Переименовать дисплей" />
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <TextBlock
+                                            FontSize="11"
+                                            Foreground="#6E6E76"
+                                            Text="{x:Bind WindowCountText, Mode=OneWay}" />
+
+                                        <ItemsControl ItemsSource="{x:Bind Windows, Mode=OneWay}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="p:WindowListItemViewModel">
+                                                    <Grid Margin="4,0,0,0" ColumnSpacing="6">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto" />
                                                             <ColumnDefinition Width="*" />
                                                             <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
-
                                                         <TextBlock
-                                                            VerticalAlignment="Center"
-                                                            FontSize="14"
+                                                            FontSize="11"
                                                             Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
                                                             Text="{x:Bind ActiveGlyph, Mode=OneWay}" />
-
-                                                        <StackPanel Grid.Column="1" Spacing="2">
-                                                            <TextBlock
-                                                                FontSize="12.5"
-                                                                FontWeight="SemiBold"
-                                                                Foreground="#F4F6FA"
-                                                                Text="{x:Bind Title, Mode=OneWay}"
-                                                                TextTrimming="CharacterEllipsis" />
-                                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                                <TextBlock
-                                                                    FontSize="11"
-                                                                    Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
-                                                                    Text="{x:Bind StateText, Mode=OneWay}" />
-                                                                <TextBlock
-                                                                    FontSize="11"
-                                                                    Foreground="#6E7A8A"
-                                                                    Text="{x:Bind MonitorLabel, Mode=OneWay}"
-                                                                    Visibility="{x:Bind HasMonitor, Mode=OneWay}" />
-                                                            </StackPanel>
-                                                        </StackPanel>
-
-                                                        <StackPanel
+                                                        <TextBlock
+                                                            Grid.Column="1"
+                                                            FontSize="11"
+                                                            Foreground="#C7C7CE"
+                                                            Text="{x:Bind Title, Mode=OneWay}"
+                                                            TextTrimming="CharacterEllipsis" />
+                                                        <TextBlock
                                                             Grid.Column="2"
-                                                            Orientation="Horizontal"
-                                                             Spacing="6"
-                                                            VerticalAlignment="Center">
-                                                            <Button
-                                                                Padding="10,4"
-                                                                MinWidth="64"
-                                                                FontSize="11"
-                                                                Command="{x:Bind FocusCommand}"
-                                                                Content="Фокус" />
-                                                            <Button
-                                                                Padding="10,4"
-                                                                MinWidth="68"
-                                                                FontSize="11"
-                                                                Command="{x:Bind MinimizeCommand}"
-                                                                Content="Свернуть" />
-                                                            <Button
-                                                                Padding="10,4"
-                                                                MinWidth="76"
-                                                                FontSize="11"
-                                                                Command="{x:Bind MaximizeCommand}"
-                                                                Content="Развернуть" />
-                                                            <Button
-                                                                Padding="10,4"
-                                                                MinWidth="64"
-                                                                FontSize="11"
-                                                                Command="{x:Bind CloseCommand}"
-                                                                Content="Закрыть" />
-                                                        </StackPanel>
+                                                            FontSize="11"
+                                                            Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
+                                                            Text="{x:Bind StateText, Mode=OneWay}" />
                                                     </Grid>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-
-                                <Border
-                                    Grid.Column="2"
-                                    Padding="10,3"
-                                    VerticalAlignment="Center"
-                                    Background="#232833"
-                                    CornerRadius="6">
-                                    <TextBlock
-                                        FontSize="11"
-                                        Foreground="#6E7A8A"
-                                        Text="{x:Bind TypeBadge, Mode=OneWay}" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
                                 </Border>
-                            </Grid>
-
-                            <Border
-                                Width="4"
-                                HorizontalAlignment="Left"
-                                Background="#4A90E2"
-                                CornerRadius="12,0,0,12"
-                                Visibility="{x:Bind IsSelected, Mode=OneWay}" />
-                        </Grid>
-                    </DataTemplate>
-                </ListView.ItemTemplate>
-            </ListView>
-
-            <TextBlock
-                Margin="0,40,0,0"
-                HorizontalAlignment="Center"
-                FontSize="14"
-                Foreground="#6E7A8A"
-                Text="Приложения не найдены"
-                Visibility="{x:Bind ViewModel.IsEmpty, Mode=OneWay}" />
-
-            <ProgressBar
-                Grid.Row="1"
-                Padding="0,8,0,0"
-                IsIndeterminate="True"
-                Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
-
-            <StackPanel
-                Grid.Row="1"
-                Padding="0,14,0,0"
-                HorizontalAlignment="Right"
-                Orientation="Horizontal"
-                Spacing="10">
-                <Button
-                    MinWidth="104"
-                    Click="OnLaunchClick"
-                    Content="Запустить" />
-                <Button
-                    MinWidth="104"
-                    Click="OnCloseClick"
-                    Content="Закрыть" />
-                <Button
-                    MinWidth="104"
-                    Click="OnRestartClick"
-                    Content="Перезапустить" />
-                <Button
-                    MinWidth="160"
-                    Click="OnTerminateClick"
-                    Content="Завершить принудительно" />
-            </StackPanel>
-        </Grid>
-
-        <Border
-            Grid.Row="3"
-            Padding="36,18,36,20"
-            Background="#1B1F27">
-            <StackPanel Spacing="8">
-                <TextBlock
-                    FontSize="12"
-                    Foreground="#98A2B3"
-                    Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
-                    TextTrimming="CharacterEllipsis" />
-                <TextBlock
-                    FontSize="12"
-                    Foreground="#4E5866"
-                    Text="Логи и данные: %LOCALAPPDATA%\GlazeShell" />
-
-                <Border
-                    Margin="0,4,0,0"
-                    Padding="14,10"
-                    Background="#232833"
-                    CornerRadius="6">
-                    <StackPanel Spacing="6">
-                        <TextBlock
-                            FontSize="12"
-                            FontWeight="SemiBold"
-                            Foreground="#F4F6FA"
-                            Text="Мониторы" />
-                        <TextBlock
-                            FontSize="14"
-                            FontWeight="SemiBold"
-                            Foreground="#F4F6FA"
-                            Text="{x:Bind ViewModel.MonitorSummary, Mode=OneWay}" />
-
-                        <Viewbox
-                            MaxHeight="118"
-                            HorizontalAlignment="Left"
-                            Stretch="Uniform">
-                            <Canvas Width="260" Height="118">
-                                <ItemsControl ItemsSource="{x:Bind ViewModel.Monitors, Mode=OneWay}">
-                                    <ItemsControl.ItemsPanel>
-                                        <ItemsPanelTemplate>
-                                            <Canvas />
-                                        </ItemsPanelTemplate>
-                                    </ItemsControl.ItemsPanel>
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="p:MonitorListItemViewModel">
-                                            <Border
-                                                Width="{x:Bind MapWidth, Mode=OneWay}"
-                                                Height="{x:Bind MapHeight, Mode=OneWay}"
-                                                Canvas.Left="{x:Bind MapLeft, Mode=OneWay}"
-                                                Canvas.Top="{x:Bind MapTop, Mode=OneWay}"
-                                                Background="#2C3646"
-                                                BorderBrush="#4A90E2"
-                                                BorderThickness="1"
-                                                CornerRadius="3">
-                                                <TextBlock
-                                                    Margin="4,2,2,0"
-                                                    FontSize="9"
-                                                    Foreground="#C7D0DC"
-                                                    Text="{x:Bind DeviceName, Mode=OneWay}"
-                                                    TextTrimming="CharacterEllipsis" />
-                                            </Border>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </Canvas>
-                        </Viewbox>
-
-                        <ScrollViewer MaxHeight="200" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{x:Bind ViewModel.Monitors, Mode=OneWay}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate x:DataType="p:MonitorListItemViewModel">
-                                        <StackPanel Margin="0,4,0,0" Spacing="2">
-                                            <Grid ColumnSpacing="12">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="Auto" />
-                                                </Grid.ColumnDefinitions>
-
-                                                <TextBlock
-                                                    FontSize="15"
-                                                    Foreground="#4A5A73"
-                                                    Text="◆" />
-                                                <TextBlock
-                                                    Grid.Column="1"
-                                                    FontSize="15"
-                                                    FontWeight="SemiBold"
-                                                    Foreground="#F4F6FA"
-                                                    Text="{x:Bind DeviceName, Mode=OneWay}" />
-                                                <StackPanel Grid.Column="2" Spacing="2">
-                                                    <TextBlock
-                                                        FontSize="12"
-                                                        Foreground="#C7D0DC"
-                                                        Text="{x:Bind Label, Mode=OneWay}" />
-                                                    <TextBlock
-                                                        FontSize="12"
-                                                        Foreground="#7A869A"
-                                                        Text="{x:Bind Summary, Mode=OneWay}" />
-                                                </StackPanel>
-                                                <Border
-                                                    Grid.Column="3"
-                                                    Padding="8,2"
-                                                    VerticalAlignment="Center"
-                                                    Background="#1B1F27"
-                                                    CornerRadius="4">
-                                                    <TextBlock
-                                                        FontSize="11"
-                                                        Foreground="#98A2B3"
-                                                        Text="{x:Bind Badge, Mode=OneWay}" />
-                                                </Border>
-                                            </Grid>
-
-                                            <TextBlock
-                                                FontSize="11"
-                                                Foreground="#6E7A8A"
-                                                Text="{x:Bind WindowCountText, Mode=OneWay}" />
-
-                                            <ItemsControl ItemsSource="{x:Bind Windows, Mode=OneWay}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate x:DataType="p:WindowListItemViewModel">
-                                                        <Grid Margin="4,0,0,0" ColumnSpacing="6">
-                                                            <Grid.ColumnDefinitions>
-                                                                <ColumnDefinition Width="Auto" />
-                                                                <ColumnDefinition Width="*" />
-                                                                <ColumnDefinition Width="Auto" />
-                                                            </Grid.ColumnDefinitions>
-                                                            <TextBlock
-                                                                FontSize="11"
-                                                                Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
-                                                                Text="{x:Bind ActiveGlyph, Mode=OneWay}" />
-                                                            <TextBlock
-                                                                Grid.Column="1"
-                                                                FontSize="11"
-                                                                Foreground="#C7D0DC"
-                                                                Text="{x:Bind Title, Mode=OneWay}"
-                                                                TextTrimming="CharacterEllipsis" />
-                                                            <TextBlock
-                                                                Grid.Column="2"
-                                                                FontSize="11"
-                                                                Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
-                                                                Text="{x:Bind StateText, Mode=OneWay}" />
-                                                        </Grid>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </StackPanel>
-                </Border>
-            </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
         </Border>
     </Grid>
 </Window>

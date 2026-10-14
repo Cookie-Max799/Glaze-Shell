@@ -66,8 +66,12 @@ internal sealed class TempUserData : IDisposable
     public static DesktopLayout CreateLayout(params DesktopTab[] tabs) =>
         new(tabs, tabs.Length > 0 ? tabs[0].Id : null);
 
-    public static UserSettings CreateSettings(bool startWithWindows = true, string language = "en-US", string? themeId = "midnight") =>
-        new(startWithWindows, minimizeToTray: true, showDesktopOnStartup: false, restoreLastLayout: false, language, themeId);
+    public static UserSettings CreateSettings(
+        bool startWithWindows = true,
+        string language = "en-US",
+        string? themeId = "midnight",
+        IReadOnlyDictionary<string, string>? monitorNames = null) =>
+        new(startWithWindows, minimizeToTray: true, showDesktopOnStartup: false, restoreLastLayout: false, language, themeId, monitorNames);
 
     public static GlazeShellConfiguration CreateConfiguration(string applicationName = "Glaze Shell", string dataDirectoryName = "GlazeShell") =>
         new() { ApplicationName = applicationName, DataDirectoryName = dataDirectoryName };

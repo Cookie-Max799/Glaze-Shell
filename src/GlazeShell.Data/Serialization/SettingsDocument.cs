@@ -23,6 +23,8 @@ public sealed class SettingsDocument
 
     public string? ActiveThemeId { get; set; }
 
+    public Dictionary<string, string>? MonitorNames { get; set; }
+
     public static SettingsDocument FromSettings(UserSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
@@ -35,7 +37,10 @@ public sealed class SettingsDocument
             ShowDesktopOnStartup = settings.ShowDesktopOnStartup,
             RestoreLastLayout = settings.RestoreLastLayout,
             Language = settings.Language,
-            ActiveThemeId = settings.ActiveThemeId
+            ActiveThemeId = settings.ActiveThemeId,
+            MonitorNames = settings.MonitorNames.Count == 0
+                ? null
+                : new Dictionary<string, string>(settings.MonitorNames, StringComparer.OrdinalIgnoreCase)
         };
     }
 }
@@ -67,6 +72,8 @@ public static class SettingsDocumentMapper
             messages.Add($"The theme identifier '{document.ActiveThemeId}' is not valid.");
         }
 
+        var monitorNames = MapMonitorNames(document.MonitorNames, messages);
+
         if (messages.Count > 0)
         {
             settings = null;
@@ -80,8 +87,46 @@ public static class SettingsDocumentMapper
             document.ShowDesktopOnStartup,
             document.RestoreLastLayout,
             language,
-            document.ActiveThemeId);
+            document.ActiveThemeId,
+            monitorNames);
         diagnostics = Array.Empty<string>();
         return true;
+    }
+
+    private static Dictionary<string, string> MapMonitorNames(
+        Dictionary<string, string>? names,
+        List<string> messages)
+    {
+        if (names is null || names.Count == 0)
+        {
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        if (names.Count > PersistenceLimits.MaxMonitorNames)
+        {
+            messages.Add($"The settings document contains more than {PersistenceLimits.MaxMonitorNames} monitor names.");
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        var parsed = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (key, value) in names)
+        {
+            if (string.IsNullOrWhiteSpace(key) || !PersistenceLimits.IsValidIdentifier(key))
+            {
+                messages.Add($"The monitor identifier '{key}' is not valid.");
+                continue;
+            }
+
+            if (!PersistenceLimits.IsValidName(value))
+            {
+                messages.Add($"The monitor name of '{key}' is not valid.");
+                continue;
+            }
+
+            parsed[key] = value;
+        }
+
+        return parsed;
     }
 }

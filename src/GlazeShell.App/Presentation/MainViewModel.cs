@@ -16,6 +16,7 @@ public sealed class ApplicationListViewModel : INotifyPropertyChanged
     private string _name = string.Empty;
     private string _description = string.Empty;
     private string _typeBadge = string.Empty;
+    private string _path = string.Empty;
     private bool _isRunning;
     private bool _hasWindows;
     private bool _isSelected;
@@ -52,6 +53,24 @@ public sealed class ApplicationListViewModel : INotifyPropertyChanged
         get => _typeBadge;
         set => Set(ref _typeBadge, value);
     }
+
+    /// <summary>
+    /// Полный путь к исполняемому файлу (или идентификатор пакета). Отображается в списке
+    /// в сокращённом виде, но копируется целиком кнопкой «Копировать».
+    /// </summary>
+    public string Path
+    {
+        get => _path;
+        set
+        {
+            if (Set(ref _path, value))
+            {
+                OnPropertyChanged(nameof(HasPath));
+            }
+        }
+    }
+
+    public bool HasPath => _path.Length > 0;
 
     public bool IsRunning
     {
@@ -148,16 +167,25 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// </summary>
     private static readonly TimeSpan RunningRefreshDelay = TimeSpan.FromMilliseconds(250);
 
-    /// <summary>Логический размер холста карты мониторов; панель масштабирует его через <c>Viewbox</c>.</summary>
-    private const double MonitorMapCanvasWidth = 260;
+    /// <summary>
+    /// Предельная длина отображаемого пути. Короткие пути выводятся целиком, длинные
+    /// обрезаются по конец строки: так карточка не растягивается из-за глубоких каталогов
+    /// и длинных имён пакетов MSIX.
+    /// </summary>
+    private const int MaxDisplayPathLength = 58;
 
-    private const double MonitorMapCanvasHeight = 118;
+    /// <summary>
+    /// Предельная длина описания приложения в карточке. Описание из ярлыка часто длиннее,
+    /// чем строка карточки, поэтому оно обрезается по конец троеточием.
+    /// </summary>
+    private const int MaxDisplayDescriptionLength = 80;
 
     private readonly IApplicationManager _applications;
     private readonly IApplicationLauncher _launcher;
     private readonly IWindowManager _windows;
     private readonly IMonitorManager _monitors;
     private readonly IDesktopManager _desktop;
+    private readonly ISettingsManager _settings;
     private readonly DispatcherQueue _dispatcher;
     private readonly IDisposable _displayChanged;
     private readonly IDisposable _processStarted;
@@ -176,6 +204,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private IReadOnlyList<ApplicationListViewModel> _visible = Array.Empty<ApplicationListViewModel>();
     private IReadOnlyList<ApplicationListViewModel> _all = Array.Empty<ApplicationListViewModel>();
     private IReadOnlyList<WindowInfo> _lastWindows = Array.Empty<WindowInfo>();
+    private readonly Dictionary<string, string> _displayNames = new(StringComparer.OrdinalIgnoreCase);
     private ApplicationListViewModel? _selected;
     private string _searchText = string.Empty;
     private string _statusText = "Готово к загрузке";
@@ -190,6 +219,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         IWindowManager windows,
         IMonitorManager monitors,
         IDesktopManager desktop,
+        ISettingsManager settings,
         IEventManager events,
         DispatcherQueue dispatcher)
     {
@@ -198,6 +228,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _windows = windows ?? throw new ArgumentNullException(nameof(windows));
         _monitors = monitors ?? throw new ArgumentNullException(nameof(monitors));
         _desktop = desktop ?? throw new ArgumentNullException(nameof(desktop));
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
 
         ArgumentNullException.ThrowIfNull(events);
@@ -331,7 +362,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             IsBusy = true;
             SetStatus("Сканирование установленных приложений…");
 
-            var discovered = await _applications.RefreshAsync(cancellationToken).ConfigureAwait(true);
+            var discovered = await Task.Run(
+                () => _applications.RefreshAsync(cancellationToken),
+                cancellationToken).ConfigureAwait(true);
 
             ApplySnapshot(discovered);
 
@@ -515,7 +548,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             return;
         }
 
-        var states = await Task.WhenAll(items.Select(item => ProbeAsync(item, cancellationToken))).ConfigureAwait(true);
+        var states = await Task.Run(
+            () => Task.WhenAll(items.Select(item => ProbeAsync(item, cancellationToken))),
+            cancellationToken).ConfigureAwait(true);
 
         await _dispatcher.EnqueueAsync(() =>
         {
@@ -607,9 +642,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>
     /// Выбирает приложения, которым принадлежит процесс. Сопоставление идёт по полному пути
-    /// к исполняемому файлу, а при его отсутствии — по имени образа. Приложения MSIX без
-    /// <see cref="Application.ExecutablePath"/> определяются по имени семейства пакета,
-    /// извлечённому из пути процесса.
+    /// к исполняемому файлу, каталогу установки (приложения-лаунчеры) и по имени образа.
+    /// Приложения MSIX без <see cref="Application.ExecutablePath"/> определяются по имени
+    /// семейства пакета, извлечённому из пути процесса.
     /// </summary>
     private List<string> SelectRunningTargets(string? executablePath, string? processName)
     {
@@ -622,38 +657,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         foreach (var item in _all)
         {
-            if (MatchesProcess(item.Application, executablePath, processName))
+            if (ApplicationProcessMatcher.Matches(item.Application, executablePath, processName))
             {
                 matches.Add(item.Id);
             }
         }
 
         return matches;
-    }
-
-    private static bool MatchesProcess(Application application, string? executablePath, string? processName)
-    {
-        if (application.ExecutablePath is { } target)
-        {
-            if (!string.IsNullOrWhiteSpace(executablePath) && IsSamePath(target, executablePath))
-            {
-                return true;
-            }
-
-            if (string.IsNullOrWhiteSpace(processName))
-            {
-                return false;
-            }
-
-            var imageName = Path.GetFileNameWithoutExtension(target);
-            return !string.IsNullOrWhiteSpace(imageName)
-                && string.Equals(imageName, processName, StringComparison.OrdinalIgnoreCase);
-        }
-
-        // У приложений MSIX нет ExecutablePath: пакет опознаётся по каталогу установки,
-        // в котором живёт исполняемый файл процесса (WindowsApps\<PackageFullName>).
-        return application.PackageFamilyName is { } packageFamilyName
-            && PackageIdentity.IsPathOfPackage(executablePath, packageFamilyName);
     }
 
     private void ApplySnapshot(IReadOnlyList<Application> applications)
@@ -668,6 +678,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 existing.Name = application.Name;
                 existing.Description = BuildDescription(application);
                 existing.TypeBadge = BuildBadge(application);
+                existing.Path = BuildPath(application);
                 models.Add(existing);
                 continue;
             }
@@ -677,6 +688,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
                 Name = application.Name,
                 Description = BuildDescription(application),
                 TypeBadge = BuildBadge(application),
+                Path = BuildPath(application),
             });
         }
 
@@ -753,14 +765,37 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         if (!string.IsNullOrWhiteSpace(application.Description))
         {
-            return application.Description;
+            return ClampText(application.Description, MaxDisplayDescriptionLength);
         }
 
         if (!string.IsNullOrWhiteSpace(application.Publisher))
         {
-            return application.Publisher;
+            return ClampText(application.Publisher, MaxDisplayDescriptionLength);
         }
 
+        return ShortenPath(BuildPath(application));
+    }
+
+    /// <summary>
+    /// Обрезает текст до предельной длины троеточием в конце. Используется для описаний,
+    /// которые не имеют смыслового «хвоста», в отличие от путей.
+    /// </summary>
+    private static string ClampText(string text, int maxLength)
+    {
+        if (text.Length <= maxLength)
+        {
+            return text;
+        }
+
+        return string.Concat(text.AsSpan(0, maxLength - 1), "…");
+    }
+
+    /// <summary>
+    /// Полный путь запуска приложения: исполняемый файл, а при его отсутствии (MSIX) —
+    /// идентификатор модели пользователя или имя семейства пакета.
+    /// </summary>
+    private static string BuildPath(Application application)
+    {
         if (!string.IsNullOrWhiteSpace(application.ExecutablePath))
         {
             return application.ExecutablePath;
@@ -769,7 +804,57 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         return application.ApplicationUserModelId ?? application.PackageFamilyName ?? string.Empty;
     }
 
+    /// <summary>
+    /// Сокращает абсолютный путь до вида «корень\первый каталог\…\последний каталог\файл»,
+    /// оставляя видимыми начало и конец. Слишком длинный результат дополнительно обрезается
+    /// по центру троеточием, а не-пути (например AUMID пакетов MSIX) возвращаются без изменений.
+    /// </summary>
+    private static string ShortenPath(string path)
+    {
+        if (path.Length == 0 || path.IndexOf('\\') < 0)
+        {
+            return ClampPath(path);
+        }
+
+        var segments = path.Split('\\', StringSplitOptions.RemoveEmptyEntries);
+
+        // Корень — диск («C:») для обычных путей или пара «server\share» для UNC.
+        var root = path.StartsWith(@"\\", StringComparison.Ordinal) ? 2 : 1;
+        var directories = segments.Length - root - 1;
+
+        if (directories <= 2)
+        {
+            return ClampPath(path);
+        }
+
+        var prefix = path.StartsWith(@"\\", StringComparison.Ordinal)
+            ? @"\\" + string.Join('\\', segments[..root])
+            : string.Join('\\', segments[..root]);
+
+        return ClampPath($"{prefix}\\{segments[root]}\\…\\{segments[^2]}\\{segments[^1]}");
+    }
+
+    /// <summary>
+    /// Обрезает строку до предельной длины, сохраняя начало и конец и вставляя троеточие
+    /// в середине. Нужна для глубоких каталогов и длинных имён пакетов, которые иначе
+    /// растягивают карточку приложения.
+    /// </summary>
+    private static string ClampPath(string path)
+    {
+        if (path.Length <= MaxDisplayPathLength)
+        {
+            return path;
+        }
+
+        var head = (MaxDisplayPathLength - 1) / 2;
+        var tail = MaxDisplayPathLength - 1 - head;
+        return string.Concat(path.AsSpan(0, head), "…", path.AsSpan(path.Length - tail));
+    }
+
     private void SetStatus(string text) => StatusText = text;
+
+    /// <summary>Показывает в строке состояния, что путь приложения скопирован в буфер обмена.</summary>
+    public void NotifyPathCopied(string path) => SetStatus($"Путь скопирован: {ShortenPath(path)}");
 
     private void ApplyMonitors(IReadOnlyList<MonitorInfo> monitors)
     {
@@ -779,49 +864,108 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             MonitorSummary = BuildMonitorSummary(monitors);
 
+            var defaults = BuildDefaultMonitorNames(monitors);
+            var custom = _settings.GetSettings().MonitorNames;
+
             var previous = Monitors.ToDictionary(static item => item.Id, StringComparer.OrdinalIgnoreCase);
             Monitors.Clear();
+            _displayNames.Clear();
 
             foreach (var monitor in monitors)
             {
+                var defaultName = defaults.TryGetValue(monitor.Id, out var name) ? name : monitor.DeviceName;
+                custom.TryGetValue(monitor.Id, out var customName);
+
                 if (previous.TryGetValue(monitor.Id, out var existing))
                 {
                     existing.Update(monitor);
+                    existing.SetNames(defaultName, customName);
                     Monitors.Add(existing);
+                    _displayNames[monitor.Id] = existing.DisplayName;
+                    continue;
                 }
-                else
-                {
-                    Monitors.Add(new MonitorListItemViewModel(monitor));
-                }
+
+                var model = new MonitorListItemViewModel(monitor);
+                model.SetNames(defaultName, customName);
+                Monitors.Add(model);
+                _displayNames[monitor.Id] = model.DisplayName;
             }
 
-            ApplyMonitorMap(monitors);
             AssignWindowsToMonitors(monitors);
         });
     }
 
     /// <summary>
-    /// Раскладывает мониторы на схематичной карте с сохранением их взаимного расположения.
+    /// Имена дисплеев по умолчанию: основной получает «MAIN DISPLAY», остальные — «DISPLAY N»
+    /// в порядке слева направо и сверху вниз. Пользователь может переименовать любой дисплей.
     /// </summary>
-    private void ApplyMonitorMap(IReadOnlyList<MonitorInfo> monitors)
+    private static Dictionary<string, string> BuildDefaultMonitorNames(IReadOnlyList<MonitorInfo> monitors)
     {
-        var placements = MonitorMapLayout.Compute(monitors, MonitorMapCanvasWidth, MonitorMapCanvasHeight, padding: 4);
-        var byId = placements.ToDictionary(static placement => placement.MonitorId, StringComparer.OrdinalIgnoreCase);
+        var names = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var ordered = monitors.OrderBy(static monitor => monitor.Bounds.X).ThenBy(static monitor => monitor.Bounds.Y);
+        var number = 1;
 
-        foreach (var monitor in Monitors)
+        foreach (var monitor in ordered)
         {
-            if (byId.TryGetValue(monitor.Id, out var placement))
+            if (monitor.IsPrimary)
             {
-                monitor.SetPlacement(placement.Left, placement.Top, placement.Width, placement.Height);
+                names[monitor.Id] = "MAIN DISPLAY";
+            }
+            else
+            {
+                number++;
+                names[monitor.Id] = $"DISPLAY {number}";
             }
         }
+
+        return names;
     }
 
-    private static Func<string?, string?> BuildMonitorNameResolver(IReadOnlyList<MonitorInfo> monitors)
+    /// <summary>
+    /// Переименовывает дисплей и сохраняет пользовательское имя в настройках. Пустое имя
+    /// возвращает дисплей к имени по умолчанию.
+    /// </summary>
+    public void RenameMonitor(MonitorListItemViewModel monitor, string? name)
     {
-        var names = monitors.ToDictionary(static monitor => monitor.Id, static monitor => monitor.DeviceName, StringComparer.OrdinalIgnoreCase);
-        return monitorId => monitorId is not null && names.TryGetValue(monitorId, out var name) ? name : null;
+        ArgumentNullException.ThrowIfNull(monitor);
+
+        var settings = _settings.GetSettings();
+        var names = new Dictionary<string, string>(settings.MonitorNames, StringComparer.OrdinalIgnoreCase);
+        var normalized = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+
+        if (normalized is null)
+        {
+            names.Remove(monitor.Id);
+        }
+        else
+        {
+            names[monitor.Id] = normalized;
+        }
+
+        _settings.SetSettings(new UserSettings(
+            settings.StartWithWindows,
+            settings.MinimizeToTray,
+            settings.ShowDesktopOnStartup,
+            settings.RestoreLastLayout,
+            settings.Language,
+            settings.ActiveThemeId,
+            names));
+
+        monitor.SetNames(
+            BuildDefaultMonitorNames(Monitors.Select(static item => item.Monitor).ToList()).TryGetValue(monitor.Id, out var fallback)
+                ? fallback
+                : monitor.DeviceName,
+            normalized);
+
+        _displayNames[monitor.Id] = monitor.DisplayName;
+        SetStatus($"Дисплей переименован: {monitor.DisplayName}");
+
+        // Подписи монитора у окон берутся из карты имён, поэтому список окон пересобирается.
+        RefreshWindows();
     }
+
+    private static Func<string?, string?> BuildMonitorNameResolver(Dictionary<string, string> displayNames) =>
+        monitorId => monitorId is not null && displayNames.TryGetValue(monitorId, out var name) ? name : null;
 
     /// <summary>
     /// Раскладывает окна по мониторам для панели мониторов: у каждого монитора
@@ -829,7 +973,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     /// </summary>
     private void AssignWindowsToMonitors(IReadOnlyList<MonitorInfo> monitors)
     {
-        var resolveMonitor = BuildMonitorNameResolver(monitors);
+        var resolveMonitor = BuildMonitorNameResolver(_displayNames);
 
         foreach (var monitor in Monitors)
         {
@@ -911,37 +1055,21 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             monitors = Array.Empty<MonitorInfo>();
         }
 
-        var resolveMonitor = BuildMonitorNameResolver(monitors);
+        var resolveMonitor = BuildMonitorNameResolver(_displayNames);
 
         foreach (var application in _all)
         {
             var model = application.Application;
-            WindowInfo[] matching;
 
-            if (model.ExecutablePath is { } path)
-            {
-                matching = windows.Where(window => IsSamePath(path, window.ExecutablePath)).ToArray();
-            }
-            else if (model.PackageFamilyName is { } packageFamilyName)
-            {
-                matching = windows
-                    .Where(window => PackageIdentity.IsPathOfPackage(window.ExecutablePath, packageFamilyName))
-                    .ToArray();
-            }
-            else
-            {
-                matching = Array.Empty<WindowInfo>();
-            }
+            var matching = windows
+                .Where(window => ApplicationProcessMatcher.MatchesExecutable(model, window.ExecutablePath))
+                .ToArray();
 
             application.SetWindows(matching, _windows, resolveMonitor);
         }
 
         AssignWindowsToMonitors(monitors);
     }
-
-    private static bool IsSamePath(string expected, string? actual) =>
-        !string.IsNullOrWhiteSpace(actual) &&
-        string.Equals(actual, expected, StringComparison.OrdinalIgnoreCase);
 
     public void Dispose()
     {

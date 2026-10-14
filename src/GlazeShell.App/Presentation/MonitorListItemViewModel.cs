@@ -9,14 +9,13 @@ namespace GlazeShell.App.Presentation;
 public sealed class MonitorListItemViewModel : INotifyPropertyChanged
 {
     private MonitorInfo _monitor;
-    private double _mapLeft;
-    private double _mapTop;
-    private double _mapWidth;
-    private double _mapHeight;
+    private string _defaultName;
+    private string? _customName;
 
     public MonitorListItemViewModel(MonitorInfo monitor)
     {
         _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
+        _defaultName = monitor.DeviceName;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -27,7 +26,16 @@ public sealed class MonitorListItemViewModel : INotifyPropertyChanged
 
     public string Id => _monitor.Id;
 
+    /// <summary>Аппаратное имя устройства (например, «\\.\DISPLAY1») — уходит в подсказку и в сводку.</summary>
     public string DeviceName => _monitor.DeviceName;
+
+    /// <summary>
+    /// Отображаемое имя дисплея: пользовательское, а при его отсутствии — имя по умолчанию
+    /// («MAIN DISPLAY» для основного, «DISPLAY N» для остальных).
+    /// </summary>
+    public string DisplayName => string.IsNullOrEmpty(_customName) ? _defaultName : _customName;
+
+    public bool HasCustomName => !string.IsNullOrEmpty(_customName);
 
     public bool IsPrimary => _monitor.IsPrimary;
 
@@ -46,15 +54,6 @@ public sealed class MonitorListItemViewModel : INotifyPropertyChanged
         _ => $"{Windows.Count} окон",
     };
 
-    /// <summary>Позиция монитора на схематичной карте (единицы холста).</summary>
-    public double MapLeft => _mapLeft;
-
-    public double MapTop => _mapTop;
-
-    public double MapWidth => _mapWidth;
-
-    public double MapHeight => _mapHeight;
-
     public void Update(MonitorInfo monitor)
     {
         ArgumentNullException.ThrowIfNull(monitor);
@@ -66,6 +65,37 @@ public sealed class MonitorListItemViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(Label));
         OnPropertyChanged(nameof(Summary));
         OnPropertyChanged(nameof(Badge));
+    }
+
+    /// <summary>
+    /// Задаёт имя по умолчанию и пользовательское имя. Имя по умолчанию пересчитывается
+    /// при изменении состава мониторов, пользовательское — приходит из настроек.
+    /// </summary>
+    public void SetNames(string defaultName, string? customName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(defaultName);
+
+        var changed = false;
+
+        if (!string.Equals(_defaultName, defaultName, StringComparison.Ordinal))
+        {
+            _defaultName = defaultName;
+            changed = true;
+        }
+
+        var normalizedCustom = string.IsNullOrWhiteSpace(customName) ? null : customName.Trim();
+
+        if (!string.Equals(_customName, normalizedCustom, StringComparison.Ordinal))
+        {
+            _customName = normalizedCustom;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            OnPropertyChanged(nameof(DisplayName));
+            OnPropertyChanged(nameof(HasCustomName));
+        }
     }
 
     public void SetWindows(IReadOnlyList<WindowListItemViewModel> windows)
@@ -81,19 +111,6 @@ public sealed class MonitorListItemViewModel : INotifyPropertyChanged
 
         OnPropertyChanged(nameof(HasWindows));
         OnPropertyChanged(nameof(WindowCountText));
-    }
-
-    public void SetPlacement(double left, double top, double width, double height)
-    {
-        _mapLeft = left;
-        _mapTop = top;
-        _mapWidth = width;
-        _mapHeight = height;
-
-        OnPropertyChanged(nameof(MapLeft));
-        OnPropertyChanged(nameof(MapTop));
-        OnPropertyChanged(nameof(MapWidth));
-        OnPropertyChanged(nameof(MapHeight));
     }
 
     private static string BuildLabel(MonitorInfo monitor)

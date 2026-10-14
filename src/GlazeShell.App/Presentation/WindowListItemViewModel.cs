@@ -64,7 +64,7 @@ public sealed class WindowListItemViewModel : INotifyPropertyChanged
 
     public SolidColorBrush ActiveBrush => IsActive
         ? new SolidColorBrush(ColorHelper.FromArgb(0xFF, 0x4A, 0xDE, 0x80))
-        : new SolidColorBrush(ColorHelper.FromArgb(0xFF, 0x4E, 0x58, 0x66));
+        : new SolidColorBrush(ColorHelper.FromArgb(0xFF, 0x5A, 0x5A, 0x63));
 
     public AsyncCommand FocusCommand { get; }
 
