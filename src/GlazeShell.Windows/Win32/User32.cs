@@ -176,8 +176,8 @@ internal static class User32
     internal const uint EventObjectHide = 0x8003;
     internal const uint EventSystemMinimizestart = 0x0016;
     internal const uint EventSystemMinimizeend = 0x0017;
-    internal const uint EventObjectCloaked = 0x8016;
-    internal const uint EventObjectUncloaked = 0x8017;
+    internal const uint EventObjectCloaked = 0x8017;
+    internal const uint EventObjectUncloaked = 0x8018;
 
     internal const uint WineventOutOfContext = 0x0000;
     internal const uint WineventSkipOwnProcess = 0x0002;

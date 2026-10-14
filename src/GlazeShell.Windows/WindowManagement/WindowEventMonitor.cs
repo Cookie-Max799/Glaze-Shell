@@ -88,7 +88,7 @@ internal sealed class WindowEventMonitor : IDisposable
             }
 
             InstallHook(User32.EventSystemForeground, User32.EventSystemMinimizeend, flags);
-            InstallHook(User32.EventObjectCreate, User32.EventObjectCloaked, flags);
+            InstallHook(User32.EventObjectCreate, User32.EventObjectUncloaked, flags);
 
             ready.Set();
 
@@ -169,10 +169,10 @@ internal sealed class WindowEventMonitor : IDisposable
 
     private void PublishAppearance(nint hwnd, bool opened)
     {
-        var window = NativeWindowEnumerator.Read(hwnd, includeProcess: false);
-
         if (opened)
         {
+            var window = NativeWindowEnumerator.Read(hwnd, includeProcess: false);
+
             if (window is not null)
             {
                 _known[hwnd] = window;
@@ -182,12 +182,17 @@ internal sealed class WindowEventMonitor : IDisposable
             return;
         }
 
-        window ??= _known.GetValueOrDefault(hwnd);
+        // При закрытии окно уже разрушается, и свежее чтение возвращает заглушку
+        // «(безымянное окно)» вместо настоящего заголовка. Поэтому берётся заголовок,
+        // запомненный при открытии окна.
+        var closed = _known.GetValueOrDefault(hwnd);
         _known.TryRemove(hwnd, out _);
 
-        if (window is not null)
+        closed ??= NativeWindowEnumerator.Read(hwnd, includeProcess: false);
+
+        if (closed is not null)
         {
-            Publish(new WindowClosed(window));
+            Publish(new WindowClosed(closed));
         }
     }
 
