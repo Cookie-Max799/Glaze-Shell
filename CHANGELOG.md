@@ -13,130 +13,42 @@
 - Принудительное завершение приложения (`IApplicationLauncher.TerminateAsync`, кнопка «Завершить принудительно» с диалогом подтверждения): завершает дерево процессов через `Process.Kill(entireProcessTree: true)` и добивает фоновые процессы из каталога установки. Расширение по каталогу ограничено несистемными каталогами (корень диска и `%WINDIR%` исключены). `RestartAsync` теперь прибегает к принудительному завершению как к fallback, когда вежливое закрытие не удалось, — иначе перезапуск поднимал второй экземпляр рядом с незакрытым первым.
 - Связь окон с мониторами: `WindowInfo.MonitorId` заполняется через `MonitorFromWindow`; панель окон показывает монитор окна, панель мониторов — окна на каждом мониторе и схематичную карту (`MonitorMapLayout`, Core, с тестами `MonitorMapLayoutTests`).
 - Добавлен регрессионный тест `ResolvesRealWindowsShortcutWithAnsiLinkInfo` и фикстура `Fixtures/real-linkinfo-ansi.lnk` (реальный ярлык Windows с ANSI `LinkInfo`) — проверка разбора `.lnk` на настоящем формате, а не только на builder-фикстуре. Managed-writer `ShellLinkBuilder` теперь пишет `LinkInfo` в реальном формате (ANSI `LocalBasePath`), благодаря чему тесты больше не маскируют ошибку декодирования; удалён временный пробник `TempRealShortcutProbe`.
+- Копирование пути приложения из списка: на карточке появилась кнопка «Копировать», которая кладёт в буфер обмена полный путь к исполняемому файлу (для MSIX — AUMID или имя семейства пакета). Сам путь в карточке показывается сокращённо в виде «корень\первый каталог\…\последний каталог\файл» (например, `C:\Program Files\…\Acrobat\Acrobat.exe`): начало и конец пути видно, длинная середина скрыта. Пути с двумя каталогами и короче показываются целиком, поэтому длинная строка не занимает весь ряд, а копируется всё равно полный путь.
+- Двухколоночный макет: список приложений и панель «Мониторы» теперь стоят рядом — приложения в широкой левой колонке, мониторы в фиксированной правой (~360px). Поиск и кнопка «Обновить» переехали над списком, строка состояния осталась внизу во всю ширину. Панель мониторов получила собственный скролл на всю высоту колонки. Начальный размер окна увеличен (1120×720 → 1280×760, минимум 960×520), чтобы колонки не сжимались.
+- Приложения-лаунчеры (Squirrel и подобные) теперь определяются как запущенные и корректно закрываются. Приложение могло быть запущено через лаунчер из ярлыка (например, Discord: `Discord.exe --processStart Discord.exe`), который поднимает настоящий исполняемый файл из подкаталога каталога установки. Сопоставление процессов и окон вынесено в framework-free `ApplicationProcessMatcher` (Core): кроме точного пути учитывается каталог установки с ограничением по имени образа, а имя из аргумента `--processStart` добавляется в набор ожидаемых. Ограничение по имени образа не даёт зацепить чужие процессы из общего каталога (например, `git-bash.exe` у `git-cmd.exe`), а проверка безопасного каталога исключает системные процессы. Добавлены `ProcessInspector.FindProcessesByImageInDirectory`, тесты `ApplicationProcessMatcherTests` и регрессионный тест `IsRunningDetectsLauncherSpawnedProcessFromSubdirectory`.
+- Описания приложений в карточке ограничены по длине (`BuildDescription`): описание из ярлыка или имя издателя обрезаются до 80 символов троеточием в конце, чтобы длинная строка не растягивала карточку.
+- Добавлен скрипт быстрого запуска `glaze.cmd` в корне репозитория: собирает приложение и запускает собранный exe отдельным процессом (консоль закрывается). Конфигурация по умолчанию — `Debug`, можно передать `Release` первым аргументом (`glaze.cmd Release`).
+- Пользовательские имена дисплеев: любой монитор можно переименовать из панели «Мониторы» (диалог «Сохранить»/«Сбросить»/«Отмена»), имя сохраняется в `settings.json` как карта `monitorNames` (идентификатор монитора → имя) и переживает перезапуск. По умолчанию дисплеи называются «MAIN DISPLAY» и «DISPLAY N» (слева направо и сверху вниз), а пустое имя возвращает дисплей к имени по умолчанию. Карта нормализуется без учёта регистра, обрезается по краям, ограничена 64 записями (`PersistenceLimits.MaxMonitorNames`), а идентификаторы и имена проверяются тем же валидатором, что и остальные документы. Логика хранения покрыта `UserSettingsTests` (Core) и тестами round-trip, лимита и валидации в `JsonUserDataStoreTests` (Data).
+- Устойчивое завершение приложения: закрытие окна освобождает ресурсы по шагам (`App.Shutdown`), и сбой одной очистки (layout-writer, источники событий, single-instance lease) логируется как warning, не мешая остальным шагам и не удерживая процесс в памяти.
 
-#### Stage 10 — Application Lifecycle
+#### Stage 0 — Foundation
 
-- Реализован `SingleInstanceHelper`/`SingleInstanceLease` (`GlazeShell.Windows/Lifecycle`) — единый жизненный цикл экземпляра приложения. `Acquire` создаёт именованный mutex (`GlazeShell.SingleInstance.v1`) и удерживает его на всё время работы процесса; если mutex уже занят, возвращается `null`, и вызывающий код завершает запуск. `SingleInstanceLease` — `IDisposable` с идемпотентным освобождением: повторный `Dispose` не делает ничего, а освобождение выполняется только на потоке-владельце mutex.
-- Заброшенный mutex (`AbandonedMutexException`) трактуется как «первый экземпляр»: аварийно завершившийся предыдущий процесс не должен мешать запуску нового.
-- `ActivateExistingInstance` находит окно уже работающего экземпляра и поднимает его: восстанавливает из свёрнутого состояния (`ShowWindowAsync(SW_RESTORE)`) и best-effort выводит на передний план (`SetForegroundWindow`); отказ системы при foreground lock не считается ошибкой.
-- `FindOwnVisibleWindow` ищет видимое top-level окно своего экземпляра через `EnumWindows` с `IsWindowVisible`, определяя владельца окна по `GetWindowThreadProcessId` и сравнению пути процесса с `Environment.ProcessPath`. Идентификация по владеющему процессу, а не по пути модуля окна (`GetWindowModuleFileNameW`): для чужих окон функция возвращает модуль вызывающего процесса и потому для сопоставления непригодна.
-- `App.xaml.cs` удерживает lease в поле: `Acquire()` вызывается в конструкторе до создания окна; при повторном запуске окно существующего экземпляра активируется, а процесс завершается через `Environment.Exit(0)`. При закрытии окна lease освобождается последним — после `Flush`/`Dispose` layout-writer и `Dispose` источников событий, поэтому mutex освобождается и приложение можно запустить заново.
-- Удалён нерабочий каркас single-instance: mutex освобождался сразу в `using`, `SetClassLongPtr`-взаимодействие с названием класса окна было no-op, а поиск окна по классу никогда не совпадал. Поиск окна больше не зависит от класса окна, поэтому `MainWindow` перестал задавать имя класса.
-- Добавлены тесты Stage 10 (`SingleInstanceHelperTests`): первый экземпляр получает lease, второй (с другого потока — named mutex реентерабелен внутри потока) получает `null`, повторный захват после освобождения, идемпотентность `Dispose`, независимость разных имён, поиск собственного окна и отсутствие исключений при активации.
-- Результат: 284 tests (`GlazeShell.Core.Tests` 146/146, `GlazeShell.Data.Tests` 64/64, `GlazeShell.Windows.Tests` 74/74 при изолированном запуске). Debug и Release build — 0 warnings / 0 errors.
+- Создана Stage 0 Foundation: solution, слоистые проекты и минимальный WinUI 3 executable.
+- Добавлены фиксированные настройки .NET SDK и NuGet package versions.
+- Добавлена базовая конфигурация `schemaVersion: 1`.
+- Добавлено централизованное JSON-lines файловое логирование.
+- Добавлен MSTest test project и smoke test foundation.
+- Добавлена обязательная архитектурная, security, performance и development документация.
+- Инициализирован локальный Git repository.
+- Окно приложению заданы явный размер и центрирование через `AppWindow`; ранее размер определялся поведением XAML по умолчанию.
+- Пустой `Grid` в `MainWindow` заменён стартовым экраном со статусом этапов.
+- `Platform` для App-проекта принудительно устанавливается в `x64`, поэтому `dotnet run` работает без указания платформы.
+- Добавлен `LogRedactor`: маскирование secrets (`password`, `token`, `api_key`, `authorization`, `Bearer` и другие) и имён пользователей в путях, плюс ограничение длины записи.
+- Файловое логирование ограничено по размеру (1 MiB) с ротацией в три архива вместо неограниченного роста.
+- `UserDataPaths` отклоняет зарезервированные имена устройств Windows, слишком длинные имена и имена с завершающей точкой или пробелом.
+- `app.manifest` дополнен `longPathAware`, `SegmentHeap` и GUID совместимости с Windows 8.1.
+- `.gitignore` дополнен шаблонами файлов с секретами.
+- `docs/SECURITY.md` переписан: модель угроз, инвентарь данных и перечень принятых рисков.
 
-#### Stage 9 — Windows Events
+#### Stage 1 — Core
 
-- Реализован `ShellEventCoordinator` (`GlazeShell.Windows/SystemEvents`) — единая точка запуска источников системных событий: оконные события (`SetWinEventHook`), события дисплеев (скрытое message window) и события процессов. Источники запускаются из одного места, поэтому ни один не поднимается дважды и ни один не остаётся работать после закрытия приложения.
-- Отказ отдельного источника не отменяет запуск остальных: он попадает в `ShellEventStatus.Diagnostics`, а подписчики на его события просто не приходят. `Start()` возвращает `ShellEventStatus` с флагами по источникам и `AllSourcesStarted`; повторный `Start()` выбрасывает `InvalidOperationException`, повторный `Dispose()` не делает ничего.
-- Добавлен контракт `IWindowsEventSource` (`Start()` + `IDisposable`) в слое Windows Integration: `WindowManager` и `MonitorManager` реализуют его и остаются при этом источниками запросов состояния для интерфейса. Контракт живёт не в Core, потому что Core не владеет WinEvent hooks и message windows.
-- Реализован `ProcessEventMonitor` — публикация `ProcessStarted`/`ProcessExited` по разнице снимков списка процессов (`ProcessWatchOptions`, интервал по умолчанию 1 с, диапазон 500 мс – 5 мин). События «процесс запущен» в Windows нет: `SetWinEventHook` работает с окнами, ETW требует прав администратора, а WMI — службы, которая часто отключена. Первый снимок — базовый и событий не порождает: процессы, работающие до запуска Glaze Shell, не считаются только что запущенными.
-- Снимок стоит одного перечисления процессов: имя и путь читаются только для новых PID, для известных используется кэш предыдущего снимка, поэтому цена прохода в установившемся состоянии не зависит от числа запущенных программ. Если на события никто не подписан, перечисление не выполняется вовсе (`HasSubscribers<TEvent>`).
-- `ProcessExited` расширен необязательным `ExecutablePath` (симметрично `ProcessStarted`): выход публикуется раньше запуска, поэтому перезапуск приложения читается как «вышел, затем открыто». Обратная совместимость вызовов с одним и двумя аргументами сохранена.
-- Добавлен `EventCoalescer` (`GlazeShell.Core/Services`, framework-free): объединяет частые запросы в одно выполнение. Обработчик ошибок обязателен — неперехваченное исключение в потоке таймера завершило бы процесс, а молча проглотить ошибку нельзя. `Cancel()` отменяет отложенное выполнение, чтобы остановленный источник не публиковал данные после остановки.
-- `MonitorEventMonitor` теперь реагирует на `WM_DEVICECHANGE` (только `DBT_DEVNODES_CHANGED`), `WM_SETTINGCHANGE` (только `SPI_SETWORKAREA` и `SPI_SETLOGICALDPIOVERRIDE`) и `WM_DPICHANGED`. Отбор вынесен в `DisplaySignal` и намеренно узкий: остальные сообщения этой группы приходят постоянно (смена клавиатуры, раскладки, темы) и не меняют ни состав, ни геометрию мониторов, поэтому перечисление мониторов на них было бы лишней работой.
-- `MonitorManager` публикует `DisplayChanged` один раз после паузы 300 мс вместо перечисления мониторов на каждое сообщение, а при `Dispose()` отменяет отложенную публикацию.
-- `IEventManager` расширен `HasSubscribers<TEvent>()`: источники используют его, чтобы не выполнять фоновую работу, когда никто не слушает. Учитывается только точный тип события.
-- `App.xaml.cs` создаёт `ShellEventCoordinator` после создания окна (подписчики уже зарегистрированы, ни одно событие не теряется между подпиской и первым проходом источника), логирует статус запуска и диагностики отказов, а при закрытии окна освобождает все источники. Отказ источника не прерывает запуск приложения: он попадает в лог как warning.
-- Добавлены тесты Stage 9: `EventCoalescerTests` (объединение запросов, запрос во время выполнения, `Flush`/`Cancel`, изоляция ошибки, работа после сбоя), `EventManagerTests` на `HasSubscribers`, `ProcessEventMonitorTests` (базовый снимок, публикация запуска и выхода, порядок «вышел, затем открыто», отсутствие пути, пропуск снимков без подписчиков, восстановление после сбоя снимка, остановка при освобождении), `ShellEventCoordinatorTests` (статус запуска, изоляция отказа источника, однократность `Start`, идемпотентность `Dispose`), `DisplaySignalTests` (отбор оконных сообщений) и расширенные `MonitorManagerTests` (коалесцирование пачки, разнесённые во времени сигналы, отмена отложенной публикации при освобождении).
-
-### Fixed
-
-- Исправлен разбор строк `LinkInfo` в ярлыках `.lnk` (`ShellLinkData`). По MS-SHLLINK строки `LocalBasePath`/`CommonPathSuffix` лежат на ANSI-офсетах (`0x10`/`0x18`) и всегда закодированы в ANSI, а Unicode-варианты доступны только при `LinkInfoHeaderSize >= 0x24` (офсеты `0x1C`/`0x20`). Прежний код декодировал эти строки как Unicode по флагу `IsUnicode` из `LinkFlags`, поэтому пути реальных ярлыков (у которых `LinkInfoHeaderSize = 0x1C`) превращались в мусор: `TryResolveManaged` формально возвращал неверный непустой путь, fallback на COM и property store не выполнялся, и все ярлыки отбрасывались как неразрешимые. В результате discovery возвращал пустой список приложений. Теперь `CommonPathSuffixOffset` читается по правильному офсету (`0x18` вместо `0x14`), `LocalBasePath` и `CommonPathSuffix` объединяются, а ANSI-строки декодируются в кодировке системы (`CultureInfo.CurrentCulture.TextInfo.ANSICodePage` через `CodePagesEncodingProvider`, с fallback на Latin1).
-- Исправлено ложное «Не удалось закрыть» при закрытии приложения. Прежний `CloseAsync` возвращал результат `CloseMainWindow`, который для части приложений (например, Acrobat) возвращает `false`, хотя окно закрывается, и не ждал завершения процесса. Теперь после вежливого запроса (`CloseMainWindow` и, если главное окно не найдено, `WM_CLOSE` по всем top-level окнам процесса) метод дожидается фактического завершения процесса (до `CloseTimeoutMilliseconds`) и сообщает «закрыто» только когда приложение действительно завершилось. Принудительное завершение (`Kill`/`TerminateProcess`) по-прежнему не применяется.
-- Предупреждения discovery (неразрешённые ярлыки, отказ AppsFolder) теперь пишутся в лог уровнем warning через подписку `App.xaml.cs` на `DiscoveryCompleted`, а не теряются.
-- Исправлено определение состояния MSIX-приложений. Прежний `PackageInstallLocationResolver` читал реестр `AppxAllUserStore\Applications`, ожидая ключи вида `PackageFamilyName!AppId` с вложенным ключом `Package`, тогда как в актуальной схеме ключ называется полным именем пакета (`Name_Version_Architecture_PublisherId`), а значение `Path` лежит прямо в ключе. Из-за этого индекс всегда оставался пустым, `ResolveInstallLocation` возвращал `null`, и все MSIX-приложения (на тестовой машине — 126 из 152) безошибочно числились незапущенными.
-- Каталог установки из реестра для bundle-пакетов указывает на `neutral`-вариант, тогда как на диске установлен вариант конкретной архитектуры (на тестовой машине — 44 из 52 пакетов). Поэтому MSIX-пакеты теперь определяются разбором пути процесса `WindowsApps\<PackageFullName>` через `PackageIdentity`, а не по значению из реестра. `PackageInstallLocationResolver` и контракт `IPackageLocationResolver` удалены как неиспользуемые и вводящие в заблуждение.
-- `MainViewModel` больше не требует `ExecutablePath` для сопоставления процессов и окон: MSIX-приложения без пути к исполняемому файлу сопоставляются по имени семейства пакета. Раньше события `ProcessStarted`/`ProcessExited` и перечисление окон вообще не касались MSIX-приложений, поэтому их состояние и список окон не менялись.
-- `MonitorManager.Start()` публикует текущую конфигурацию мониторов сразу. Раньше список мониторов оставался пустым до первого системного изменения дисплеев.
-- `MainViewModel.RefreshAsync` вызывает `RefreshWindows()` после первичного сканирования: окна, открытые до запуска Glaze Shell, не порождают событий, поэтому список окон не заполнялся.
-
-### Changed
-
-- `MainViewModel` больше не опрашивает состояние запущенных приложений каждые 3 секунды. Состояние обновляется по событиям `ProcessStarted`/`ProcessExited`: приложения сопоставляются по полному пути к исполняемому файлу, при его отсутствии — по имени образа, пересчитываются только затронутые приложения, а пачка событий одного запуска объединяется (`EventCoalescer`, 250 мс). Однократный полный пересчёт остался в `RefreshAsync` и задаёт базовую линию для приложений, запущенных до Glaze Shell.
-- `WindowsApplicationLauncher.IsRunningAsync` больше не определяет состояние MSIX-приложения по AUMID собственного процесса оболочки (`Environment.ProcessId`). Состояние пакета определяется по процессам в его каталоге установки; если каталог не разрешён, состояние считается неизвестным, а не «не запущено» в отчёт об остановке. Проверка AUMID потребовала бы COM-вызова для каждого процесса, что несопоставимо дороже проверки по пути.
-
-### Changed (ранее)
-
-- Документация сведена к двум файлам, чтобы её было проще читать на GitHub: `docs/ARCHITECTURE.md` (слои, решения по этапам, таблица использованных Windows API, производительность) и `docs/SECURITY.md` (модель угроз и принятые риски). Раздел «Разработка» перенесён в `README.md`; `docs/DEVELOPMENT.md`, `docs/WINDOWS_API.md`, `docs/PERFORMANCE.md` и корневой `ARCHITECTURE.md` удалены. Содержание сохранено полностью, изменены только пути, уровни заголовков и формулировки под фактическое состояние репозитория.
-- `docs/ARCHITECTURE.md`: таблица Windows API дополнена реально используемыми API Stage 5/6 (`EnumDisplayMonitors`, `EnumDisplaySettingsW`, `MonitorFromWindow`, `MonitorFromPoint`, `GetDpiForMonitor`, `GetDpiForSystem`, `GetDpiForWindow`, `WM_DISPLAYCHANGE`, `SHGetKnownFolderPath`/`SHGetKnownFolderItem`) и исправлена ссылка на `Shell/IPersistFile.cs`: интерфейс объявлен в `Shell/IShellLinkW.cs`, отдельного файла нет.
-- Из структуры репозитория убраны пустые каталоги-заглушки с `.gitkeep`: `assets`, `GlazeShell.Data/Database`, `GlazeShell.Infrastructure/Diagnostics`, `GlazeShell.Infrastructure/Startup`, `GlazeShell.Windows/Windows`, а также устаревшие `.gitkeep` в непустых `GlazeShell.Windows/Interop`, `Shell` и `Win32`. Git не хранит пустые каталоги, поэтому файлы-заглушки только мешали читать дерево репозитория; каталоги появятся вместе с содержимым.
-
-### Added
-
-#### Stage 8 — Theme System
-
-- Реализован `ThemeManager` (`IThemeManager`): реестр тем в детерминированном порядке (по имени, затем по идентификатору), выбор действующей темы, `ThemeChanged` при фактической смене. Темы возвращаются как неизменяемый снимок и не меняются после загрузки.
-- `IThemeManager` расширен `GetActiveTheme` и `SetActiveTheme`. Действующая тема всегда существует: пока тема не выбрана, действует встроенная `Theme.CreateDefault()` (`glaze-default`). Неизвестный идентификатор не оставляет приложение без темы — сохраняется предыдущая.
-- Добавлена встроенная тема `glaze-default`: цвета (`layerBackground`, `layerText`, `subtleText`, `controlBackground`, `controlBackgroundHover`, `controlBorder`, `accentBackground`, `accentText`, `criticalBackground`, `criticalText`), шрифты, размеры и эффекты.
-- Добавлен `ThemeStore` (`GlazeShell.Data/Themes`): чтение пользовательских тем из каталога `themes` в каталоге данных приложения, только `*.json` верхнего уровня. Темы наполняет пользователь, поэтому программа их только читает.
-- Непригодная тема отбрасывается по отдельности, а не отправляет весь набор в recovery: пользовательские темы — данные пользователя, а не документы программы. Причины отклонения возвращаются в `ThemeLoadResult.Diagnostics`.
-- Добавлены `ThemeDocument` и `ThemeDocumentMapper`: проверяются идентификатор, имя, метаданные, формат цвета (`#RGB`, `#RRGGBB`, `#AARRGGBB`), размеры, режим обоев, диапазоны анимаций и лимиты количества (64 темы, 256 цветов, 64 шрифта, 256 иконок, 512 KiB на файл).
-- `App.xaml.cs` загружает темы при старте, выбирает тему из `UserSettings.ActiveThemeId` и логирует количество загруженных тем, диагностику и факт замены недоступной темы на встроенную.
-- `ThemeColors.Find` ищет цвет по имени без учёта регистра; дубликаты имён цветов отклоняются моделью.
-- Добавлены тесты `ThemeManagerTests` (Core) и `ThemeStoreTests` (Data), включая запрет исполняемых ассетов, выход за пределы каталога темы, неверный формат цвета, превышение лимитов и устойчивость к одной повреждённой теме.
-- Результат: 220/221 tests green в Release (`GlazeShell.Core.Tests` 121/121, `GlazeShell.Data.Tests` 64/64, `GlazeShell.Windows.Tests` 35 passed + 1 пропущенный). Debug и Release build — 0 warnings / 0 errors.
-
-#### Stage 7 — Persistence
-
-- Добавлен слой `GlazeShell.Data` с `JsonUserDataStore` (`IUserDataStore`): документы `config.json`, `settings.json`, `layout.json` в каталоге пользовательских данных, чтение и запись по требованию.
-- Добавлены DTO и строгие мапперы `ConfigurationDocument`, `SettingsDocument`, `LayoutDocument` с проверкой идентификаторов, имён, уникальности id, ссылок на активную вкладку и лимитов `PersistenceLimits` (4 MiB на документ, глубина JSON 32, 512 вкладок, 512 категорий на вкладку, 4096 элементов на категорию).
-- Версия схемы хранится в каждом документе (`schemaVersion`). `SchemaMigrationRunner` применяет миграции строго последовательно, отказывается строить цепочку с пропуском версии или дублем и не трогает документы из будущих версий приложения (`UnsupportedSchemaVersionException` → `PersistenceStatus.Unsupported`).
-- Миграции принадлежат конкретному типу документа (`UserDataDocumentKind`): миграция настроек никогда не применяется к конфигурации или layout.
-- Перед перезаписью миграцией создаётся резервная копия в `backups` (хранятся 3 последние). Если копию создать не удалось, документ не переписывается, а переходит в recovery.
-- Запись атомарна: временный файл рядом с целью, `FileStream.Flush(flushToDisk: true)` и `File.Move(overwrite)`; превышение лимита записи отклоняется до касания существующего файла.
-- Повреждённые документы изолируются перемещением в `recovery` (3 последние) и заменяются значениями по умолчанию. Если изолировать файл не удалось, он остаётся нетронутым, а значения по умолчанию применяются только в памяти.
-- `JsonDocumentPipeline` — общий путь загрузки (лимит размера до разбора, разбор, миграции, маппинг, recovery) с единым отчётом об ошибках `PersistenceErrorReporter`.
-- `DesktopLayoutPersistenceWriter` сохраняет layout по событию `DesktopChanged` с объединением изменений (400 мс) и `Flush`/`Dispose` при закрытии окна.
-- `PersistingSettingsManager` загружает настройки при старте, сохраняет их при изменении и публикует `SettingsChanged`. Ошибка записи не отменяет изменение: она передаётся обработчику и попадает в лог.
-- Привязка вкладок к мониторам: `DesktopTab.MonitorId`, `DesktopTab.WithMonitor`, `IDesktopManager.AssignTabToMonitor` и `GetTabsForMonitor`, а также framework-free сервис `MonitorLayoutBinding.Reconcile`.
-- При загрузке layout привязки к недоступным мониторам снимаются, каждая снятая привязка логируется, а результат сверки сразу сохраняется. Пустой или недоступный список мониторов не считается основанием для снятия привязок.
-- Валидация имени каталога данных вынесена в `UserDataDirectoryName` (Core) и используется `UserDataPaths` и маппером конфигурации: запрещены разделители, обход каталогов, зарезервированные имена устройств, точка/пробел в конце и длина более 64 символов.
-- `App.xaml.cs`: конфигурация читается один раз из каталога по умолчанию, корневой каталог берётся из неё, layout/settings загружаются из него же, логирование старта и статус загрузки документов пишутся в лог.
-- Добавлен тестовый проект `GlazeShell.Data.Tests` (46 тестов) и расширен `GlazeShell.Core.Tests` (`MonitorLayoutBindingTests`, `UserDataDirectoryNameTests`).
-- Результат: 180/181 tests green в Debug и Release (`GlazeShell.Core.Tests` 99/99, `GlazeShell.Data.Tests` 46/46, `GlazeShell.Windows.Tests` 35 passed + 1 пропущенный `FocusBringsWindowToForegroundOrIsDeniedBySystem` как environment-tolerant). Debug и Release build — 0 warnings / 0 errors.
-
-#### Fixed
-
-- Исправлена двойная загрузка конфигурации при старте: при смене `DataDirectoryName` второй load из нового каталога создавал там документ по умолчанию и сбрасывал имя приложения.
-- Исправлена атомарная запись: `FileStream.Flush(flushToDisk: true)` вызывался после `Dispose` писателя, из-за чего любая запись завершалась `ObjectDisposedException` и документ не сохранялся.
-- Снятые привязки к мониторам теперь сохраняются, иначе они вычислялись бы заново при каждом запуске.
-
-#### Changed
-
-- `MonitorLayoutBinding.Reconcile` при пустом или недоступном списке мониторов возвращает layout без изменений: при отсутствии достоверных сведений привязки не снимаются.
-- `IsValidIdentifier` отклоняет управляющие символы, как и `IsValidName`: идентификаторы попадают в диагностику и логи.
-- `GlazeShell.Data` подключён к `GlazeShell.Core`; `GlazeShell.App` подключён к `GlazeShell.Data`.
-
-#### Stage 6 — Tabs and Categories
-
-- Реализован полный backend рабочего пространства в `DesktopManager` (Core): вкладки (`CreateTab`, `RemoveTab`, `RenameTab`, `MoveTab`, `ActivateTab`), категории (`CreateCategory`, `RemoveCategory`, `RenameCategory`, `MoveCategory`) и размещение приложений (`AddApplication`, `RemoveApplication`, `MoveApplication`).
-- `MoveApplication` поддерживает перенос элемента между категориями с перенумерацией `Order` в исходной и целевой коллекциях; в пределах одной категории поведение совпадает с переупорядочиванием.
-- `AddApplication` принимает необязательный `categoryId`; без него элемент попадает в первую категорию вкладки, а при отсутствии категорий лениво создаётся категория по умолчанию (`main`/«Основная»).
-- Добавлен канонический порядок на всех трёх уровнях layout: `ApplicationCategory` получил поле `Order`, `Order` нормализуется в плотную последовательность `0..N-1` и совпадает с позицией в коллекции.
-- Нормализация внешнего layout выполняется на границе менеджера: `SetLayout` и конструктор с `initialLayout` сортируют по `Order` (с сохранением исходного порядка при равенстве) и перенумеровывают вкладки, категории и элементы.
-- `CreateTab` и `CreateCategory` принимают `int? order`: `null` добавляет объект в конец, явное значение вставляет по позиции с клампингом.
-- Все мутации unified-проходят через `Mutate(Func<DesktopLayout, DesktopLayout?>)`: запись в состояние происходит только после успешного вычисления, поэтому исключение валидации не оставляет частично обновлённого layout; `DesktopChanged` публикуется вне lock.
-- Мутации, не меняющие состояние (переименование в то же имя, перемещение в текущую позицию), возвращают `false` и не публикуют `DesktopChanged`.
-- Добавлены `DesktopTab.With(...)`, `ApplicationCategory.With(...)` и `DesktopItem.WithOrder(int)` для построения изменённых immutable-моделей с сохранением валидации (по образцу `Application.WithMetadata`).
-- Расширены `DesktopManagerTests`: вкладки (вставка по позиции, переименование, перемещение, append по умолчанию, клампинг), категории (CRUD, вставка, перемещение, append по умолчанию), размещение приложений (прицельная категория, дубликаты, перенумерация, перенос между категориями), нормализация layout и отсутствие публикации при no-op.
-- Результат: 118/119 tests green в Debug и Release (`GlazeShell.Core.Tests` 83/83, `GlazeShell.Windows.Tests` 35 passed); `FocusBringsWindowToForegroundOrIsDeniedBySystem` пропускается как environment-tolerant (результат зависит от foreground lock текущей сессии и меняется между прогонами). Debug и Release build — 0 warnings / 0 errors.
-
-#### Changed
-
-- `IDesktopManager`: `AddItem`/`RemoveItem`/`MoveItem` переименованы в `AddApplication`/`RemoveApplication`/`MoveApplication` согласно плану §13. Ломающее изменение контракта; прямых потребителей кроме `DesktopManager` и тестов не было.
-- `IDesktopManager` дополнен `RenameTab`, `MoveTab`, `CreateCategory`, `RemoveCategory`, `RenameCategory`, `MoveCategory` согласно плану §12/§13.
-- `CreateTab`/`CreateCategory` изменили сигнатуру: `int order = 0` заменён на `int? order = null` (append). Прежнее значение по умолчанию вставляло каждый новый объект в начало коллекции.
-
-#### Removed
-
-- Удалено `DesktopTab.IsActive`: поле дублировало `DesktopLayout.ActiveTabId` и никогда не поддерживалось `DesktopManager`, из-за чего всегда оставалось `false`. Единственный источник истины — `DesktopLayout.ActiveTabId`.
-
-#### Documentation
-
-- `README.md`: добавлен статус Stage 6, обновлено описание desktop layout и known issues; в roadmap отмечено выполнение вкладок/категорий, привязка layout к мониторам отнесена к Stage 7.
-- `ARCHITECTURE.md`: добавлен раздел «Решения Stage 6», обновлено описание `DesktopManager`; привязка layout к мониторам перенесена из Stage 6 в Stage 7 вместе с persistence.
-- XAML не изменялся: Stage 6 добавляет только backend-контракт, подключение UI выполняет владелец проекта.
+- Добавлены доменные модели Core: applications, categories, desktop items, tabs, layout, settings, windows, monitors и themes.
+- Добавлена единая валидация входных данных моделей через `ModelValidation`.
+- Добавлены контракты интерфейсов `IApplicationManager`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IThemeManager`, `IEventManager` и `IMonitorManager`.
+- Добавлены типизированные события оболочки с общим базовым `GlazeEvent`.
+- Добавлен `EventManager` с disposable-подписками и изоляцией ошибок подписчиков.
+- Добавлен `InMemorySettingsManager` с публикацией `SettingsChanged` только при фактическом изменении значений.
+- Добавлены тесты моделей, `EventManager` и `InMemorySettingsManager`.
 
 #### Stage 2 — Application Discovery
 
@@ -177,6 +89,106 @@
 - Тесты: `DesktopManagerTests` (вкладки, активация, добавление/удаление/перемещение элементов, events) и `MonitorManagerTests` (environment-tolerant: перечисление, primary, геометрия, событие `DisplayChanged` через `HWND_BROADCAST`).
 - Результат на момент Stage 5: 84/85 tests green (`GlazeShell.Core.Tests` 49/49, `GlazeShell.Windows.Tests` 35 passed, 1 environment-tolerant skip), Debug и Release build — 0 warnings / 0 errors.
 
+#### Stage 6 — Tabs and Categories
+
+- Реализован полный backend рабочего пространства в `DesktopManager` (Core): вкладки (`CreateTab`, `RemoveTab`, `RenameTab`, `MoveTab`, `ActivateTab`), категории (`CreateCategory`, `RemoveCategory`, `RenameCategory`, `MoveCategory`) и размещение приложений (`AddApplication`, `RemoveApplication`, `MoveApplication`).
+- `MoveApplication` поддерживает перенос элемента между категориями с перенумерацией `Order` в исходной и целевой коллекциях; в пределах одной категории поведение совпадает с переупорядочиванием.
+- `AddApplication` принимает необязательный `categoryId`; без него элемент попадает в первую категорию вкладки, а при отсутствии категорий лениво создаётся категория по умолчанию (`main`/«Основная»).
+- Добавлен канонический порядок на всех трёх уровнях layout: `ApplicationCategory` получил поле `Order`, `Order` нормализуется в плотную последовательность `0..N-1` и совпадает с позицией в коллекции.
+- Нормализация внешнего layout выполняется на границе менеджера: `SetLayout` и конструктор с `initialLayout` сортируют по `Order` (с сохранением исходного порядка при равенстве) и перенумеровывают вкладки, категории и элементы.
+- `CreateTab` и `CreateCategory` принимают `int? order`: `null` добавляет объект в конец, явное значение вставляет по позиции с клампингом.
+- Все мутации unified-проходят через `Mutate(Func<DesktopLayout, DesktopLayout?>)`: запись в состояние происходит только после успешного вычисления, поэтому исключение валидации не оставляет частично обновлённого layout; `DesktopChanged` публикуется вне lock.
+- Мутации, не меняющие состояние (переименование в то же имя, перемещение в текущую позицию), возвращают `false` и не публикуют `DesktopChanged`.
+- Добавлены `DesktopTab.With(...)`, `ApplicationCategory.With(...)` и `DesktopItem.WithOrder(int)` для построения изменённых immutable-моделей с сохранением валидации (по образцу `Application.WithMetadata`).
+- Расширены `DesktopManagerTests`: вкладки (вставка по позиции, переименование, перемещение, append по умолчанию, клампинг), категории (CRUD, вставка, перемещение, append по умолчанию), размещение приложений (прицельная категория, дубликаты, перенумерация, перенос между категориями), нормализация layout и отсутствие публикации при no-op.
+- Результат: 118/119 tests green в Debug и Release (`GlazeShell.Core.Tests` 83/83, `GlazeShell.Windows.Tests` 35 passed); `FocusBringsWindowToForegroundOrIsDeniedBySystem` пропускается как environment-tolerant (результат зависит от foreground lock текущей сессии и меняется между прогонами). Debug и Release build — 0 warnings / 0 errors.
+
+##### Changed
+
+- `IDesktopManager`: `AddItem`/`RemoveItem`/`MoveItem` переименованы в `AddApplication`/`RemoveApplication`/`MoveApplication` согласно плану §13. Ломающее изменение контракта; прямых потребителей кроме `DesktopManager` и тестов не было.
+- `IDesktopManager` дополнен `RenameTab`, `MoveTab`, `CreateCategory`, `RemoveCategory`, `RenameCategory`, `MoveCategory` согласно плану §12/§13.
+- `CreateTab`/`CreateCategory` изменили сигнатуру: `int order = 0` заменён на `int? order = null` (append). Прежнее значение по умолчанию вставляло каждый новый объект в начало коллекции.
+
+##### Removed
+
+- Удалено `DesktopTab.IsActive`: поле дублировало `DesktopLayout.ActiveTabId` и никогда не поддерживалось `DesktopManager`, из-за чего всегда оставалось `false`. Единственный источник истины — `DesktopLayout.ActiveTabId`.
+
+##### Documentation
+
+- `README.md`: добавлен статус Stage 6, обновлено описание desktop layout и known issues; в roadmap отмечено выполнение вкладок/категорий, привязка layout к мониторам отнесена к Stage 7.
+- `ARCHITECTURE.md`: добавлен раздел «Решения Stage 6», обновлено описание `DesktopManager`; привязка layout к мониторам перенесена из Stage 6 в Stage 7 вместе с persistence.
+- XAML не изменялся: Stage 6 добавляет только backend-контракт, подключение UI выполняет владелец проекта.
+
+#### Stage 7 — Persistence
+
+- Добавлен слой `GlazeShell.Data` с `JsonUserDataStore` (`IUserDataStore`): документы `config.json`, `settings.json`, `layout.json` в каталоге пользовательских данных, чтение и запись по требованию.
+- Добавлены DTO и строгие мапперы `ConfigurationDocument`, `SettingsDocument`, `LayoutDocument` с проверкой идентификаторов, имён, уникальности id, ссылок на активную вкладку и лимитов `PersistenceLimits` (4 MiB на документ, глубина JSON 32, 512 вкладок, 512 категорий на вкладку, 4096 элементов на категорию).
+- Версия схемы хранится в каждом документе (`schemaVersion`). `SchemaMigrationRunner` применяет миграции строго последовательно, отказывается строить цепочку с пропуском версии или дублем и не трогает документы из будущих версий приложения (`UnsupportedSchemaVersionException` → `PersistenceStatus.Unsupported`).
+- Миграции принадлежат конкретному типу документа (`UserDataDocumentKind`): миграция настроек никогда не применяется к конфигурации или layout.
+- Перед перезаписью миграцией создаётся резервная копия в `backups` (хранятся 3 последние). Если копию создать не удалось, документ не переписывается, а переходит в recovery.
+- Запись атомарна: временный файл рядом с целью, `FileStream.Flush(flushToDisk: true)` и `File.Move(overwrite)`; превышение лимита записи отклоняется до касания существующего файла.
+- Повреждённые документы изолируются перемещением в `recovery` (3 последние) и заменяются значениями по умолчанию. Если изолировать файл не удалось, он остаётся нетронутым, а значения по умолчанию применяются только в памяти.
+- `JsonDocumentPipeline` — общий путь загрузки (лимит размера до разбора, разбор, миграции, маппинг, recovery) с единым отчётом об ошибках `PersistenceErrorReporter`.
+- `DesktopLayoutPersistenceWriter` сохраняет layout по событию `DesktopChanged` с объединением изменений (400 мс) и `Flush`/`Dispose` при закрытии окна.
+- `PersistingSettingsManager` загружает настройки при старте, сохраняет их при изменении и публикует `SettingsChanged`. Ошибка записи не отменяет изменение: она передаётся обработчику и попадает в лог.
+- Привязка вкладок к мониторам: `DesktopTab.MonitorId`, `DesktopTab.WithMonitor`, `IDesktopManager.AssignTabToMonitor` и `GetTabsForMonitor`, а также framework-free сервис `MonitorLayoutBinding.Reconcile`.
+- При загрузке layout привязки к недоступным мониторам снимаются, каждая снятая привязка логируется, а результат сверки сразу сохраняется. Пустой или недоступный список мониторов не считается основанием для снятия привязок.
+- Валидация имени каталога данных вынесена в `UserDataDirectoryName` (Core) и используется `UserDataPaths` и маппером конфигурации: запрещены разделители, обход каталогов, зарезервированные имена устройств, точка/пробел в конце и длина более 64 символов.
+- `App.xaml.cs`: конфигурация читается один раз из каталога по умолчанию, корневой каталог берётся из неё, layout/settings загружаются из него же, логирование старта и статус загрузки документов пишутся в лог.
+- Добавлен тестовый проект `GlazeShell.Data.Tests` (46 тестов) и расширен `GlazeShell.Core.Tests` (`MonitorLayoutBindingTests`, `UserDataDirectoryNameTests`).
+- Результат: 180/181 tests green в Debug и Release (`GlazeShell.Core.Tests` 99/99, `GlazeShell.Data.Tests` 46/46, `GlazeShell.Windows.Tests` 35 passed + 1 пропущенный `FocusBringsWindowToForegroundOrIsDeniedBySystem` как environment-tolerant). Debug и Release build — 0 warnings / 0 errors.
+
+##### Fixed
+
+- Исправлена двойная загрузка конфигурации при старте: при смене `DataDirectoryName` второй load из нового каталога создавал там документ по умолчанию и сбрасывал имя приложения.
+- Исправлена атомарная запись: `FileStream.Flush(flushToDisk: true)` вызывался после `Dispose` писателя, из-за чего любая запись завершалась `ObjectDisposedException` и документ не сохранялся.
+- Снятые привязки к мониторам теперь сохраняются, иначе они вычислялись бы заново при каждом запуске.
+
+##### Changed
+
+- `MonitorLayoutBinding.Reconcile` при пустом или недоступном списке мониторов возвращает layout без изменений: при отсутствии достоверных сведений привязки не снимаются.
+- `IsValidIdentifier` отклоняет управляющие символы, как и `IsValidName`: идентификаторы попадают в диагностику и логи.
+- `GlazeShell.Data` подключён к `GlazeShell.Core`; `GlazeShell.App` подключён к `GlazeShell.Data`.
+
+#### Stage 8 — Theme System
+
+- Реализован `ThemeManager` (`IThemeManager`): реестр тем в детерминированном порядке (по имени, затем по идентификатору), выбор действующей темы, `ThemeChanged` при фактической смене. Темы возвращаются как неизменяемый снимок и не меняются после загрузки.
+- `IThemeManager` расширен `GetActiveTheme` и `SetActiveTheme`. Действующая тема всегда существует: пока тема не выбрана, действует встроенная `Theme.CreateDefault()` (`glaze-default`). Неизвестный идентификатор не оставляет приложение без темы — сохраняется предыдущая.
+- Добавлена встроенная тема `glaze-default`: цвета (`layerBackground`, `layerText`, `subtleText`, `controlBackground`, `controlBackgroundHover`, `controlBorder`, `accentBackground`, `accentText`, `criticalBackground`, `criticalText`), шрифты, размеры и эффекты.
+- Добавлен `ThemeStore` (`GlazeShell.Data/Themes`): чтение пользовательских тем из каталога `themes` в каталоге данных приложения, только `*.json` верхнего уровня. Темы наполняет пользователь, поэтому программа их только читает.
+- Непригодная тема отбрасывается по отдельности, а не отправляет весь набор в recovery: пользовательские темы — данные пользователя, а не документы программы. Причины отклонения возвращаются в `ThemeLoadResult.Diagnostics`.
+- Добавлены `ThemeDocument` и `ThemeDocumentMapper`: проверяются идентификатор, имя, метаданные, формат цвета (`#RGB`, `#RRGGBB`, `#AARRGGBB`), размеры, режим обоев, диапазоны анимаций и лимиты количества (64 темы, 256 цветов, 64 шрифта, 256 иконок, 512 KiB на файл).
+- `App.xaml.cs` загружает темы при старте, выбирает тему из `UserSettings.ActiveThemeId` и логирует количество загруженных тем, диагностику и факт замены недоступной темы на встроенную.
+- `ThemeColors.Find` ищет цвет по имени без учёта регистра; дубликаты имён цветов отклоняются моделью.
+- Добавлены тесты `ThemeManagerTests` (Core) и `ThemeStoreTests` (Data), включая запрет исполняемых ассетов, выход за пределы каталога темы, неверный формат цвета, превышение лимитов и устойчивость к одной повреждённой теме.
+- Результат: 220/221 tests green в Release (`GlazeShell.Core.Tests` 121/121, `GlazeShell.Data.Tests` 64/64, `GlazeShell.Windows.Tests` 35 passed + 1 пропущенный). Debug и Release build — 0 warnings / 0 errors.
+
+#### Stage 9 — Windows Events
+
+- Реализован `ShellEventCoordinator` (`GlazeShell.Windows/SystemEvents`) — единая точка запуска источников системных событий: оконные события (`SetWinEventHook`), события дисплеев (скрытое message window) и события процессов. Источники запускаются из одного места, поэтому ни один не поднимается дважды и ни один не остаётся работать после закрытия приложения.
+- Отказ отдельного источника не отменяет запуск остальных: он попадает в `ShellEventStatus.Diagnostics`, а подписчики на его события просто не приходят. `Start()` возвращает `ShellEventStatus` с флагами по источникам и `AllSourcesStarted`; повторный `Start()` выбрасывает `InvalidOperationException`, повторный `Dispose()` не делает ничего.
+- Добавлен контракт `IWindowsEventSource` (`Start()` + `IDisposable`) в слое Windows Integration: `WindowManager` и `MonitorManager` реализуют его и остаются при этом источниками запросов состояния для интерфейса. Контракт живёт не в Core, потому что Core не владеет WinEvent hooks и message windows.
+- Реализован `ProcessEventMonitor` — публикация `ProcessStarted`/`ProcessExited` по разнице снимков списка процессов (`ProcessWatchOptions`, интервал по умолчанию 1 с, диапазон 500 мс – 5 мин). События «процесс запущен» в Windows нет: `SetWinEventHook` работает с окнами, ETW требует прав администратора, а WMI — службы, которая часто отключена. Первый снимок — базовый и событий не порождает: процессы, работающие до запуска Glaze Shell, не считаются только что запущенными.
+- Снимок стоит одного перечисления процессов: имя и путь читаются только для новых PID, для известных используется кэш предыдущего снимка, поэтому цена прохода в установившемся состоянии не зависит от числа запущенных программ. Если на события никто не подписан, перечисление не выполняется вовсе (`HasSubscribers<TEvent>`).
+- `ProcessExited` расширен необязательным `ExecutablePath` (симметрично `ProcessStarted`): выход публикуется раньше запуска, поэтому перезапуск приложения читается как «вышел, затем открыто». Обратная совместимость вызовов с одним и двумя аргументами сохранена.
+- Добавлен `EventCoalescer` (`GlazeShell.Core/Services`, framework-free): объединяет частые запросы в одно выполнение. Обработчик ошибок обязателен — неперехваченное исключение в потоке таймера завершило бы процесс, а молча проглотить ошибку нельзя. `Cancel()` отменяет отложенное выполнение, чтобы остановленный источник не публиковал данные после остановки.
+- `MonitorEventMonitor` теперь реагирует на `WM_DEVICECHANGE` (только `DBT_DEVNODES_CHANGED`), `WM_SETTINGCHANGE` (только `SPI_SETWORKAREA` и `SPI_SETLOGICALDPIOVERRIDE`) и `WM_DPICHANGED`. Отбор вынесен в `DisplaySignal` и намеренно узкий: остальные сообщения этой группы приходят постоянно (смена клавиатуры, раскладки, темы) и не меняют ни состав, ни геометрию мониторов, поэтому перечисление мониторов на них было бы лишней работой.
+- `MonitorManager` публикует `DisplayChanged` один раз после паузы 300 мс вместо перечисления мониторов на каждое сообщение, а при `Dispose()` отменяет отложенную публикацию.
+- `IEventManager` расширен `HasSubscribers<TEvent>()`: источники используют его, чтобы не выполнять фоновую работу, когда никто не слушает. Учитывается только точный тип события.
+- `App.xaml.cs` создаёт `ShellEventCoordinator` после создания окна (подписчики уже зарегистрированы, ни одно событие не теряется между подпиской и первым проходом источника), логирует статус запуска и диагностики отказов, а при закрытии окна освобождает все источники. Отказ источника не прерывает запуск приложения: он попадает в лог как warning.
+- Добавлены тесты Stage 9: `EventCoalescerTests` (объединение запросов, запрос во время выполнения, `Flush`/`Cancel`, изоляция ошибки, работа после сбоя), `EventManagerTests` на `HasSubscribers`, `ProcessEventMonitorTests` (базовый снимок, публикация запуска и выхода, порядок «вышел, затем открыто», отсутствие пути, пропуск снимков без подписчиков, восстановление после сбоя снимка, остановка при освобождении), `ShellEventCoordinatorTests` (статус запуска, изоляция отказа источника, однократность `Start`, идемпотентность `Dispose`), `DisplaySignalTests` (отбор оконных сообщений) и расширенные `MonitorManagerTests` (коалесцирование пачки, разнесённые во времени сигналы, отмена отложенной публикации при освобождении).
+
+#### Stage 10 — Application Lifecycle
+
+- Реализован `SingleInstanceHelper`/`SingleInstanceLease` (`GlazeShell.Windows/Lifecycle`) — единый жизненный цикл экземпляра приложения. `Acquire` создаёт именованный mutex (`GlazeShell.SingleInstance.v1`) и удерживает его на всё время работы процесса; если mutex уже занят, возвращается `null`, и вызывающий код завершает запуск. `SingleInstanceLease` — `IDisposable` с идемпотентным освобождением: повторный `Dispose` не делает ничего, а освобождение выполняется только на потоке-владельце mutex.
+- Заброшенный mutex (`AbandonedMutexException`) трактуется как «первый экземпляр»: аварийно завершившийся предыдущий процесс не должен мешать запуску нового.
+- `ActivateExistingInstance` находит окно уже работающего экземпляра и поднимает его: восстанавливает из свёрнутого состояния (`ShowWindowAsync(SW_RESTORE)`) и best-effort выводит на передний план (`SetForegroundWindow`); отказ системы при foreground lock не считается ошибкой.
+- `FindOwnVisibleWindow` ищет видимое top-level окно своего экземпляра через `EnumWindows` с `IsWindowVisible`, определяя владельца окна по `GetWindowThreadProcessId` и сравнению пути процесса с `Environment.ProcessPath`. Идентификация по владеющему процессу, а не по пути модуля окна (`GetWindowModuleFileNameW`): для чужих окон функция возвращает модуль вызывающего процесса и потому для сопоставления непригодна.
+- `App.xaml.cs` удерживает lease в поле: `Acquire()` вызывается в конструкторе до создания окна; при повторном запуске окно существующего экземпляра активируется, а процесс завершается через `Environment.Exit(0)`. При закрытии окна lease освобождается последним — после `Flush`/`Dispose` layout-writer и `Dispose` источников событий, поэтому mutex освобождается и приложение можно запустить заново.
+- Удалён нерабочий каркас single-instance: mutex освобождался сразу в `using`, `SetClassLongPtr`-взаимодействие с названием класса окна было no-op, а поиск окна по классу никогда не совпадал. Поиск окна больше не зависит от класса окна, поэтому `MainWindow` перестал задавать имя класса.
+- Добавлены тесты Stage 10 (`SingleInstanceHelperTests`): первый экземпляр получает lease, второй (с другого потока — named mutex реентерабелен внутри потока) получает `null`, повторный захват после освобождения, идемпотентность `Dispose`, независимость разных имён, поиск собственного окна и отсутствие исключений при активации.
+- Результат: 284 tests (`GlazeShell.Core.Tests` 146/146, `GlazeShell.Data.Tests` 64/64, `GlazeShell.Windows.Tests` 74/74 при изолированном запуске). Debug и Release build — 0 warnings / 0 errors.
+
 #### UI
 
 - Добавлен простой лаунчер UI: поиск, список приложений с virtualization, статусная строка, кнопки «Запустить/Закрыть/Перезапустить/Обновить».
@@ -191,29 +203,35 @@
 - Добавлены window manager тесты: `Win32TestWindow` (окно-фикстура на pumping-потоке) и `WindowManagerTests` — перечисление, поиск, свернуть/развернуть/восстановить, закрытие, события открытия/закрытия и изменения состояния.
 - Результат: 64/64 tests green либо `Inconclusive` по environment-зависимым приборам (`GlazeShell.Core.Tests` 32/32, `GlazeShell.Windows.Tests` 32/32: 31 passed, 1 environment-tolerant), Debug и Release build — 0 warnings / 0 errors.
 
-- Создана Stage 0 Foundation: solution, слоистые проекты и минимальный WinUI 3 executable.
-- Добавлены фиксированные настройки .NET SDK и NuGet package versions.
-- Добавлена базовая конфигурация `schemaVersion: 1`.
-- Добавлено централизованное JSON-lines файловое логирование.
-- Добавлен MSTest test project и smoke test foundation.
-- Добавлена обязательная архитектурная, security, performance и development документация.
-- Инициализирован локальный Git repository.
-- Добавлены доменные модели Core: applications, categories, desktop items, tabs, layout, settings, windows, monitors и themes.
-- Добавлена единая валидация входных данных моделей через `ModelValidation`.
-- Добавлены контракты интерфейсов `IApplicationManager`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IThemeManager`, `IEventManager` и `IMonitorManager`.
-- Добавлены типизированные события оболочки с общим базовым `GlazeEvent`.
-- Добавлен `EventManager` с disposable-подписками и изоляцией ошибок подписчиков.
-- Добавлен `InMemorySettingsManager` с публикацией `SettingsChanged` только при фактическом изменении значений.
-- Добавлены тесты моделей, `EventManager` и `InMemorySettingsManager`.
-- Окно приложению заданы явный размер и центрирование через `AppWindow`; ранее размер определялся поведением XAML по умолчанию.
-- Пустой `Grid` в `MainWindow` заменён стартовым экраном со статусом этапов.
-- `Platform` для App-проекта принудительно устанавливается в `x64`, поэтому `dotnet run` работает без указания платформы.
-- Добавлен `LogRedactor`: маскирование secrets (`password`, `token`, `api_key`, `authorization`, `Bearer` и другие) и имён пользователей в путях, плюс ограничение длины записи.
-- Файловое логирование ограничено по размеру (1 MiB) с ротацией в три архива вместо неограниченного роста.
-- `UserDataPaths` отклоняет зарезервированные имена устройств Windows, слишком длинные имена и имена с завершающей точкой или пробелом.
-- `app.manifest` дополнен `longPathAware`, `SegmentHeap` и GUID совместимости с Windows 8.1.
-- `.gitignore` дополнен шаблонами файлов с секретами.
-- `docs/SECURITY.md` переписан: модель угроз, инвентарь данных и перечень принятых рисков.
+### Documentation
+
+- Упрощена и синхронизирована документация структуры проекта: разделы «Структура проекта» (README.md) и «Структура» (docs/ARCHITECTURE.md) приведены в соответствие с фактическим деревом — добавлены `glaze.cmd`, каталог `GlazeShell.Windows/SystemEvents`, тестовые подпроекты и локальные (gitignored) `assets-src/` и `AGENTS.md`, устранено расхождение между README и ARCHITECTURE.
+- Текст `AGENTS.md` синхронизирован с `.gitignore`: файл локален и в репозиторий не попадает; удалено неактуальное упоминание `AGENT_PROMPT.md`.
+- Удалены накопленные каталоги `tests/**/TestResults/` — артефакты локальных прогонов тестов, уже покрытые `.gitignore`.
+- Добавлена лицензия MIT (`LICENSE`), раздел «Лицензия» в README обновлён с заглушки «лицензия не выбрана» на ссылку на MIT.
+
+### Fixed
+
+- Исправлены константы оконных событий `EVENT_OBJECT_CLOAKED`/`EVENT_OBJECT_UNCLOAKED`: в `User32` они были сдвинуты на единицу (`0x8016`/`0x8017` вместо `0x8017`/`0x8018`), из-за чего диапазон object-хуков не совпадал с реальными событиями; диапазон установки hook приведён к `EVENT_OBJECT_CREATE`…`EVENT_OBJECT_UNCLOAKED`.
+- Исправлен заголовок окна в событии закрытия: при чтении уже разрушающегося окна возвращалась заглушка «(безымянное окно)», поэтому `WindowClosed` теперь использует заголовок, запомненный при открытии окна.
+- Панель «Мониторы» больше не рисует схематичную карту при единственном мониторе: карта вырождалась в один большой прямоугольник и напрасно занимала место. Карта показывается только при двух и более экранах (`HasMonitorMap`).
+- Исправлен разбор строк `LinkInfo` в ярлыках `.lnk` (`ShellLinkData`). По MS-SHLLINK строки `LocalBasePath`/`CommonPathSuffix` лежат на ANSI-офсетах (`0x10`/`0x18`) и всегда закодированы в ANSI, а Unicode-варианты доступны только при `LinkInfoHeaderSize >= 0x24` (офсеты `0x1C`/`0x20`). Прежний код декодировал эти строки как Unicode по флагу `IsUnicode` из `LinkFlags`, поэтому пути реальных ярлыков (у которых `LinkInfoHeaderSize = 0x1C`) превращались в мусор: `TryResolveManaged` формально возвращал неверный непустой путь, fallback на COM и property store не выполнялся, и все ярлыки отбрасывались как неразрешимые. В результате discovery возвращал пустой список приложений. Теперь `CommonPathSuffixOffset` читается по правильному офсету (`0x18` вместо `0x14`), `LocalBasePath` и `CommonPathSuffix` объединяются, а ANSI-строки декодируются в кодировке системы (`CultureInfo.CurrentCulture.TextInfo.ANSICodePage` через `CodePagesEncodingProvider`, с fallback на Latin1).
+- Исправлено ложное «Не удалось закрыть» при закрытии приложения. Прежний `CloseAsync` возвращал результат `CloseMainWindow`, который для части приложений (например, Acrobat) возвращает `false`, хотя окно закрывается, и не ждал завершения процесса. Теперь после вежливого запроса (`CloseMainWindow` и, если главное окно не найдено, `WM_CLOSE` по всем top-level окнам процесса) метод дожидается фактического завершения процесса (до `CloseTimeoutMilliseconds`) и сообщает «закрыто» только когда приложение действительно завершилось. Принудительное завершение (`Kill`/`TerminateProcess`) по-прежнему не применяется.
+- Предупреждения discovery (неразрешённые ярлыки, отказ AppsFolder) теперь пишутся в лог уровнем warning через подписку `App.xaml.cs` на `DiscoveryCompleted`, а не теряются.
+- Исправлено определение состояния MSIX-приложений. Прежний `PackageInstallLocationResolver` читал реестр `AppxAllUserStore\Applications`, ожидая ключи вида `PackageFamilyName!AppId` с вложенным ключом `Package`, тогда как в актуальной схеме ключ называется полным именем пакета (`Name_Version_Architecture_PublisherId`), а значение `Path` лежит прямо в ключе. Из-за этого индекс всегда оставался пустым, `ResolveInstallLocation` возвращал `null`, и все MSIX-приложения (на тестовой машине — 126 из 152) безошибочно числились незапущенными.
+- Каталог установки из реестра для bundle-пакетов указывает на `neutral`-вариант, тогда как на диске установлен вариант конкретной архитектуры (на тестовой машине — 44 из 52 пакетов). Поэтому MSIX-пакеты теперь определяются разбором пути процесса `WindowsApps\<PackageFullName>` через `PackageIdentity`, а не по значению из реестра. `PackageInstallLocationResolver` и контракт `IPackageLocationResolver` удалены как неиспользуемые и вводящие в заблуждение.
+- `MainViewModel` больше не требует `ExecutablePath` для сопоставления процессов и окон: MSIX-приложения без пути к исполняемому файлу сопоставляются по имени семейства пакета. Раньше события `ProcessStarted`/`ProcessExited` и перечисление окон вообще не касались MSIX-приложений, поэтому их состояние и список окон не менялись.
+- `MonitorManager.Start()` публикует текущую конфигурацию мониторов сразу. Раньше список мониторов оставался пустым до первого системного изменения дисплеев.
+- `MainViewModel.RefreshAsync` вызывает `RefreshWindows()` после первичного сканирования: окна, открытые до запуска Glaze Shell, не порождают событий, поэтому список окон не заполнялся.
+
+### Changed
+
+- `MainViewModel` больше не опрашивает состояние запущенных приложений каждые 3 секунды. Состояние обновляется по событиям `ProcessStarted`/`ProcessExited`: приложения сопоставляются по полному пути к исполняемому файлу, при его отсутствии — по имени образа, пересчитываются только затронутые приложения, а пачка событий одного запуска объединяется (`EventCoalescer`, 250 мс). Однократный полный пересчёт остался в `RefreshAsync` и задаёт базовую линию для приложений, запущенных до Glaze Shell.
+- `WindowsApplicationLauncher.IsRunningAsync` больше не определяет состояние MSIX-приложения по AUMID собственного процесса оболочки (`Environment.ProcessId`). Состояние пакета определяется по процессам в его каталоге установки; если каталог не разрешён, состояние считается неизвестным, а не «не запущено» в отчёт об остановке. Проверка AUMID потребовала бы COM-вызова для каждого процесса, что несопоставимо дороже проверки по пути.
+- Документация сведена к двум файлам, чтобы её было проще читать на GitHub: `docs/ARCHITECTURE.md` (слои, решения по этапам, таблица использованных Windows API, производительность) и `docs/SECURITY.md` (модель угроз и принятые риски). Раздел «Разработка» перенесён в `README.md`; `docs/DEVELOPMENT.md`, `docs/WINDOWS_API.md`, `docs/PERFORMANCE.md` и корневой `ARCHITECTURE.md` удалены. Содержание сохранено полностью, изменены только пути, уровни заголовков и формулировки под фактическое состояние репозитория.
+- `docs/ARCHITECTURE.md`: таблица Windows API дополнена реально используемыми API Stage 5/6 (`EnumDisplayMonitors`, `EnumDisplaySettingsW`, `MonitorFromWindow`, `MonitorFromPoint`, `GetDpiForMonitor`, `GetDpiForSystem`, `GetDpiForWindow`, `WM_DISPLAYCHANGE`, `SHGetKnownFolderPath`/`SHGetKnownFolderItem`) и исправлена ссылка на `Shell/IPersistFile.cs`: интерфейс объявлен в `Shell/IShellLinkW.cs`, отдельного файла нет.
+- Из структуры репозитория убраны пустые каталоги-заглушки с `.gitkeep`: `assets`, `GlazeShell.Data/Database`, `GlazeShell.Infrastructure/Diagnostics`, `GlazeShell.Infrastructure/Startup`, `GlazeShell.Windows/Windows`, а также устаревшие `.gitkeep` в непустых `GlazeShell.Windows/Interop`, `Shell` и `Win32`. Git не хранит пустые каталоги, поэтому файлы-заглушки только мешали читать дерево репозитория; каталоги появятся вместе с содержимым.
+- Документация приведена в порядок перед первым слиянием: `CHANGELOG.md` перестроен по возрастанию стадий (Stage 0→10) под единым разделом `Added` без дублей с сохранением всего текста, а шапка `README.md` дополнена переключаемым по теме пользователя логотипом (`<picture>`) и центрированными заголовком и бейджами.
 
 ### Known limitations
 

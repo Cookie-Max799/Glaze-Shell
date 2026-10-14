@@ -6,12 +6,22 @@
   </picture>
 </p>
 
-# Glaze Shell
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/logo-light.png">
+    <img alt="Glaze Shell" src="docs/assets/logo-dark.png" width="360">
+  </picture>
+</p>
 
-[![platform](https://img.shields.io/badge/platform-Windows%2010%2B-0078D4?logo=windows&logoColor=white)](#требования)
-[![.NET](https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white)](#требования)
-[![Windows App SDK](https://img.shields.io/badge/Windows%20App%20SDK-2.5.1-512BD4)](#требования)
-[![status](https://img.shields.io/badge/status-Stage%2010%2F13-blue)](#roadmap)
+<h1 align="center">Glaze Shell</h1>
+
+<p align="center">
+  <a href="#требования"><img alt="platform: Windows 10+" src="https://img.shields.io/badge/platform-Windows%2010%2B-0078D4?logo=windows&logoColor=white"></a>
+  <a href="#требования"><img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white"></a>
+  <a href="#требования"><img alt="Windows App SDK 2.5.1" src="https://img.shields.io/badge/Windows%20App%20SDK-2.5.1-512BD4"></a>
+  <a href="#roadmap"><img alt="status: Stage 10/13" src="https://img.shields.io/badge/status-Stage%2010%2F13-blue"></a>
+</p>
 
 Glaze Shell — Windows-приложение для глубокой персонализации рабочего окружения поверх штатных возможностей Windows. Проект не изменяет системные файлы и не заменяет компоненты Windows: он работает только через официальные Win32 и COM API.
 
@@ -30,7 +40,7 @@ Glaze Shell — это оболочка рабочего стола на WinUI 3
 
 ## Скриншоты
 
-> Скриншоты и короткая демонстрация будут добавлены позже. Секция зарезервирована, ссылки на изображения появятся вместе с ассетами в `docs/assets`.
+> Скриншоты и короткая демонстрация будут добавлены позже. Секция зарезервирована под них; брендовые изображения проекта уже лежат в `docs/assets`.
 
 <!-- Когда изображения будут готовы, замените блок ниже:
 
@@ -68,6 +78,15 @@ dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 
 Первый запуск восстанавливает NuGet-пакеты и собирает проект, поэтому может занять несколько минут. Подробная инструкция — ниже.
 
+### Скрипт быстрого запуска
+
+В корне репозитория лежит `glaze.cmd`: двойной клик по нему собирает и запускает приложение (консоль закрывается, приложение продолжает работать). Конфигурация по умолчанию — `Debug`, можно передать `Release`:
+
+```text
+glaze.cmd
+glaze.cmd Release
+```
+
 ## Возможности
 
 ### Обнаружение и запуск приложений
@@ -91,6 +110,7 @@ dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 - monitor/DPI integration: перечисление мониторов (`EnumDisplayMonitors`), bounds и working area, primary-флаг, scale factor (`GetDpiForMonitor`/`GetDpiForSystem`), refresh rate и ориентация (`EnumDisplaySettingsW`), `MonitorFromWindow`/`MonitorFromPoint`;
 - display events: уведомление об изменении конфигурации дисплеев через hidden message window (`WM_DISPLAYCHANGE`, `WM_DEVICECHANGE`/`DBT_DEVNODES_CHANGED`, `WM_SETTINGCHANGE`/`SPI_SETWORKAREA` и `SPI_SETLOGICALDPIOVERRIDE`, `WM_DPICHANGED`) и публикация `DisplayChanged`; отбор сообщений вынесен в `DisplaySignal`, а пачка сигналов объединяется `EventCoalescer` (300 мс) вместо перечисления мониторов на каждое сообщение;
 - панель «Мониторы» в футере UI со сводкой, списком устройств (разрешение, DPI, refresh rate, ориентация), схематичной картой мониторов (раскладка `MonitorMapLayout`) с окнами, открытыми на каждом мониторе, и автообновлением по display events.
+- пользовательские имена дисплеев: монитор можно переименовать из панели «Мониторы» (диалог «Сохранить»/«Сбросить»/«Отмена»); имя сохраняется в `settings.json` (`monitorNames`) и восстанавливается при следующем запуске. По умолчанию — «MAIN DISPLAY» и «DISPLAY N».
 
 ### Системные события
 
@@ -170,18 +190,22 @@ GlazeShell/
 │   ├── GlazeShell.Data/           # persistence (JSON, миграции, пользовательские данные)
 │   ├── GlazeShell.Infrastructure/ # логирование, пути, диагностика
 │   └── GlazeShell.Windows/        # Win32/COM P/Invoke, хуки, нативные интеграции
-├── tests/                         # тестовые проекты (*.Tests)
+├── tests/                         # тестовые проекты: Core.Tests, Data.Tests, Windows.Tests
 ├── docs/
 │   ├── assets/                    # баннеры и логотипы для README/GitHub
-│   ├── ARCHITECTURE.md
-│   └── SECURITY.md
+│   ├── ARCHITECTURE.md            # слои, решения по стадиям, Windows API, производительность
+│   └── SECURITY.md                # модель угроз и границы доверия
+├── glaze.cmd                      # скрипт быстрого запуска (сборка + запуск)
 ├── GlazeShell.slnx
 ├── global.json
 ├── Directory.Build.props
 ├── Directory.Packages.props
 ├── README.md
-└── CHANGELOG.md
+├── CHANGELOG.md
+└── LICENSE
 ```
+
+Локальные каталоги, перечисленные в `.gitignore` и не попадающие в репозиторий: `assets-src/` (исходные визуальные ассеты) и `AGENTS.md` (инструкции для агентов). Подробное дерево по слоям — в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Требования
 
@@ -310,13 +334,13 @@ dotnet test --configuration Release
 
 Тестовые проекты:
 
-- `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service, `DesktopManager`, `MonitorLayoutBinding`, `UserDataDirectoryName`, `ThemeManager`.
+- `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service, `ApplicationProcessMatcher`, `DesktopManager`, `MonitorLayoutBinding`, `UserDataDirectoryName`, `ThemeManager`.
 - `tests/GlazeShell.Data.Tests` — `JsonUserDataStoreTests`, `SchemaMigrationRunnerTests`, `PersistenceServicesTests`, `ThemeStoreTests`; каждый тест работает в собственном временном каталоге (`TempUserData`), который удаляется после теста.
 - `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`, `WindowManagerTests`, `MonitorManagerTests`, `ProcessEventMonitorTests`, `ShellEventCoordinatorTests`, `SingleInstanceHelperTests`.
 
 `Windows.Tests` использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо COM `IShellLinkW.Save`, который в текущем окружении возвращает `0x80070002`.
 
-Текущий статус: 284 tests (`Core.Tests` 146/146, `Data.Tests` 64/64, `Windows.Tests` 74/74 при изолированном запуске) в Debug и Release; build — 0 warnings / 0 errors. В общем прогоне допустим единственный провал — environment-tolerant flake `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` (см. ниже); изолированный запуск `GlazeShell.Windows.Tests` даёт 74/74.
+Текущий статус: 308 tests (`Core.Tests` 164/164, `Data.Tests` 68/68, `Windows.Tests` 76/76 при изолированном запуске) в Debug и Release; build — 0 warnings / 0 errors. В общем прогоне допустим единственный провал — environment-tolerant flake `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` (см. ниже); изолированный запуск `GlazeShell.Windows.Tests` даёт 76/76.
 
 Остальные environment-tolerant тесты не падают из-за недоступных API, а завершаются `Inconclusive` с объясняющим warning: `AppsFolderSourceTests` и `MonitorManagerTests`. `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` зависит от доставки `EVENT_OBJECT_DESTROY` для собственного процесса и потому чувствителен к параллелизму прогонов: таймаут ожидания события истекает, когда тестовые сборки запускаются одновременно. Поведение воспроизводится и на commit до Stage 7, то есть не связано с persistence или темами; изолированный запуск `GlazeShell.Windows.Tests` проходит стабильно.
 
@@ -401,4 +425,4 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 
 ## Лицензия
 
-Лицензия проекта ещё не выбрана владельцем проекта: файл `LICENSE` не предоставляет юридических прав до утверждения лицензии.
+Проект распространяется под лицензией MIT — полный текст в файле [LICENSE](LICENSE).

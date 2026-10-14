@@ -15,6 +15,7 @@ GlazeShell/
 ├── global.json
 ├── Directory.Build.props
 ├── Directory.Packages.props
+├── glaze.cmd
 ├── .editorconfig
 ├── .gitattributes
 ├── .gitignore
@@ -47,6 +48,7 @@ GlazeShell/
 │       ├── Interop/
 │       ├── Lifecycle/
 │       ├── Shell/
+│       ├── SystemEvents/
 │       ├── Win32/
 │       └── WindowManagement/
 └── tests/
@@ -54,6 +56,8 @@ GlazeShell/
     ├── GlazeShell.Data.Tests/
     └── GlazeShell.Windows.Tests/
 ```
+
+Локальные каталоги, перечисленные в `.gitignore` и не попадающие в репозиторий: `assets-src/` (исходные визуальные ассеты) и `AGENTS.md` (инструкции для агентов).
 
 ## Dependency flow
 
@@ -94,7 +98,7 @@ WinUI 3 executable и composition root приложения. Содержит о
 - `Theme` с metadata, colors, fonts, dimensions, icons и анимацией;
 - `ModelValidation` — единая валидация входных данных моделей.
 
-Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `ApplicationDiscoveryOptions`, `ApplicationIdentity`, `ApplicationLaunchResult`, `PackageIdentity`.
+Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `ApplicationDiscoveryOptions`, `ApplicationIdentity`, `ApplicationLaunchResult`, `PackageIdentity`. Сопоставление процессов и окон с приложением выполняет framework-free `ApplicationProcessMatcher` (`Discovery/ApplicationProcessMatcher.cs`): одна и та же логика используется лаунчером и UI.
 
 Интерфейсы: `IApplicationManager`, `IApplicationLauncher`, `IApplicationDiscoverySource`, `IProcessInspector`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IUserDataStore`, `IThemeManager`, `IEventManager`, `IMonitorManager`.
 
@@ -117,7 +121,7 @@ Persistence contracts: `PersistenceStatus` (`Created`/`Loaded`/`Migrated`/`Recov
 - `Shell/IShellItem*.cs`, `IShellFolder.cs`, `IShellLinkW.cs`, `IPersistFile.cs` — официальные COM-интерфейсы;
 - `Interop/ComApartment.cs` — STA-исполнение COM с балансом `CoInitializeEx`/`CoUninitialize`;
 - `Interop/IApplicationActivationManager.cs` — активация MSIX;
-- `Applications/WindowsApplicationLauncher.cs`, `ProcessInspector.cs` — Stage 3 launcher;
+- `Applications/WindowsApplicationLauncher.cs`, `ProcessInspector.cs` — Stage 3 launcher (сопоставление процессов и окон с приложением — `ApplicationProcessMatcher` в Core);
 - `Win32/Ole32.cs`, `Shell32.cs` — P/Invoke объявления.
 
 На Stage 4 добавляет:
@@ -156,7 +160,7 @@ Persistence contracts: `PersistenceStatus` (`Created`/`Loaded`/`Migrated`/`Recov
 
 ### GlazeShell.Core.Tests
 
-MSTest test project. Проверяет foundation configuration, инварианты моделей, семантику `EventManager`, публикацию `SettingsChanged` в `InMemorySettingsManager`, discovery service, `DesktopManager` (вкладки, активация, элементы, события `DesktopChanged`), `MonitorLayoutBinding`, `UserDataDirectoryName` и `ThemeManager` (порядок тем, выбор активной темы, `ThemeChanged`, запрет исполняемых ассетов и выхода за пределы каталога темы).
+MSTest test project. Проверяет foundation configuration, инварианты моделей, семантику `EventManager`, публикацию `SettingsChanged` в `InMemorySettingsManager`, discovery service, `ApplicationProcessMatcher` (точный путь, каталог установки с лаунчером, имя образа, аргумент `--processStart`, MSIX), `DesktopManager` (вкладки, активация, элементы, события `DesktopChanged`), `MonitorLayoutBinding`, `UserDataDirectoryName` и `ThemeManager` (порядок тем, выбор активной темы, `ThemeChanged`, запрет исполняемых ассетов и выхода за пределы каталога темы).
 
 ### GlazeShell.Data.Tests
 
@@ -209,6 +213,7 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - `RestartAsync` сохраняет приоритет вежливого пути (приложение успевает сохранить данные), но если закрытие не удалось — переходит к принудительному завершению и только затем запускает приложение заново. Без этого незакрытый первый экземпляр и новый запуск давали бы два процесса.
 - `ProcessInspector` освобождает каждый `Process` через `using` и проверяет границу каталога (а не `StartsWith` без разделителя).
 - `ProcessInspector.FindProcessesByPackage` определяет пакет по разбору пути процесса (`WindowsApps\<PackageFullName>`), а не по каталогу установки из реестра.
+- Сопоставление процессов и окон с приложением вынесено в framework-free `ApplicationProcessMatcher` (Core), поэтому одна и та же логика используется и лаунчером (`WindowsApplicationLauncher.FindProcesses`), и UI (`MainViewModel`), и не дублируется между слоями. Кроме точного совпадения пути учитывается каталог установки: приложения-лаунчеры (например Squirrel у Discord, ярлык `Discord.exe --processStart Discord.exe`) запускают настоящий исполняемый файл из подкаталога каталога установки, и путь из ярлыка после запуска перестаёт существовать, поэтому по одному пути приложение ошибочно считалось незапущенным. Чтобы каталог не смешивал разные приложения (например `git-bash.exe` и `git-cmd.exe` в одном каталоге Git), в пределах каталога сопоставление идёт по имени образа из набора ожидаемых имён: имя файла запуска плюс имя из аргумента `--processStart` (`GetImageNames`). Расширение по каталогу остаётся ограниченным именем образа, а `ProcessInspector.FindProcessesByImageInDirectory` используется только для безопасных (несистемных) каталогов.
 - `ComApartment` выполняет COM в STA и балансирует `CoInitializeEx`/`CoUninitialize`; результат исключения пробрасывается в вызывающий поток через `ExceptionDispatchInfo`.
 
 ## Решения Stage 4 — Window Manager
@@ -233,7 +238,8 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - `MonitorManager` публикует `DisplayChanged` со свежим снимком `MonitorInfo` на каждый `WM_DISPLAYCHANGE`; коалесация публикаций выполняется на стороне UI (`DispatcherQueue`), а не на источнике — событие несёт фактическую конфигурацию, а не diff.
 - `DesktopManager` полностью framework-free и оперирует строками вкладок/категорий/элементов; начиная со Stage 6 он предоставляет полный CRUD вкладок, категорий и размещения приложений (см. «Решения Stage 6»).
 - UI-панель «Мониторы» получает `DisplayChanged` через `IEventManager` и обновляется на UI-потоке, переиспользуя VM по `Id` (паттерн `ApplicationListViewModel`); обновление не приводит к миганию списка.
-- Панель показывает схематичную карту мониторов и окна, открытые на каждом из них. Карта строится `MonitorMapLayout` (Core, framework-free): он раскладывает `MonitorInfo.Bounds` в единицах фиксированного холста с сохранением взаимного расположения и единым масштабом, поэтому логика раскладки тестируется без реальных мониторов. Связь окон с мониторами берётся из `WindowInfo.MonitorId`.
+- Окно разделено на две колонки: список приложений с поиском и кнопкой «Обновить» — слева, панель «Мониторы» — справа (фиксированная ширина ~360px, собственный `ScrollViewer` на всю высоту колонки). Так окна и мониторы видны одновременно с основным списком и не прокручиваются вместе с ним; строка состояния остаётся внизу во всю ширину окна. Пути в карточках приложений показываются сокращённо (`корень\первый каталог\…\последний каталог\файл`), а полный путь копируется кнопкой «Копировать».
+- Панель показывает окна, открытые на каждом мониторе, и — при двух и более экранах — схематичную карту мониторов. Карта строится `MonitorMapLayout` (Core, framework-free): он раскладывает `MonitorInfo.Bounds` в единицах фиксированного холста с сохранением взаимного расположения и единым масштабом, поэтому логика раскладки тестируется без реальных мониторов. Для единственного монитора карта вырождается в один прямоугольник и потому не показывается (`HasMonitorMap`). Связь окон с мониторами берётся из `WindowInfo.MonitorId`.
 
 ## Решения Stage 6 — Tabs and Categories
 
@@ -289,7 +295,7 @@ MSTest test project. Проверяет managed резолвер `.lnk` (`ShellL
 - Снимок стоит одного перечисления процессов: имя и путь читаются только для новых PID, для известных используется кэш предыдущего снимка. Открытие `MainModule` на каждом процессе при каждом такте было бы заметной нагрузкой, не зависящей от числа запущенных программ.
 - `ProcessExited` публикуется раньше `ProcessStarted` в одном проходе: перезапуск приложения должен читаться как «вышел, затем открыто». Обратный порядок заставлял бы интерфейс на секунду показывать приложение выключенным после перезапуска.
 - Состояние запущенных приложений обновляется по событиям, а не опросом каждые несколько секунд. Периодический опрос перечислял процессы для всех приложений списка независимо от того, изменилось ли что-нибудь; событийный подход пересчитывает только приложения, которых касается событие. Однократный полный пересчёт сохранён как базовая линия — он необходим, потому что процессы, работавшие до запуска оболочки, не порождают событий.
-- Сопоставление события процесса с приложением идёт по полному пути к исполняемому файлу, а при его отсутствии — по имени образа; у MSIX-приложений без `ExecutablePath` — по имени семейства пакета, извлечённому из пути процесса (`WindowsApps\<PackageFullName>`). Сравнение только по имени образа дало бы ложные совпадения (`update.exe`, `setup.exe` у разных приложений), поэтому для Win32 полный путь остаётся основным признаком.
+- Сопоставление события процесса с приложением идёт по полному пути к исполняемому файлу, а при его отсутствии — по имени образа; у MSIX-приложений без `ExecutablePath` — по имени семейства пакета, извлечённому из пути процесса (`WindowsApps\<PackageFullName>`). Сравнение только по имени образа дало бы ложные совпадения (`update.exe`, `setup.exe` у разных приложений), поэтому для Win32 полный путь остаётся основным признаком. Логика сопоставления общая для лаунчера и UI (`ApplicationProcessMatcher`), поэтому приложения-лаунчеры (например Discord через `--processStart`) распознаются одинаково и в событиях процессов, и при перечислении окон.
 - `EventCoalescer` объединяет пачку сигналов в одно действие. Система присылает изменение дисплеев несколькими сообщениями подряд, и перечисление мониторов на каждое из них было бы лишней работой, заметной при подключении монитора. Обработчик ошибок обязателен: неперехваченное исключение в потоке таймера завершило бы процесс.
 - `Cancel()` отменяет отложенную публикацию при остановке источника. Иначе источник, уже отключённый, успевал бы опубликовать `DisplayChanged` после закрытия, и подписчики получали бы данные от источника, которого больше нет.
 - Отбор оконных сообщений, означающих изменение дисплеев, намеренно узкий: `WM_DEVICECHANGE` обрабатывается только для `DBT_DEVNODES_CHANGED`, `WM_SETTINGCHANGE` — только для `SPI_SETWORKAREA` и `SPI_SETLOGICALDPIOVERRIDE`. Остальные сообщения этой группы приходят постоянно (смена клавиатуры, раскладки, темы) и не меняют ни состав, ни геометрию мониторов.
@@ -328,7 +334,7 @@ Glaze Shell использует только официальные Win32 и CO
 | AppsFolder | `SHCreateItemFromParsingName`, `IShellFolder`, `IShellItemArray`, `IID_IShellItemArray` `{56FDF344-FD6D-11D0-958A-006097C9A090}` | `Shell/AppsFolderSource.cs` |
 | MSIX | `IApplicationActivationManager` (`ActivateApplication`) | `Interop/IApplicationActivationManager.cs` |
 | MSIX | разбор пути процесса (`WindowsApps\<PackageFullName>`) через `PackageIdentity` | `GlazeShell.Core/Discovery/PackageIdentity.cs`, `Applications/ProcessInspector.cs` |
-| Processes | `Process.GetProcesses`, `CloseMainWindow`, `Process.Kill(entireProcessTree: true)` | `Applications/WindowsApplicationLauncher.cs`, `Applications/ProcessInspector.cs`, `SystemEvents/ProcessEventMonitor.cs` |
+| Processes | `Process.GetProcesses`, `CloseMainWindow`, `Process.Kill(entireProcessTree: true)` | `Applications/WindowsApplicationLauncher.cs`, `Applications/ProcessInspector.cs`, `SystemEvents/ProcessEventMonitor.cs`, `GlazeShell.Core/Discovery/ApplicationProcessMatcher.cs` |
 | COM | `CoInitializeEx`, `CoUninitialize`, `CoTaskMemFree`, `CoCreateInstance` | `Win32/Ole32.cs`, `Shell/ShellIdentifiers.cs` |
 | Windows | `EnumWindows`, `GetForegroundWindow`, `IsWindow`, `GetWindowText`, `GetClassName`, `GetWindowThreadProcessId`, `ShowWindowAsync`, `PostMessage`, `SetForegroundWindow`, `AttachThreadInput`, `GetWindowPlacement`, `SetWindowPos` | `Win32/User32.cs` |
 | Windows events | `SetWinEventHook`/`UnhookWinEvent`, `GetMessage`/`TranslateMessage`/`DispatchMessage` (0x0003–0x0017, 0x8000–0x8017) | `Win32/User32.cs`, `WindowManagement/WindowEventMonitor.cs` |
@@ -381,8 +387,8 @@ Stage 1 добавил только framework-free Core: модели, конт�
 
 - `ProcessInspector.FindProcessesByPackage` разбирает пути процессов без обращения к реестру: имя семейства пакета вычисляется из имени каталога `WindowsApps\<PackageFullName>`.
 - `ProcessInspector` итерирует процессы один раз, освобождая каждый `Process` через `using`, и не копирует `Process[]` бесконечно.
-- UI проверяет фоновые процессы не чаще, чем раз в 3 секунды, и только после завершения первичного сканирования.
-- Периодический polling оправдан техническим ограничением: .NET не предоставляет событие «процесс запущен» для произвольных exe.
+- Состояние запущенных приложений обновляется по событиям процессов (`ProcessStarted`/`ProcessExited`), а не периодическим опросом (см. «Решения Stage 9»); однократный полный пересчёт выполняется только после первичного сканирования и задаёт базовую линию для приложений, запущенных до Glaze Shell.
+- `ApplicationProcessMatcher` не перечисляет процессы сам: он работает над уже полученными путём и именем образа (из снимка процессов или события), поэтому сопоставление не добавляет проходов по системе.
 
 ### Stage 4 — Window Manager
 
@@ -445,6 +451,8 @@ Stage 11 выполнит профилирование и зафиксирует
 ## Границы UI
 
 UI может использовать модели, интерфейсы Application Services, events и state, не зная о native handles и Win32. Визуальный дизайн согласован: палитра (`#12151B`, `#1B1F27`, `#F4F6FA`, `#98A2B3`, `#6E7A8A`, `#4E5866`), шрифты и layout сохраняются без явного согласования изменений.
+
+Имена дисплеев — presentation-данные: отображаемое имя вычисляется в UI (значение по умолчанию плюс пользовательская переопределёнка из `UserSettings.MonitorNames`), а Core и Data хранят только карту «идентификатор монитора → имя» и не знают о Win32. Пользовательское имя сохраняется вместе с остальными настройками обычным путём persistence.
 
 ## Следующие архитектурные изменения
 
