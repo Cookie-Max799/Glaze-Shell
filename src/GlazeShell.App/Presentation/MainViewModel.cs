@@ -439,9 +439,13 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             var closed = await _launcher.CloseAsync(target.Id, token).ConfigureAwait(true);
 
+            // Состояние берётся из фактического опроса, а не из флага закрытия: приложение
+            // могло завершиться уже после таймаута ожидания (тогда флаг равен false), и точка
+            // запуска иначе осталась бы светлой, хотя приложение закрыто.
+            target.Set(await ProbeAsync(target, token).ConfigureAwait(true));
+
             if (closed)
             {
-                target.Set(false);
                 SetStatus($"Закрыто: {target.Name}");
             }
             else
@@ -489,9 +493,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             var terminated = await _launcher.TerminateAsync(target.Id, token).ConfigureAwait(true);
 
+            target.Set(await ProbeAsync(target, token).ConfigureAwait(true));
+
             if (terminated)
             {
-                target.Set(false);
                 SetStatus($"Завершено принудительно: {target.Name}");
             }
             else

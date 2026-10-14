@@ -79,6 +79,18 @@ public sealed class ApplicationProcessMatcherTests
     }
 
     [TestMethod]
+    public void MatchesLauncherSpawnedProcessNameWhenPathIsUnknown()
+    {
+        // Update.exe --processStart Discord.exe: настоящий процесс носит имя Discord, поэтому
+        // его выход должен сопоставляться с приложением, даже если путь процесса недоступен.
+        var application = Win32(@"C:\Users\me\AppData\Local\Discord\Update.exe", arguments: "--processStart Discord.exe");
+
+        Assert.IsTrue(ApplicationProcessMatcher.Matches(application, executablePath: null, processName: "Discord"));
+        Assert.IsTrue(ApplicationProcessMatcher.Matches(application, executablePath: null, processName: "Update"));
+        Assert.IsFalse(ApplicationProcessMatcher.Matches(application, executablePath: null, processName: "Other"));
+    }
+
+    [TestMethod]
     public void MatchesMsixPackagePath()
     {
         var application = new Application(

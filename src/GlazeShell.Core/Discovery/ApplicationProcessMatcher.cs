@@ -29,9 +29,24 @@ public static class ApplicationProcessMatcher
             return true;
         }
 
-        return application.ExecutablePath is { } target
-            && !string.IsNullOrWhiteSpace(processName)
-            && string.Equals(Path.GetFileNameWithoutExtension(target), processName, StringComparison.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(processName))
+        {
+            return false;
+        }
+
+        // Имя процесса сверяется со всеми образами приложения, а не только с файлом
+        // запуска: у приложений-лаунчеров настоящий процесс носит имя из аргумента
+        // --processStart (например, Discord, а не Update), и без этого выход
+        // приложения не сопоставился бы с карточкой.
+        foreach (var image in GetImageNames(application))
+        {
+            if (string.Equals(Path.GetFileNameWithoutExtension(image), processName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
