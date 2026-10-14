@@ -162,6 +162,53 @@ public sealed class WindowsApplicationLauncherTests
         Assert.IsTrue(await launcher.IsRunningAsync("msix:test"));
     }
 
+    [TestMethod]
+    public async Task IsRunningDetectsLauncherSpawnedProcessFromSubdirectory()
+    {
+        var comspec = Environment.GetEnvironmentVariable("ComSpec");
+
+        if (string.IsNullOrWhiteSpace(comspec) || !File.Exists(comspec))
+        {
+            Assert.Inconclusive("ComSpec is unavailable.");
+            return;
+        }
+
+        // Лаунчер лежит в корне каталога установки и не работает, а настоящий процесс с тем
+        // же именем образа запущен из подкаталога — как у Squirrel (Discord). Точное
+        // совпадение пути не находит процесс, поэтому срабатывает расширение по каталогу.
+        const string imageName = "glaze-launcher-probe.exe";
+        var appDirectory = Path.Combine(_root, "App");
+        var nestedDirectory = Path.Combine(appDirectory, "app-1.0.0");
+        Directory.CreateDirectory(nestedDirectory);
+
+        var runningExecutable = Path.Combine(nestedDirectory, imageName);
+        File.Copy(comspec, runningExecutable);
+
+        using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(runningExecutable, "/c ping -n 30 127.0.0.1")
+        {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        });
+
+        Assert.IsNotNull(process);
+
+        var application = new Application("app:launcher", "Launcher", ApplicationType.Win32, Path.Combine(appDirectory, imageName));
+        var launcher = CreateLauncher(new FakeApplicationManager().Add(application));
+
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!await launcher.IsRunningAsync("app:launcher") && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(100);
+        }
+
+        Assert.IsTrue(await launcher.IsRunningAsync("app:launcher"), "The launcher-spawned process should be detected by directory.");
+
+        var terminated = await launcher.TerminateAsync("app:launcher");
+
+        Assert.IsTrue(terminated, "The launcher-spawned process should be stopped.");
+        Assert.IsTrue(process!.WaitForExit(5000), "The process should have exited.");
+    }
+
     private static WindowsApplicationLauncher CreateLauncher(
         FakeApplicationManager manager,
         IProcessInspector? inspector = null)
@@ -171,3 +218,4 @@ public sealed class WindowsApplicationLauncherTests
             inspector ?? new ProcessInspector());
     }
 }
+

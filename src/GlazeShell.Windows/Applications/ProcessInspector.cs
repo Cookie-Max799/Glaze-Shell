@@ -31,6 +31,28 @@ public sealed class ProcessInspector : IProcessInspector
         return matches;
     }
 
+    public IReadOnlyList<int> FindProcessesByImageInDirectory(
+        string directory,
+        IReadOnlyCollection<string> imageNames,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(directory);
+        ArgumentNullException.ThrowIfNull(imageNames);
+
+        if (imageNames.Count == 0)
+        {
+            return Array.Empty<int>();
+        }
+
+        var prefix = TrimSeparator(directory);
+        var matches = new List<int>();
+
+        Collect(matches, path =>
+            IsUnderDirectory(path, prefix) && HasImageName(path, imageNames), cancellationToken);
+
+        return matches;
+    }
+
     public IReadOnlyList<int> FindProcessesByPackage(string packageFamilyName, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageFamilyName);
@@ -67,6 +89,27 @@ public sealed class ProcessInspector : IProcessInspector
 
         return path[prefix.Length] == Path.DirectorySeparatorChar || path[prefix.Length] == Path.AltDirectorySeparatorChar;
     }
+
+    private static bool HasImageName(string path, IReadOnlyCollection<string> imageNames)
+    {
+        var image = Path.GetFileName(path);
+
+        if (image.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var name in imageNames)
+        {
+            if (string.Equals(image, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
 
     private static string SafePath(Process process)
     {

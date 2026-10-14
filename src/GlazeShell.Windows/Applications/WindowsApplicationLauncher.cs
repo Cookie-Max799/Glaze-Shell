@@ -160,7 +160,30 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
     {
         if (!string.IsNullOrWhiteSpace(application.ExecutablePath))
         {
-            return _processes.FindProcessesByPath(application.ExecutablePath);
+            var exact = _processes.FindProcessesByPath(application.ExecutablePath);
+
+            if (exact.Count > 0)
+            {
+                return exact;
+            }
+
+            // Приложение могло быть запущено через лаунчер (Squirrel и т.п.): настоящий
+            // процесс живёт в подкаталоге каталога установки под своим именем образа, а
+            // путь лаунчера из ярлыка уже не существует. Ограничение по имени образа не
+            // даёт зацепить чужие процессы из общего каталога (например, git-bash у git-cmd),
+            // а проверка безопасного каталога исключает системные процессы.
+            if (ApplicationProcessMatcher.GetInstallDirectory(application) is { } directory
+                && IsSafeInstallDirectory(directory))
+            {
+                var imageNames = ApplicationProcessMatcher.GetImageNames(application);
+
+                if (imageNames.Count > 0)
+                {
+                    return _processes.FindProcessesByImageInDirectory(directory, imageNames);
+                }
+            }
+
+            return exact;
         }
 
         if (!string.IsNullOrWhiteSpace(application.PackageFamilyName))
