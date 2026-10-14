@@ -55,6 +55,7 @@ Glaze Shell — это оболочка рабочего стола на WinUI 3
 - [Скриншоты](#скриншоты)
 - [Быстрый старт](#быстрый-старт)
 - [Возможности](#возможности)
+- [Дизайн-система](#дизайн-система)
 - [Архитектура](#архитектура)
 - [Структура проекта](#структура-проекта)
 - [Требования](#требования)
@@ -142,9 +143,9 @@ glaze.cmd Release
 
 ### Планируемые возможности
 
-- кастомизация рабочего стола и настройка визуальной стороны (темы, оформление) — вынесена в отдельную задачу и будет спланирована позднее: backend тем готов, но применение темы к визуальному дереву остаётся за UI;
+- кастомизация рабочего стола и настройка визуальной стороны (темы, оформление) — дизайн-система и план функций в стиле macOS описаны в [docs/DESIGN.md](docs/DESIGN.md) и [docs/FEATURES.md](docs/FEATURES.md);
 - автозапуск приложения при входе в систему;
-- будущая система виджетов и расширений.
+- будущая система виджетов и расширений; см. подробный перечень в [docs/FEATURES.md](docs/FEATURES.md).
 
 ## Архитектура
 
@@ -192,20 +193,20 @@ GlazeShell/
 │   └── GlazeShell.Windows/        # Win32/COM P/Invoke, хуки, нативные интеграции
 ├── tests/                         # тестовые проекты: Core.Tests, Data.Tests, Windows.Tests
 ├── docs/
-│   ├── assets/                    # баннеры и логотипы для README/GitHub
+│   ├── assets/                    # иконка, баннеры и логотипы для README/GitHub
+│   ├── design/                    # токены, иконки и макеты дизайн-системы
+│   ├── DESIGN.md                  # дизайн-система: цвета, материалы, компоненты, движение
+│   ├── FEATURES.md                # спецификация возможностей в стиле macOS (фазы 1–3)
+│   ├── features.json              # машинный индекс функций
 │   ├── ARCHITECTURE.md            # слои, решения по стадиям, Windows API, производительность
 │   └── SECURITY.md                # модель угроз и границы доверия
 ├── glaze.cmd                      # скрипт быстрого запуска (сборка + запуск)
-├── GlazeShell.slnx
-├── global.json
-├── Directory.Build.props
-├── Directory.Packages.props
 ├── README.md
 ├── CHANGELOG.md
 └── LICENSE
 ```
 
-Локальные каталоги, перечисленные в `.gitignore` и не попадающие в репозиторий: `assets-src/` (исходные визуальные ассеты) и `AGENTS.md` (инструкции для агентов). Подробное дерево по слоям — в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Полное дерево по слоям и конфигурационные файлы сборки (`GlazeShell.slnx`, `global.json`, `Directory.Build.props`, `Directory.Packages.props`) — в [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Локальные каталоги, перечисленные в `.gitignore` и не попадающие в репозиторий: `assets-src/` (исходные визуальные ассеты) и `AGENTS.md` (инструкции для агентов).
 
 ## Требования
 
@@ -375,6 +376,8 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 
 ## Документация
 
+- [docs/DESIGN.md](docs/DESIGN.md) — дизайн-система Glaze Shell (цвета, материалы, компоненты, движение).
+- [docs/FEATURES.md](docs/FEATURES.md) — спецификация возможностей в стиле macOS для Windows (приоритеты, фазы, детальные спецификации).
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — слои, dependency flow, решения по этапам, использованные Windows API и производительность.
 - [docs/SECURITY.md](docs/SECURITY.md) — модель угроз, границы доверия и принятые риски.
 - [CHANGELOG.md](CHANGELOG.md) — история изменений.
@@ -414,6 +417,38 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 - **Stage 1 — Core завершён.** Реализованы доменные модели, контракты интерфейсов, события и базовые framework-free сервисы `GlazeShell.Core`.
 - **Stage 0 — Foundation завершён.** Создана минимальная запускаемая WinUI 3 оболочка, слоистая структура .NET-решения, базовая конфигурация, централизованное файловое логирование и тестовый проект.
 
+## Продуктовый roadmap
+
+Статусы: ✅ — завершено, ⏳ — планируется, ⚪ — не планируется.
+
+Краткое описание фаз см. в [docs/FEATURES.md](docs/FEATURES.md); там же полная спецификация (53 функции). G1 (слой клавиатуры в стиле Mac) снят с плана.
+
+| Фаза | Описание | Статус |
+|---|---|---|
+| Phase 1 (MVP) | Core identity, безопасность, top bar, dock, Glance, Quick Preview, Quick Settings, Explorer basics, настройки, доступность, мультимонитор/DPI | ⏳ |
+| Phase 2 | Бейджи, папки в dock, Trash, сетка приложений, виджеты, Overview, Workspaces, Snap, app switcher, центр уведомлений, календарь, вкладки/пути Explorer, теги, Get Info, undo, недавние, скриншоты | ⏳ |
+| Phase 3 | Анимация сворачивания в dock, стопки рабочего стола, динамические обои, горячие углы, скрыть/показать, force quit, режимы фокуса, HUD, пакетное переименование, spring-loaded, умные папки, быстрые действия, запись экрана, замена текста, диакритика, backdrop для чужих окон | ⏳ |
+| Later | Focus layout, Share, трекпад-удобства, словарный поиск, звуковая тема | ⏳ |
+| Снято с плана | G1 — слой клавиатуры в стиле Mac | ⚪ |
+
+All product feature plans consolidated in [docs/FEATURES.md](docs/FEATURES.md) with full details and acceptance criteria.
+
+## Продуктовый roadmap
+
+Статусы: ✅ — завершено, ⏳ — планируется, ⚪ — не планируется.
+
+Краткое описание фаз см. в [docs/FEATURES.md](docs/FEATURES.md); там же полная спецификация (53 функции). G1 (слой клавиатуры в стиле Mac) снят с плана.
+
+| Фаза | Описание | Статус |
+|---|---|---|
+| Phase 1 (MVP) | Core identity, безопасность, top bar, dock, Glance, Quick Preview, Quick Settings, Explorer basics, настройки, доступность, мультимонитор/DPI | ⏳ |
+| Phase 2 | Бейджи, папки в dock, Trash, сетка приложений, виджеты, Overview, Workspaces, Snap, app switcher, центр уведомлений, календарь, вкладки/пути Explorer, теги, Get Info, undo, недавние, скриншоты | ⏳ |
+| Phase 3 | Анимация сворачивания в dock, стопки рабочего стола, динамические обои, горячие углы, скрыть/показать, force quit, режимы фокуса, HUD, пакетное переименование, spring-loaded, умные папки, быстрые действия, запись экрана, замена текста, диакритика, backdrop для чужих окон | ⏳ |
+| Later | Focus layout, Share, трекпад-удобства, словарный поиск, звуковая тема | ⏳ |
+| Снято с плана | G1 — слой клавиатуры в стиле Mac | ⚪ |
+
+All product feature plans consolidated in [docs/FEATURES.md](docs/FEATURES.md) with full details and acceptance criteria.
+
 ## Known issues
 
 - Visual Studio/WinUI 3 template не установлен в текущем окружении; App project создан вручную.
@@ -424,5 +459,9 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 - Используется системный title bar, поэтому его оформление не следует тёмной палитре контента; кастомный title bar запланирован вместе с Theme System.
 
 ## Лицензия
+
+## Дизайн-система
+
+Дизайн Glaze Shell основан на концепции «глазурованной керамики»: мягкое стекло, пастель, крупные скругления, плавающие панели и две равноправные темы (светлая и тёмная). Подробности — в [docs/DESIGN.md](docs/DESIGN.md). Токены, иконки и эталонные макеты расположены в `docs/design/`.
 
 Проект распространяется под лицензией MIT — полный текст в файле [LICENSE](LICENSE).

@@ -1,0 +1,548 @@
+{
+ "$name": "Glaze Shell features",
+ "$version": "1.0",
+ "$decisions": {
+  "targetWindows": "Windows 11 22H2+ primary; Windows 10 degraded",
+  "stack": "WinUI 3",
+  "packaging": "unpackaged in Phase 1; MSIX/sparse later for D2",
+  "workspacesModel": "own workspaces over DesktopManager",
+  "taskbar": "overlay + hide/restore native taskbar",
+  "keyboardLayerG1": "not shipping (dropped)",
+  "distribution": "own site + code signing at Release (Stage 13)",
+  "widgetExtensibility": "built-in only first",
+  "accountConnectors": "none in v1; optional ICS later",
+  "telemetry": "off by default"
+ },
+ "features": [
+  {
+   "id": "A1",
+   "group": "A. Shell chrome",
+   "name": "Dock",
+   "priority": "P0",
+   "complexity": "L",
+   "feasibility": "documented",
+   "phase": "Phase 1 (MVP)",
+   "status": "todo"
+  },
+  {
+   "id": "A2",
+   "group": "A. Shell chrome",
+   "name": "Minimize to dock animation",
+   "priority": "P2",
+   "complexity": "M",
+   "feasibility": "partial",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "A3",
+   "group": "A. Shell chrome",
+   "name": "Dock badges and attention bounce",
+   "priority": "P1",
+   "complexity": "M",
+   "feasibility": "partial",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "A4",
+   "group": "A. Shell chrome",
+   "name": "Folder stacks in dock",
+   "priority": "P1",
+   "complexity": "M",
+   "feasibility": "documented",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "A5",
+   "group": "A. Shell chrome",
+   "name": "Trash",
+   "priority": "P1",
+   "complexity": "S",
+   "feasibility": "documented",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "A6",
+   "group": "A. Shell chrome",
+   "name": "Top bar",
+   "priority": "P0",
+   "complexity": "M",
+   "feasibility": "own-ui",
+   "phase": "Phase 1 (MVP)",
+   "status": "todo"
+  },
+  {
+   "id": "A7",
+   "group": "A. Shell chrome",
+   "name": "Apps grid",
+   "priority": "P1",
+   "complexity": "M",
+   "feasibility": "documented",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "A8",
+   "group": "A. Shell chrome",
+   "name": "Widgets column",
+   "priority": "P1",
+   "complexity": "M",
+   "feasibility": "own-ui",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "A9",
+   "group": "A. Shell chrome",
+   "name": "Desktop stacks and tidy-up",
+   "priority": "P2",
+   "complexity": "M",
+   "feasibility": "partial",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "A10",
+   "group": "A. Shell chrome",
+   "name": "Dynamic wallpaper",
+   "priority": "P2",
+   "complexity": "S",
+   "feasibility": "documented",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "B1",
+   "group": "B. Search and preview",
+   "name": "Glance (global search and launcher)",
+   "priority": "P0",
+   "complexity": "L",
+   "feasibility": "documented",
+   "phase": "Phase 1 (MVP)",
+   "status": "todo"
+  },
+  {
+   "id": "B2",
+   "group": "B. Search and preview",
+   "name": "Quick Preview",
+   "priority": "P0",
+   "complexity": "M",
+   "feasibility": "partial",
+   "phase": "Phase 1 (MVP)",
+   "status": "todo"
+  },
+  {
+   "id": "C1",
+   "group": "C. Windows and workspaces",
+   "name": "Overview",
+   "priority": "P1",
+   "complexity": "L",
+   "feasibility": "partial",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "C2",
+   "group": "C. Windows and workspaces",
+   "name": "Workspaces",
+   "priority": "P1",
+   "complexity": "L",
+   "feasibility": "own-ui",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "C3",
+   "group": "C. Windows and workspaces",
+   "name": "Snap and tiling",
+   "priority": "P1",
+   "complexity": "M",
+   "feasibility": "documented",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "C4",
+   "group": "C. Windows and workspaces",
+   "name": "App switcher",
+   "priority": "P1",
+   "complexity": "M",
+   "feasibility": "partial",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "C5",
+   "group": "C. Windows and workspaces",
+   "name": "Hot corners",
+   "priority": "P2",
+   "complexity": "S",
+   "feasibility": "documented",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "C6",
+   "group": "C. Windows and workspaces",
+   "name": "Hide / Hide others / Show desktop",
+   "priority": "P2",
+   "complexity": "S",
+   "feasibility": "documented",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "C7",
+   "group": "C. Windows and workspaces",
+   "name": "Force Quit panel",
+   "priority": "P2",
+   "complexity": "S",
+   "feasibility": "documented",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "C8",
+   "group": "C. Windows and workspaces",
+   "name": "Focus layout",
+   "priority": "P3",
+   "complexity": "L",
+   "feasibility": "partial",
+   "phase": "Later",
+   "status": "todo"
+  },
+  {
+   "id": "D1",
+   "group": "D. Controls and notifications",
+   "name": "Quick Settings panel",
+   "priority": "P0",
+   "complexity": "M",
+   "feasibility": "partial",
+   "phase": "Phase 1 (MVP)",
+   "status": "todo"
+  },
+  {
+   "id": "D2",
+   "group": "D. Controls and notifications",
+   "name": "Notification centre",
+   "priority": "P1",
+   "complexity": "L",
+   "feasibility": "partial",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "D3",
+   "group": "D. Controls and notifications",
+   "name": "Focus modes",
+   "priority": "P2",
+   "complexity": "M",
+   "feasibility": "own-ui",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "D4",
+   "group": "D. Controls and notifications",
+   "name": "Clock and calendar popover",
+   "priority": "P1",
+   "complexity": "S",
+   "feasibility": "own-ui",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "D5",
+   "group": "D. Controls and notifications",
+   "name": "On-screen HUD",
+   "priority": "P2",
+   "complexity": "S",
+   "feasibility": "partial",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "E1",
+   "group": "E. Explorer (file manager)",
+   "name": "Views",
+   "priority": "P0",
+   "complexity": "L",
+   "feasibility": "own-ui",
+   "phase": "Phase 1 (MVP)",
+   "status": "todo"
+  },
+  {
+   "id": "E2",
+   "group": "E. Explorer (file manager)",
+   "name": "Sidebar favourites and drives",
+   "priority": "P0",
+   "complexity": "M",
+   "feasibility": "documented",
+   "phase": "Phase 1 (MVP)",
+   "status": "todo"
+  },
+  {
+   "id": "E3",
+   "group": "E. Explorer (file manager)",
+   "name": "Tabs, path bar, Go to folder",
+   "priority": "P1",
+   "complexity": "M",
+   "feasibility": "own-ui",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "E4",
+   "group": "E. Explorer (file manager)",
+   "name": "Tags (coloured labels)",
+   "priority": "P1",
+   "complexity": "M",
+   "feasibility": "partial",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "E5",
+   "group": "E. Explorer (file manager)",
+   "name": "Get Info panel",
+   "priority": "P1",
+   "complexity": "M",
+   "feasibility": "documented",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "E6",
+   "group": "E. Explorer (file manager)",
+   "name": "File operations with undo",
+   "priority": "P1",
+   "complexity": "L",
+   "feasibility": "documented",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "E7",
+   "group": "E. Explorer (file manager)",
+   "name": "Batch rename",
+   "priority": "P2",
+   "complexity": "S",
+   "feasibility": "own-ui",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "E8",
+   "group": "E. Explorer (file manager)",
+   "name": "Spring-loaded folders and drag behaviours",
+   "priority": "P2",
+   "complexity": "S",
+   "feasibility": "own-ui",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "E9",
+   "group": "E. Explorer (file manager)",
+   "name": "Smart folders",
+   "priority": "P2",
+   "complexity": "M",
+   "feasibility": "documented",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "E10",
+   "group": "E. Explorer (file manager)",
+   "name": "Quick actions",
+   "priority": "P2",
+   "complexity": "M",
+   "feasibility": "own-ui",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "E11",
+   "group": "E. Explorer (file manager)",
+   "name": "Recents and Go menu",
+   "priority": "P1",
+   "complexity": "S",
+   "feasibility": "documented",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "E12",
+   "group": "E. Explorer (file manager)",
+   "name": "Share",
+   "priority": "P3",
+   "complexity": "L",
+   "feasibility": "partial",
+   "phase": "Later",
+   "status": "todo"
+  },
+  {
+   "id": "F1",
+   "group": "F. Capture",
+   "name": "Screenshots",
+   "priority": "P1",
+   "complexity": "M",
+   "feasibility": "documented",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "F2",
+   "group": "F. Capture",
+   "name": "Screen recording",
+   "priority": "P2",
+   "complexity": "L",
+   "feasibility": "documented",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "G1",
+   "group": "G. Input and text",
+   "name": "Mac-style keyboard layer (optional)",
+   "priority": "P2",
+   "complexity": "L",
+   "feasibility": "fragile",
+   "phase": "Phase 3",
+   "status": "dropped"
+  },
+  {
+   "id": "G2",
+   "group": "G. Input and text",
+   "name": "Text replacement",
+   "priority": "P2",
+   "complexity": "M",
+   "feasibility": "partial",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "G3",
+   "group": "G. Input and text",
+   "name": "Press-and-hold accents",
+   "priority": "P2",
+   "complexity": "M",
+   "feasibility": "partial",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "G4",
+   "group": "G. Input and text",
+   "name": "Trackpad conveniences",
+   "priority": "P3",
+   "complexity": "S",
+   "feasibility": "partial",
+   "phase": "Later",
+   "status": "todo"
+  },
+  {
+   "id": "G5",
+   "group": "G. Input and text",
+   "name": "Dictionary lookup",
+   "priority": "P3",
+   "complexity": "S",
+   "feasibility": "partial",
+   "phase": "Later",
+   "status": "todo"
+  },
+  {
+   "id": "H1",
+   "group": "H. Appearance",
+   "name": "Theme engine",
+   "priority": "P0",
+   "complexity": "M",
+   "feasibility": "documented",
+   "phase": "Phase 1 (MVP)",
+   "status": "todo"
+  },
+  {
+   "id": "H2",
+   "group": "H. Appearance",
+   "name": "Window backdrop and title-bar styling for other apps",
+   "priority": "P2",
+   "complexity": "M",
+   "feasibility": "partial",
+   "phase": "Phase 3",
+   "status": "todo"
+  },
+  {
+   "id": "H3",
+   "group": "H. Appearance",
+   "name": "Sound theme",
+   "priority": "P3",
+   "complexity": "S",
+   "feasibility": "documented",
+   "phase": "Later",
+   "status": "todo"
+  },
+  {
+   "id": "I1",
+   "group": "I. System and maintenance",
+   "name": "Glaze Settings",
+   "priority": "P0",
+   "complexity": "M",
+   "feasibility": "own-ui",
+   "phase": "Phase 1 (MVP)",
+   "status": "todo"
+  },
+  {
+   "id": "I2",
+   "group": "I. System and maintenance",
+   "name": "Safe restore and watchdog",
+   "priority": "P0",
+   "complexity": "S",
+   "feasibility": "documented",
+   "phase": "Phase 1 (MVP)",
+   "status": "todo"
+  },
+  {
+   "id": "I3",
+   "group": "I. System and maintenance",
+   "name": "Onboarding",
+   "priority": "P1",
+   "complexity": "S",
+   "feasibility": "own-ui",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "I4",
+   "group": "I. System and maintenance",
+   "name": "Updates and uninstall",
+   "priority": "P1",
+   "complexity": "M",
+   "feasibility": "documented",
+   "phase": "Phase 2",
+   "status": "todo"
+  },
+  {
+   "id": "I5",
+   "group": "I. System and maintenance",
+   "name": "Accessibility",
+   "priority": "P0",
+   "complexity": "M",
+   "feasibility": "documented",
+   "phase": "Phase 1 (MVP)",
+   "status": "todo"
+  },
+  {
+   "id": "I6",
+   "group": "I. System and maintenance",
+   "name": "Multi-monitor, DPI and performance",
+   "priority": "P0",
+   "complexity": "M",
+   "feasibility": "documented",
+   "phase": "Phase 1 (MVP)",
+   "status": "todo"
+  }
+ ]
+}
