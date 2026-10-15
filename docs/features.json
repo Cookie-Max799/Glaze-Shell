@@ -7,7 +7,6 @@
   "packaging": "unpackaged in Phase 1; MSIX/sparse later for D2",
   "workspacesModel": "own workspaces over DesktopManager",
   "taskbar": "overlay + hide/restore native taskbar",
-  "keyboardLayerG1": "not shipping (dropped)",
   "distribution": "own site + code signing at Release (Stage 13)",
   "widgetExtensibility": "built-in only first",
   "accountConnectors": "none in v1; optional ICS later",
@@ -403,16 +402,6 @@
    "feasibility": "documented",
    "phase": "Phase 3",
    "status": "todo"
-  },
-  {
-   "id": "G1",
-   "group": "G. Input and text",
-   "name": "Mac-style keyboard layer (optional)",
-   "priority": "P2",
-   "complexity": "L",
-   "feasibility": "fragile",
-   "phase": "Phase 3",
-   "status": "dropped"
   },
   {
    "id": "G2",

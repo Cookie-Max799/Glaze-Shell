@@ -422,7 +422,7 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 
 Статусы: ✅ — завершено, ⏳ — планируется, ⚪ — не планируется.
 
-Краткое описание фаз см. в [docs/FEATURES.md](docs/FEATURES.md); там же полная спецификация (53 функции). G1 (слой клавиатуры в стиле Mac) снят с плана.
+Краткое описание фаз см. в [docs/FEATURES.md](docs/FEATURES.md); там же полная спецификация (52 функции).
 
 | Фаза | Описание | Статус |
 |---|---|---|
@@ -430,23 +430,6 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 | Phase 2 | Бейджи, папки в dock, Trash, сетка приложений, виджеты, Overview, Workspaces, Snap, app switcher, центр уведомлений, календарь, вкладки/пути Explorer, теги, Get Info, undo, недавние, скриншоты | ⏳ |
 | Phase 3 | Анимация сворачивания в dock, стопки рабочего стола, динамические обои, горячие углы, скрыть/показать, force quit, режимы фокуса, HUD, пакетное переименование, spring-loaded, умные папки, быстрые действия, запись экрана, замена текста, диакритика, backdrop для чужих окон | ⏳ |
 | Later | Focus layout, Share, трекпад-удобства, словарный поиск, звуковая тема | ⏳ |
-| Снято с плана | G1 — слой клавиатуры в стиле Mac | ⚪ |
-
-All product feature plans consolidated in [docs/FEATURES.md](docs/FEATURES.md) with full details and acceptance criteria.
-
-## Продуктовый roadmap
-
-Статусы: ✅ — завершено, ⏳ — планируется, ⚪ — не планируется.
-
-Краткое описание фаз см. в [docs/FEATURES.md](docs/FEATURES.md); там же полная спецификация (53 функции). G1 (слой клавиатуры в стиле Mac) снят с плана.
-
-| Фаза | Описание | Статус |
-|---|---|---|
-| Phase 1 (MVP) | Core identity, безопасность, top bar, dock, Glance, Quick Preview, Quick Settings, Explorer basics, настройки, доступность, мультимонитор/DPI | ⏳ |
-| Phase 2 | Бейджи, папки в dock, Trash, сетка приложений, виджеты, Overview, Workspaces, Snap, app switcher, центр уведомлений, календарь, вкладки/пути Explorer, теги, Get Info, undo, недавние, скриншоты | ⏳ |
-| Phase 3 | Анимация сворачивания в dock, стопки рабочего стола, динамические обои, горячие углы, скрыть/показать, force quit, режимы фокуса, HUD, пакетное переименование, spring-loaded, умные папки, быстрые действия, запись экрана, замена текста, диакритика, backdrop для чужих окон | ⏳ |
-| Later | Focus layout, Share, трекпад-удобства, словарный поиск, звуковая тема | ⏳ |
-| Снято с плана | G1 — слой клавиатуры в стиле Mac | ⚪ |
 
 All product feature plans consolidated in [docs/FEATURES.md](docs/FEATURES.md) with full details and acceptance criteria.
 
