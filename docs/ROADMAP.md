@@ -1,27 +1,46 @@
 # Roadmap Glaze Shell
 
-Дорожная карта проекта: технические стадии (0–13) и продуктовые фазы. Обзор — в [README.md](../README.md), архитектурные решения по стадиям — в [ARCHITECTURE.md](ARCHITECTURE.md), спецификация будущих возможностей — в [FEATURES.md](FEATURES.md).
+Дорожная карта проекта: технические стадии (0–26) и продуктовые фазы. Обзор — в [README.md](../README.md), архитектурные решения по стадиям — в [ARCHITECTURE.md](ARCHITECTURE.md), спецификация возможностей — в [FEATURES.md](FEATURES.md).
+
+## Как читать дорожную карту
+
+- **Стадия (Stage)** — единица разработки. Стадии идут строго по порядку: `0–10` завершены, `11–12` — hardening фундамента, `13–25` — продуктовые фазы, `26` — релиз.
+- **Фаза (Phase)** — продуктовый приоритет функции из [FEATURES.md](FEATURES.md): `Phase 1 (MVP)`, `Phase 2`, `Phase 3`, `Later`. Одна фаза раскладывается на несколько стадий (см. маппинг ниже).
+- Релизов до `Stage 26` нет: `Phase 1` — веха готовности MVP, но публикуется продукт целиком на стадии релиза.
 
 ## Этапы разработки
 
 Статусы: ✅ — завершено, ⏳ — планируется.
 
-| № | Стадия | Статус |
-| --- | --- | --- |
-| 0 | Foundation — структура решения, сборка, логирование и базовая конфигурация | ✅ |
-| 1 | Core — доменные модели, интерфейсы и события | ✅ |
-| 2 | Application Discovery — обнаружение установленных приложений | ✅ |
-| 3 | Application Launcher — запуск, проверка состояния и закрытие приложений | ✅ |
-| 4 | Window Manager — управление окнами и события окон | ✅ |
-| 5 | Desktop Integration — мониторы, DPI и display configuration | ✅ |
-| 6 | Tabs and Categories — вкладки, категории, размещение приложений и порядок элементов | ✅ |
-| 7 | Persistence — JSON, layout, settings, schema migrations и recovery. Включает привязку desktop layout к мониторам | ✅ |
-| 8 | Theme System — безопасная загрузка данных тем без исполняемого кода | ✅ |
-| 9 | Windows Events — централизованная event-driven модель | ✅ |
-| 10 | Application Lifecycle — startup, shutdown и single-instance | ✅ |
-| 11 | Performance — profiling и оптимизация фоновых ресурсов | ⏳ |
-| 12 | Security — security review и hardening boundaries | ⏳ |
-| 13 | Testing и Release — расширенное покрытие и первый релиз | ⏳ |
+| № | Стадия | Фаза | Статус |
+| --- | --- | --- | --- |
+| 0 | Foundation — структура решения, сборка, логирование и базовая конфигурация | — | ✅ |
+| 1 | Core — доменные модели, интерфейсы и события | — | ✅ |
+| 2 | Application Discovery — обнаружение установленных приложений | — | ✅ |
+| 3 | Application Launcher — запуск, проверка состояния и закрытие приложений | — | ✅ |
+| 4 | Window Manager — управление окнами и события окон | — | ✅ |
+| 5 | Desktop Integration — мониторы, DPI и display configuration | — | ✅ |
+| 6 | Tabs and Categories — вкладки, категории, размещение приложений и порядок элементов | — | ✅ |
+| 7 | Persistence — JSON, layout, settings, schema migrations и recovery | — | ✅ |
+| 8 | Theme System — безопасная загрузка данных тем без исполняемого кода | — | ✅ |
+| 9 | Windows Events — централизованная event-driven модель | — | ✅ |
+| 10 | Application Lifecycle — startup, shutdown и single-instance | — | ✅ |
+| 11 | Performance — profiling и оптимизация фоновых ресурсов | — | ⏳ |
+| 12 | Security — security review и hardening boundaries | — | ⏳ |
+| 13 | Shell Foundation — восстановление, настройки, доступность (I1, I2, I5) | Phase 1 | ⏳ |
+| 14 | Appearance — движок тем, DPI/мультимонитор, бюджеты производительности (H1, I6) | Phase 1 | ⏳ |
+| 15 | Shell Chrome — top bar и Quick Settings (A6, D1) | Phase 1 | ⏳ |
+| 16 | Dock and Search — dock, глобальный поиск, быстрый предпросмотр (A1, B1, B2) | Phase 1 | ⏳ |
+| 17 | Explorer Basics — виды и сайдбар (E1, E2) | Phase 1 | ⏳ |
+| 18 | Dock Extras — бейджи, папки, Trash, сетка приложений, виджеты (A3, A4, A5, A7, A8) | Phase 2 | ⏳ |
+| 19 | Windows and Workspaces — Overview, workspaces, snap, app switcher (C1, C2, C3, C4) | Phase 2 | ⏳ |
+| 20 | Notifications and System — центр уведомлений, календарь, onboarding, обновления (D2, D4, I3, I4) | Phase 2 | ⏳ |
+| 21 | Explorer Advanced and Capture — вкладки/путь, теги, Get Info, undo, недавние, скриншоты (E3, E4, E5, E6, E11, F1) | Phase 2 | ⏳ |
+| 22 | Dock and Window Polish — анимация, стопки, обои, горячие углы, скрыть/показать, force quit (A2, A9, A10, C5, C6, C7) | Phase 3 | ⏳ |
+| 23 | Controls and Appearance — фокус-режимы, HUD, backdrop чужих окон (D3, D5, H2) | Phase 3 | ⏳ |
+| 24 | Explorer and Input — переименование, spring-loaded, умные папки, быстрые действия, запись экрана, ввод (E7, E8, E9, E10, F2, G2, G3) | Phase 3 | ⏳ |
+| 25 | Later — фокус-раскладка, Share, трекпад, словарь, звуковая тема (C8, E12, G4, G5, H3) | Later | ⏳ |
+| 26 | Testing и Release — расширенное покрытие и первый релиз | — | ⏳ |
 
 ### Текущий статус по стадиям
 
@@ -37,18 +56,28 @@
 - **Stage 1 — Core завершён.** Реализованы доменные модели, контракты интерфейсов, события и базовые framework-free сервисы `GlazeShell.Core`.
 - **Stage 0 — Foundation завершён.** Создана минимальная запускаемая WinUI 3 оболочка, слоистая структура .NET-решения, базовая конфигурация, централизованное файловое логирование и тестовый проект.
 
+## Маппинг фаз на стадии
+
+| Фаза | Стадии | Функции |
+| --- | --- | --- |
+| Phase 1 (MVP) | 13–17 | A1, A6, B1, B2, D1, E1, E2, H1, I1, I2, I5, I6 |
+| Phase 2 | 18–21 | A3, A4, A5, A7, A8, C1, C2, C3, C4, D2, D4, E3, E4, E5, E6, E11, F1, I3, I4 |
+| Phase 3 | 22–24 | A2, A9, A10, C5, C6, C7, D3, D5, E7, E8, E9, E10, F2, G2, G3, H2 |
+| Later | 25 | C8, E12, G4, G5, H3 |
+| Release | 26 | — |
+
+Всего 52 активные функции (G1 — слой клавиатуры в стиле Mac — снята с плана). Полное описание каждой функции, приоритеты и критерии готовности — в [FEATURES.md](FEATURES.md); машинный индекс — в [features.json](features.json).
+
 ## Продуктовые фазы
 
 Статусы: ✅ — завершено, ⏳ — планируется, ⚪ — не планируется.
 
+| Фаза | Описание | Стадии | Статус |
+| --- | --- | --- | --- |
+| Phase 1 (MVP) | Core identity, безопасность, top bar, dock, Glance, Quick Preview, Quick Settings, Explorer basics, настройки, доступность, мультимонитор/DPI | 13–17 | ⏳ |
+| Phase 2 | Бейджи, папки в dock, Trash, сетка приложений, виджеты, Overview, Workspaces, Snap, app switcher, центр уведомлений, календарь, вкладки/пути Explorer, теги, Get Info, undo, недавние, скриншоты | 18–21 | ⏳ |
+| Phase 3 | Анимация сворачивания в dock, стопки рабочего стола, динамические обои, горячие углы, скрыть/показать, force quit, режимы фокуса, HUD, пакетное переименование, spring-loaded, умные папки, быстрые действия, запись экрана, замена текста, диакритика, backdrop для чужих окон | 22–24 | ⏳ |
+| Later | Focus layout, Share, трекпад-удобства, словарный поиск, звуковая тема | 25 | ⏳ |
+| Снято с плана | G1 — слой клавиатуры в стиле Mac | — | ⚪ |
+
 Краткое описание фаз см. в [FEATURES.md](FEATURES.md); там же полная спецификация (53 функции). G1 (слой клавиатуры в стиле Mac) снят с плана.
-
-| Фаза | Описание | Статус |
-|---|---|---|
-| Phase 1 (MVP) | Core identity, безопасность, top bar, dock, Glance, Quick Preview, Quick Settings, Explorer basics, настройки, доступность, мультимонитор/DPI | ⏳ |
-| Phase 2 | Бейджи, папки в dock, Trash, сетка приложений, виджеты, Overview, Workspaces, Snap, app switcher, центр уведомлений, календарь, вкладки/пути Explorer, теги, Get Info, undo, недавние, скриншоты | ⏳ |
-| Phase 3 | Анимация сворачивания в dock, стопки рабочего стола, динамические обои, горячие углы, скрыть/показать, force quit, режимы фокуса, HUD, пакетное переименование, spring-loaded, умные папки, быстрые действия, запись экрана, замена текста, диакритика, backdrop для чужих окон | ⏳ |
-| Later | Focus layout, Share, трекпад-удобства, словарный поиск, звуковая тема | ⏳ |
-| Снято с плана | G1 — слой клавиатуры в стиле Mac | ⚪ |
-
-All product feature plans consolidated in [FEATURES.md](FEATURES.md) with full details and acceptance criteria.

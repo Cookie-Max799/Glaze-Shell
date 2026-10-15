@@ -12,7 +12,7 @@
   <a href="#требования"><img alt="platform: Windows 10+" src="https://img.shields.io/badge/platform-Windows%2010%2B-0078D4?logo=windows&logoColor=white"></a>
   <a href="#требования"><img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white"></a>
   <a href="#требования"><img alt="Windows App SDK 2.5.1" src="https://img.shields.io/badge/Windows%20App%20SDK-2.5.1-512BD4"></a>
-  <a href="#roadmap"><img alt="status: Stage 10/13" src="https://img.shields.io/badge/status-Stage%2010%2F13-blue"></a>
+  <a href="#roadmap"><img alt="status: Stage 10/26" src="https://img.shields.io/badge/status-Stage%2010%2F26-blue"></a>
 </p>
 
 Glaze Shell — Windows-приложение для глубокой персонализации рабочего окружения поверх штатных возможностей Windows. Проект не изменяет системные файлы и не заменяет компоненты Windows: он работает только через официальные Win32 и COM API.
@@ -132,26 +132,19 @@ GlazeShell/
 
 ## Roadmap
 
-Статусы: ✅ — завершено, ⏳ — планируется.
+Статусы: ✅ — завершено, ⏳ — планируется. Полная таблица стадий `0–26`, статусы и маппинг фаз — в [docs/ROADMAP.md](docs/ROADMAP.md).
 
-| № | Стадия | Статус |
+| Веха | Стадии | Статус |
 | --- | --- | --- |
-| 0 | Foundation — структура решения, сборка, логирование и базовая конфигурация | ✅ |
-| 1 | Core — доменные модели, интерфейсы и события | ✅ |
-| 2 | Application Discovery — обнаружение установленных приложений | ✅ |
-| 3 | Application Launcher — запуск, проверка состояния и закрытие приложений | ✅ |
-| 4 | Window Manager — управление окнами и события окон | ✅ |
-| 5 | Desktop Integration — мониторы, DPI и display configuration | ✅ |
-| 6 | Tabs and Categories — вкладки, категории, размещение приложений и порядок элементов | ✅ |
-| 7 | Persistence — JSON, layout, settings, schema migrations и recovery | ✅ |
-| 8 | Theme System — безопасная загрузка данных тем без исполняемого кода | ✅ |
-| 9 | Windows Events — централизованная event-driven модель | ✅ |
-| 10 | Application Lifecycle — startup, shutdown и single-instance | ✅ |
-| 11 | Performance — profiling и оптимизация фоновых ресурсов | ⏳ |
-| 12 | Security — security review и hardening boundaries | ⏳ |
-| 13 | Testing и Release — расширенное покрытие и первый релиз | ⏳ |
+| Foundation и Core-оболочка (discovery, launcher, окна, мониторы, layout, persistence, темы, события, lifecycle) | 0–10 | ✅ |
+| Hardening фундамента (Performance, Security) | 11–12 | ⏳ |
+| Phase 1 (MVP): Shell Foundation, Appearance, Chrome, Dock/Search, Explorer Basics | 13–17 | ⏳ |
+| Phase 2: Dock Extras, Workspaces, Notifications, Explorer Advanced | 18–21 | ⏳ |
+| Phase 3: полировка, контролы, Explorer и ввод | 22–24 | ⏳ |
+| Later | 25 | ⏳ |
+| Testing и Release — первый релиз | 26 | ⏳ |
 
-Текущий этап — **Stage 10 завершён**; впереди Performance (11), Security (12) и Testing/Release (13). Подробный статус по стадиям и продуктовые фазы — в [docs/ROADMAP.md](docs/ROADMAP.md).
+Текущий этап — **Stage 10 завершён**. Впереди Performance (11), Security (12), продуктовые фазы Phase 1–3 (13–25) и единый релиз (26).
 
 ## Документация
 
