@@ -209,6 +209,72 @@ public sealed class WindowsApplicationLauncherTests
         Assert.IsTrue(process!.WaitForExit(5000), "The process should have exited.");
     }
 
+    [TestMethod]
+    public async Task DirectoryExpansionIsNotUsedForSystemDirectory()
+    {
+        // Корень Windows не считается «подкаталогом» самого себя, но при этом объединяет
+        // все системные процессы: расширение по каталогу здесь зацепило бы систему целиком.
+        var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+
+        if (string.IsNullOrWhiteSpace(windows))
+        {
+            Assert.Inconclusive("The Windows directory is unavailable.");
+            return;
+        }
+
+        var inspector = new StubProcessInspector { ByImageInDirectory = [1], ByDirectory = [1] };
+        var application = new Application(
+            "app:system",
+            "System",
+            ApplicationType.Win32,
+            Path.Combine(windows, "notepad.exe"));
+        var launcher = CreateLauncher(new FakeApplicationManager().Add(application), inspector);
+
+        Assert.IsFalse(await launcher.IsRunningAsync("app:system"));
+        Assert.IsEmpty(inspector.ImageInDirectoryRequests);
+    }
+
+    [TestMethod]
+    public async Task DirectoryExpansionIsNotUsedForSharedInstallRoot()
+    {
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+
+        if (string.IsNullOrWhiteSpace(programFiles))
+        {
+            Assert.Inconclusive("Program Files is unavailable.");
+            return;
+        }
+
+        var inspector = new StubProcessInspector { ByImageInDirectory = [1], ByDirectory = [1] };
+        var application = new Application(
+            "app:shared",
+            "Shared",
+            ApplicationType.Win32,
+            Path.Combine(programFiles, "app.exe"));
+        var launcher = CreateLauncher(new FakeApplicationManager().Add(application), inspector);
+
+        Assert.IsFalse(await launcher.TerminateAsync("app:shared"));
+        Assert.IsEmpty(inspector.DirectoryRequests);
+        Assert.IsEmpty(inspector.ImageInDirectoryRequests);
+    }
+
+    [TestMethod]
+    public async Task DirectoryExpansionIsUsedForApplicationSubdirectory()
+    {
+        // Подкаталог конкретной программы остаётся безопасным: фоновые процессы
+        // приложения из подкаталога (AcroCEF и подобные) по-прежнему находятся.
+        var inspector = new StubProcessInspector();
+        var application = new Application(
+            "app:subdirectory",
+            "Subdirectory",
+            ApplicationType.Win32,
+            Path.Combine(_root, "App", "app.exe"));
+        var launcher = CreateLauncher(new FakeApplicationManager().Add(application), inspector);
+
+        Assert.IsFalse(await launcher.TerminateAsync("app:subdirectory"));
+        Assert.Contains(Path.Combine(_root, "App"), inspector.DirectoryRequests);
+    }
+
     private static WindowsApplicationLauncher CreateLauncher(
         FakeApplicationManager manager,
         IProcessInspector? inspector = null)

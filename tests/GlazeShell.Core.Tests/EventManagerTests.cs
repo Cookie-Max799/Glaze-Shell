@@ -1,3 +1,4 @@
+using GlazeShell.Core.Diagnostics;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Models;
 using GlazeShell.Core.Services;
@@ -79,5 +80,30 @@ public sealed class EventManagerTests
 
         Assert.HasCount(1, failures);
         Assert.AreEqual("subscriber failure", failures[0].Message);
+    }
+
+    [TestMethod]
+    public void LatencyRecorderCapturesDispatch()
+    {
+        var recorder = new EventLatencyRecorder();
+        var eventManager = new EventManager(_ => { }, recorder);
+        using var subscription = eventManager.Subscribe<WindowOpened>(_ => { });
+
+        eventManager.Publish(new WindowOpened(new WindowInfo("window-1", "Glaze Shell", 1234)));
+
+        var stats = recorder.Snapshot();
+        Assert.AreEqual(1L, stats.Count);
+        Assert.IsGreaterThanOrEqualTo(TimeSpan.Zero, stats.Minimum);
+    }
+
+    [TestMethod]
+    public void PublicationWithoutSubscribersIsNotMeasured()
+    {
+        var recorder = new EventLatencyRecorder();
+        var eventManager = new EventManager(_ => { }, recorder);
+
+        eventManager.Publish(new WindowOpened(new WindowInfo("window-1", "Glaze Shell", 1234)));
+
+        Assert.AreEqual(0L, recorder.Snapshot().Count);
     }
 }

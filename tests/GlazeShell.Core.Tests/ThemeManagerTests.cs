@@ -235,6 +235,29 @@ public sealed class ThemeManagerTests
     }
 
     [TestMethod]
+    public void ThemeRejectsShortcutsInstallersAndControlAssets()
+    {
+        string[] sources =
+        [
+            "run.cpl",
+            "run.pif",
+            "run.scf",
+            "open.url",
+            "help.chm",
+            "setup.msix",
+            "setup.appx",
+            "module.psd1",
+            "pack.cab",
+            "patch.msp"
+        ];
+
+        foreach (var source in sources)
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => new ThemeIcon("shell", source), source);
+        }
+    }
+
+    [TestMethod]
     public void WallpaperRejectsExecutableAssetsAndEscapingPaths()
     {
         Assert.ThrowsExactly<ArgumentException>(() => new ThemeWallpaper("wallpaper.exe"));

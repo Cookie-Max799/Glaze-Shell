@@ -7,9 +7,7 @@
   "packaging": "unpackaged in Phase 1; MSIX/sparse later for D2",
   "workspacesModel": "own workspaces over DesktopManager",
   "taskbar": "overlay + hide/restore native taskbar",
-  "keyboardLayerG1": "not shipping (dropped)",
-  "distribution": "own site + code signing at Release (Stage 26)",
-  "roadmapStages": "Phase 1 -> 13-17; Phase 2 -> 18-21; Phase 3 -> 22-24; Later -> 25; Release -> 26",
+  "distribution": "own site; release process at Stage 13, code signing with Installer",
   "widgetExtensibility": "built-in only first",
   "accountConnectors": "none in v1; optional ICS later",
   "telemetry": "off by default"
@@ -23,7 +21,6 @@
    "complexity": "L",
    "feasibility": "documented",
    "phase": "Phase 1 (MVP)",
-   "stage": 16,
    "status": "todo"
   },
   {
@@ -34,7 +31,6 @@
    "complexity": "M",
    "feasibility": "partial",
    "phase": "Phase 3",
-   "stage": 22,
    "status": "todo"
   },
   {
@@ -45,7 +41,6 @@
    "complexity": "M",
    "feasibility": "partial",
    "phase": "Phase 2",
-   "stage": 18,
    "status": "todo"
   },
   {
@@ -56,7 +51,6 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 2",
-   "stage": 18,
    "status": "todo"
   },
   {
@@ -67,7 +61,6 @@
    "complexity": "S",
    "feasibility": "documented",
    "phase": "Phase 2",
-   "stage": 18,
    "status": "todo"
   },
   {
@@ -78,7 +71,6 @@
    "complexity": "M",
    "feasibility": "own-ui",
    "phase": "Phase 1 (MVP)",
-   "stage": 15,
    "status": "todo"
   },
   {
@@ -89,7 +81,6 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 2",
-   "stage": 18,
    "status": "todo"
   },
   {
@@ -100,7 +91,6 @@
    "complexity": "M",
    "feasibility": "own-ui",
    "phase": "Phase 2",
-   "stage": 18,
    "status": "todo"
   },
   {
@@ -111,7 +101,6 @@
    "complexity": "M",
    "feasibility": "partial",
    "phase": "Phase 3",
-   "stage": 22,
    "status": "todo"
   },
   {
@@ -122,7 +111,6 @@
    "complexity": "S",
    "feasibility": "documented",
    "phase": "Phase 3",
-   "stage": 22,
    "status": "todo"
   },
   {
@@ -133,7 +121,6 @@
    "complexity": "L",
    "feasibility": "documented",
    "phase": "Phase 1 (MVP)",
-   "stage": 16,
    "status": "todo"
   },
   {
@@ -144,7 +131,6 @@
    "complexity": "M",
    "feasibility": "partial",
    "phase": "Phase 1 (MVP)",
-   "stage": 16,
    "status": "todo"
   },
   {
@@ -155,7 +141,6 @@
    "complexity": "L",
    "feasibility": "partial",
    "phase": "Phase 2",
-   "stage": 19,
    "status": "todo"
   },
   {
@@ -166,7 +151,6 @@
    "complexity": "L",
    "feasibility": "own-ui",
    "phase": "Phase 2",
-   "stage": 19,
    "status": "todo"
   },
   {
@@ -177,7 +161,6 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 2",
-   "stage": 19,
    "status": "todo"
   },
   {
@@ -188,7 +171,6 @@
    "complexity": "M",
    "feasibility": "partial",
    "phase": "Phase 2",
-   "stage": 19,
    "status": "todo"
   },
   {
@@ -199,7 +181,6 @@
    "complexity": "S",
    "feasibility": "documented",
    "phase": "Phase 3",
-   "stage": 22,
    "status": "todo"
   },
   {
@@ -210,7 +191,6 @@
    "complexity": "S",
    "feasibility": "documented",
    "phase": "Phase 3",
-   "stage": 22,
    "status": "todo"
   },
   {
@@ -221,7 +201,6 @@
    "complexity": "S",
    "feasibility": "documented",
    "phase": "Phase 3",
-   "stage": 22,
    "status": "todo"
   },
   {
@@ -232,7 +211,6 @@
    "complexity": "L",
    "feasibility": "partial",
    "phase": "Later",
-   "stage": 25,
    "status": "todo"
   },
   {
@@ -243,7 +221,6 @@
    "complexity": "M",
    "feasibility": "partial",
    "phase": "Phase 1 (MVP)",
-   "stage": 15,
    "status": "todo"
   },
   {
@@ -254,7 +231,6 @@
    "complexity": "L",
    "feasibility": "partial",
    "phase": "Phase 2",
-   "stage": 20,
    "status": "todo"
   },
   {
@@ -265,7 +241,6 @@
    "complexity": "M",
    "feasibility": "own-ui",
    "phase": "Phase 3",
-   "stage": 23,
    "status": "todo"
   },
   {
@@ -276,7 +251,6 @@
    "complexity": "S",
    "feasibility": "own-ui",
    "phase": "Phase 2",
-   "stage": 20,
    "status": "todo"
   },
   {
@@ -287,7 +261,6 @@
    "complexity": "S",
    "feasibility": "partial",
    "phase": "Phase 3",
-   "stage": 23,
    "status": "todo"
   },
   {
@@ -298,7 +271,6 @@
    "complexity": "L",
    "feasibility": "own-ui",
    "phase": "Phase 1 (MVP)",
-   "stage": 17,
    "status": "todo"
   },
   {
@@ -309,7 +281,6 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 1 (MVP)",
-   "stage": 17,
    "status": "todo"
   },
   {
@@ -320,7 +291,6 @@
    "complexity": "M",
    "feasibility": "own-ui",
    "phase": "Phase 2",
-   "stage": 21,
    "status": "todo"
   },
   {
@@ -331,7 +301,6 @@
    "complexity": "M",
    "feasibility": "partial",
    "phase": "Phase 2",
-   "stage": 21,
    "status": "todo"
   },
   {
@@ -342,7 +311,6 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 2",
-   "stage": 21,
    "status": "todo"
   },
   {
@@ -353,7 +321,6 @@
    "complexity": "L",
    "feasibility": "documented",
    "phase": "Phase 2",
-   "stage": 21,
    "status": "todo"
   },
   {
@@ -364,7 +331,6 @@
    "complexity": "S",
    "feasibility": "own-ui",
    "phase": "Phase 3",
-   "stage": 24,
    "status": "todo"
   },
   {
@@ -375,7 +341,6 @@
    "complexity": "S",
    "feasibility": "own-ui",
    "phase": "Phase 3",
-   "stage": 24,
    "status": "todo"
   },
   {
@@ -386,7 +351,6 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 3",
-   "stage": 24,
    "status": "todo"
   },
   {
@@ -397,7 +361,6 @@
    "complexity": "M",
    "feasibility": "own-ui",
    "phase": "Phase 3",
-   "stage": 24,
    "status": "todo"
   },
   {
@@ -408,7 +371,6 @@
    "complexity": "S",
    "feasibility": "documented",
    "phase": "Phase 2",
-   "stage": 21,
    "status": "todo"
   },
   {
@@ -419,7 +381,6 @@
    "complexity": "L",
    "feasibility": "partial",
    "phase": "Later",
-   "stage": 25,
    "status": "todo"
   },
   {
@@ -430,7 +391,6 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 2",
-   "stage": 21,
    "status": "todo"
   },
   {
@@ -441,19 +401,7 @@
    "complexity": "L",
    "feasibility": "documented",
    "phase": "Phase 3",
-   "stage": 24,
    "status": "todo"
-  },
-  {
-   "id": "G1",
-   "group": "G. Input and text",
-   "name": "Mac-style keyboard layer (optional)",
-   "priority": "P2",
-   "complexity": "L",
-   "feasibility": "fragile",
-   "phase": "Phase 3",
-   "stage": null,
-   "status": "dropped"
   },
   {
    "id": "G2",
@@ -463,7 +411,6 @@
    "complexity": "M",
    "feasibility": "partial",
    "phase": "Phase 3",
-   "stage": 24,
    "status": "todo"
   },
   {
@@ -474,7 +421,6 @@
    "complexity": "M",
    "feasibility": "partial",
    "phase": "Phase 3",
-   "stage": 24,
    "status": "todo"
   },
   {
@@ -485,7 +431,6 @@
    "complexity": "S",
    "feasibility": "partial",
    "phase": "Later",
-   "stage": 25,
    "status": "todo"
   },
   {
@@ -496,7 +441,6 @@
    "complexity": "S",
    "feasibility": "partial",
    "phase": "Later",
-   "stage": 25,
    "status": "todo"
   },
   {
@@ -507,7 +451,6 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 1 (MVP)",
-   "stage": 14,
    "status": "todo"
   },
   {
@@ -518,7 +461,6 @@
    "complexity": "M",
    "feasibility": "partial",
    "phase": "Phase 3",
-   "stage": 23,
    "status": "todo"
   },
   {
@@ -529,7 +471,6 @@
    "complexity": "S",
    "feasibility": "documented",
    "phase": "Later",
-   "stage": 25,
    "status": "todo"
   },
   {
@@ -540,7 +481,6 @@
    "complexity": "M",
    "feasibility": "own-ui",
    "phase": "Phase 1 (MVP)",
-   "stage": 13,
    "status": "todo"
   },
   {
@@ -551,7 +491,6 @@
    "complexity": "S",
    "feasibility": "documented",
    "phase": "Phase 1 (MVP)",
-   "stage": 13,
    "status": "todo"
   },
   {
@@ -562,7 +501,6 @@
    "complexity": "S",
    "feasibility": "own-ui",
    "phase": "Phase 2",
-   "stage": 20,
    "status": "todo"
   },
   {
@@ -573,7 +511,6 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 2",
-   "stage": 20,
    "status": "todo"
   },
   {
@@ -584,7 +521,6 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 1 (MVP)",
-   "stage": 13,
    "status": "todo"
   },
   {
@@ -595,7 +531,6 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 1 (MVP)",
-   "stage": 14,
    "status": "todo"
   }
  ]

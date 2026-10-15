@@ -19,7 +19,8 @@ internal sealed class WindowEventMonitor : IDisposable
 
     private Thread? _thread;
     private readonly List<nint> _hooks = [];
-    private uint _threadId;
+    private readonly object _hooksSync = new();
+    private volatile uint _threadId;
     private int _started;
 
     internal WindowEventMonitor(IEventManager events, bool skipOwnProcess = true)
@@ -50,7 +51,7 @@ internal sealed class WindowEventMonitor : IDisposable
             return false;
         }
 
-        return _hooks.Count > 0;
+        return HasHooks();
     }
 
     public void Dispose()
@@ -65,14 +66,15 @@ internal sealed class WindowEventMonitor : IDisposable
 
     private void Stop()
     {
-        UnhookAll();
-
+        // Снятие хуков выполняет сам поток-владелец в finally: UnhookWinEvent из чужого
+        // потока не снимает хук, а очищение списка здесь лишило бы cleanup ссылок на хуки.
         if (_thread is not null && _threadId != 0)
         {
             User32.PostThreadMessage(_threadId, User32.WmQuit, 0, 0);
-            _thread.Join(TimeSpan.FromSeconds(2));
-            _thread = null;
         }
+
+        _thread?.Join(TimeSpan.FromSeconds(2));
+        _thread = null;
     }
 
     private void ThreadMain(ManualResetEventSlim ready)
@@ -92,7 +94,7 @@ internal sealed class WindowEventMonitor : IDisposable
 
             ready.Set();
 
-            if (_hooks.Count == 0)
+            if (!HasHooks())
             {
                 return;
             }
@@ -116,18 +118,36 @@ internal sealed class WindowEventMonitor : IDisposable
 
         if (hook != 0)
         {
-            _hooks.Add(hook);
+            lock (_hooksSync)
+            {
+                _hooks.Add(hook);
+            }
         }
     }
 
+    /// <summary>
+    /// Снимает все хуки. Вызывается только с потока-владельца: список очищается под локом,
+    /// потому что поток остановки читает его для проверки готовности.
+    /// </summary>
     private void UnhookAll()
     {
-        foreach (var hook in _hooks)
+        lock (_hooksSync)
         {
-            User32.UnhookWinEvent(hook);
-        }
+            foreach (var hook in _hooks)
+            {
+                User32.UnhookWinEvent(hook);
+            }
 
-        _hooks.Clear();
+            _hooks.Clear();
+        }
+    }
+
+    private bool HasHooks()
+    {
+        lock (_hooksSync)
+        {
+            return _hooks.Count > 0;
+        }
     }
 
     private void OnWinEvent(nint hook, uint winEvent, nint hwnd, uint objectId, uint childId, uint eventThread, uint eventTime)

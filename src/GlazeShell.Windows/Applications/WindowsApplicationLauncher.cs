@@ -221,18 +221,52 @@ public sealed class WindowsApplicationLauncher : IApplicationLauncher
     }
 
     /// <summary>
-    /// Каталог считается безопасным для расширенного завершения, если это не корень диска
-    /// и не системный каталог Windows или его подкаталоги.
+    /// Каталог считается безопасным для расширенного завершения, если это не корень диска,
+    /// не системный каталог Windows или его подкаталоги и не общий корень установки
+    /// (сам корень объединяет все установленные программы, а программы живут
+    /// в собственных подкаталогах).
     /// </summary>
     private static bool IsSafeInstallDirectory(string directory)
     {
-        if (directory.Length <= 3)
+        var normalized = directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        // Корень диска (C:\) содержит все программы сразу.
+        if (normalized.Length <= 3)
         {
             return false;
         }
 
+        // C:\Windows и все его подкаталоги: расширение по каталогу здесь снесло бы
+        // системные процессы (корень также должен отклоняться сам по себе).
         var windows = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-        return string.IsNullOrWhiteSpace(windows) || !IsUnderDirectory(directory, windows);
+        if (!string.IsNullOrWhiteSpace(windows) && (IsSameDirectory(normalized, windows) || IsUnderDirectory(normalized, windows)))
+        {
+            return false;
+        }
+
+        foreach (var root in SharedInstallRoots)
+        {
+            if (root.Length > 0 && IsSameDirectory(normalized, root))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static readonly string[] SharedInstallRoots =
+    [
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+        Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+        Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)
+    ];
+
+    private static bool IsSameDirectory(string path, string directory)
+    {
+        var prefix = directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+
+        return path.Length > 0 && path.Equals(prefix, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsUnderDirectory(string path, string directory)

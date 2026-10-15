@@ -8,4 +8,13 @@
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
   </PropertyGroup>
+
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <AssemblyVersion>0.1.0.0</AssemblyVersion>
+    <FileVersion>0.1.0.0</FileVersion>
+    <Product>Glaze Shell</Product>
+    <Company>Glaze Shell</Company>
+    <Copyright>Copyright © Glaze Shell 2026</Copyright>
+  </PropertyGroup>
 </Project>

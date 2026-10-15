@@ -55,19 +55,13 @@ internal sealed class UserDataDirectory
 
         try
         {
-            var info = new FileInfo(path);
-            if (!info.Exists)
-            {
-                return DocumentReadResult.Missing();
-            }
-
-            if (info.Length > maxBytes)
+            if (!BoundedTextFile.TryRead(path, maxBytes, out var content, out var byteLength))
             {
                 return DocumentReadResult.TooLarge(
-                    $"The document '{fileName}' is {info.Length} bytes, the limit is {maxBytes} bytes.");
+                    $"The document '{fileName}' is {byteLength} bytes, the limit is {maxBytes} bytes.");
             }
 
-            return DocumentReadResult.Loaded(File.ReadAllText(path, Utf8WithoutBom));
+            return DocumentReadResult.Loaded(content);
         }
         catch (FileNotFoundException) when (!File.Exists(path))
         {
@@ -198,11 +192,44 @@ internal sealed class UserDataDirectory
             throw new ArgumentException("The document file name is required.", nameof(fileName));
         }
 
-        if (fileName.IndexOfAny(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) >= 0 || fileName.Contains("..", StringComparison.Ordinal))
+        // Win32 отбрасывает завершающие точки и пробелы, поэтому «settings.json.» и
+        // «settings.json » открывают тот же файл, что и «settings.json», — так имя
+        // документа можно перепутать или обойти проверку каталога.
+        if (fileName.IndexOfAny(['/', '\\', ':', '*', '?', '"', '<', '>', '|']) >= 0
+            || fileName.Contains("..", StringComparison.Ordinal)
+            || fileName.EndsWith('.')
+            || fileName.EndsWith(' '))
         {
             throw new PersistenceException($"The document file name is not valid: {fileName}.");
         }
+
+        if (IsReservedDeviceName(fileName))
+        {
+            throw new PersistenceException($"The document file name is reserved by the file system: {fileName}.");
+        }
     }
+
+    /// <summary>
+    /// Имена устройств (CON, PRN, AUX, NUL, COM1…COM9, LPT1…LPT9) резервируются Windows
+    /// и с расширением (CON.txt открывает консоль), поэтому проверяется имя до первой точки.
+    /// </summary>
+    private static bool IsReservedDeviceName(string fileName)
+    {
+        var separatorIndex = fileName.IndexOf('.');
+        var baseName = separatorIndex < 0 ? fileName : fileName[..separatorIndex];
+
+        return baseName.Equals("CON", StringComparison.OrdinalIgnoreCase)
+            || baseName.Equals("PRN", StringComparison.OrdinalIgnoreCase)
+            || baseName.Equals("AUX", StringComparison.OrdinalIgnoreCase)
+            || baseName.Equals("NUL", StringComparison.OrdinalIgnoreCase)
+            || IsNumberedDeviceName(baseName, "COM")
+            || IsNumberedDeviceName(baseName, "LPT");
+    }
+
+    private static bool IsNumberedDeviceName(string baseName, string prefix) =>
+        baseName.Length == prefix.Length + 1
+        && baseName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+        && baseName[^1] is >= '1' and <= '9';
 
     private static string Timestamp() => DateTimeOffset.Now.ToString("yyyyMMdd-HHmmssfff", System.Globalization.CultureInfo.InvariantCulture);
 
