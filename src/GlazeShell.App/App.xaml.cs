@@ -1,10 +1,13 @@
+using System.Globalization;
 using GlazeShell.Core.Configuration;
+using GlazeShell.Core.Diagnostics;
 using GlazeShell.Core.Discovery;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Persistence;
 using GlazeShell.Core.Services;
 using GlazeShell.Data.Persistence;
 using GlazeShell.Data.Themes;
+using GlazeShell.Infrastructure.Diagnostics;
 using GlazeShell.Infrastructure.Logging;
 using GlazeShell.Infrastructure.System;
 using GlazeShell.Windows.Applications;
@@ -48,11 +51,15 @@ public partial class App : Application
     {
         _logger.Write(GlazeLogLevel.Information, "App", "Application launched.");
 
+        var performance = new PerformanceMonitor(_logger);
+        var eventLatency = new EventLatencyRecorder();
+
         var (store, configuration) = CreateUserDataStore();
 
         var options = ApplicationDiscoveryOptions.Default;
-        var eventManager = new EventManager(exception =>
-            _logger.Write(GlazeLogLevel.Error, "Events", "Unhandled event dispatch failure.", exception));
+        var eventManager = new EventManager(
+            exception => _logger.Write(GlazeLogLevel.Error, "Events", "Unhandled event dispatch failure.", exception),
+            eventLatency);
 
         var discovery = new ApplicationDiscoveryService(
             [new AppsFolderSource(options), new StartMenuShortcutSource(options)],
@@ -105,9 +112,14 @@ public partial class App : Application
             _logger.Write(GlazeLogLevel.Error, "Events", "Unexpected failure while starting system event sources.", exception);
         }
 
-        window.Closed += (_, _) => Shutdown(layoutWriter, eventSources);
+        window.Closed += (_, _) => Shutdown(layoutWriter, eventSources, performance, eventLatency);
 
         window.Activate();
+
+        // Baseline снимается после активации окна: время работы процесса в этом снимке —
+        // фактическое время запуска приложения, а не только время композиции объектов.
+        performance.LogBaseline();
+        StartPerformanceSampling(performance);
     }
 
     /// <summary>
@@ -115,7 +127,11 @@ public partial class App : Application
     /// не должен мешать остальным и не должен удерживать процесс в памяти, из-за чего
     /// закрытое окно выглядело бы как «незакрывающееся» приложение. Сбой логируется.
     /// </summary>
-    private void Shutdown(DesktopLayoutPersistenceWriter layoutWriter, ShellEventCoordinator eventSources)
+    private void Shutdown(
+        DesktopLayoutPersistenceWriter layoutWriter,
+        ShellEventCoordinator eventSources,
+        PerformanceMonitor performance,
+        EventLatencyRecorder eventLatency)
     {
         _logger.Write(GlazeLogLevel.Information, "App", "Application window closed, releasing resources.");
 
@@ -132,7 +148,46 @@ public partial class App : Application
             _singleInstanceLease = null;
         });
 
+        TryShutdownStep("performance summary", () => LogPerformanceSummary(performance, eventLatency));
+
         _logger.Write(GlazeLogLevel.Information, "App", "Application resources released.");
+    }
+
+    /// <summary>
+    /// Пишет задержку доставки событий и итог сессии по ресурсам. Вызывается из пути
+    /// закрытия после освобождения хуков: к этому моменту счётчики handles и потоков
+    /// показывают состояние после остановки источников событий.
+    /// </summary>
+    private void LogPerformanceSummary(PerformanceMonitor performance, EventLatencyRecorder eventLatency)
+    {
+        _logger.Write(
+            GlazeLogLevel.Information,
+            "Performance",
+            $"Event dispatch latency: {eventLatency.Snapshot().ToLogString()}.");
+
+        performance.LogSession();
+        performance.Dispose();
+    }
+
+    /// <summary>
+    /// Включает периодическую запись idle-снимков, если задан интервал через переменную
+    /// окружения <c>GLAZESHELL_PERF_INTERVAL_MS</c>. По умолчанию профилирование idle выключено:
+    /// постоянный таймер — это фоновая нагрузка, которую не создают без потребности.
+    /// </summary>
+    private void StartPerformanceSampling(PerformanceMonitor performance)
+    {
+        var configured = Environment.GetEnvironmentVariable("GLAZESHELL_PERF_INTERVAL_MS");
+        if (!int.TryParse(configured, NumberStyles.Integer, CultureInfo.InvariantCulture, out var milliseconds) ||
+            milliseconds <= 0)
+        {
+            return;
+        }
+
+        performance.StartSampling(TimeSpan.FromMilliseconds(milliseconds));
+        _logger.Write(
+            GlazeLogLevel.Information,
+            "Performance",
+            $"Idle sampling is enabled every {milliseconds} ms.");
     }
 
     private void TryShutdownStep(string name, Action step)

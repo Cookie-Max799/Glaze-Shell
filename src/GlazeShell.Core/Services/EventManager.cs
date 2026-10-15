@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using GlazeShell.Core.Diagnostics;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 
@@ -7,11 +9,17 @@ public sealed class EventManager : IEventManager
 {
     private readonly Dictionary<Type, List<Subscription>> _subscriptions = [];
     private readonly Action<Exception>? _exceptionHandler;
+    private readonly EventLatencyRecorder? _latency;
     private readonly object _sync = new();
 
-    public EventManager(Action<Exception>? exceptionHandler = null)
+    /// <summary>
+    /// <paramref name="latency"/> необязателен: пока он не передан, доставка событий не
+    /// измеряется и не получает дополнительных операций на горячем пути.
+    /// </summary>
+    public EventManager(Action<Exception>? exceptionHandler = null, EventLatencyRecorder? latency = null)
     {
         _exceptionHandler = exceptionHandler;
+        _latency = latency;
     }
 
     public IDisposable Subscribe<TEvent>(Action<TEvent> handler)
@@ -66,20 +74,33 @@ public sealed class EventManager : IEventManager
             subscriptions = registeredSubscriptions.ToArray();
         }
 
-        foreach (var subscription in subscriptions)
-        {
-            try
-            {
-                subscription.Invoke(glazeEvent);
-            }
-            catch (Exception exception)
-            {
-                if (_exceptionHandler is null)
-                {
-                    throw;
-                }
+        var measure = _latency is not null;
+        var startTimestamp = measure ? Stopwatch.GetTimestamp() : 0L;
 
-                _exceptionHandler(exception);
+        try
+        {
+            foreach (var subscription in subscriptions)
+            {
+                try
+                {
+                    subscription.Invoke(glazeEvent);
+                }
+                catch (Exception exception)
+                {
+                    if (_exceptionHandler is null)
+                    {
+                        throw;
+                    }
+
+                    _exceptionHandler(exception);
+                }
+            }
+        }
+        finally
+        {
+            if (measure)
+            {
+                _latency!.Record(Stopwatch.GetElapsedTime(startTimestamp));
             }
         }
     }
