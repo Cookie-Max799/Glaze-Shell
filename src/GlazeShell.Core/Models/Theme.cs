@@ -307,7 +307,19 @@ internal static class ThemeAssetValidation
         ".reg",
         ".msc",
         ".jar",
-        ".psm1"
+        ".psm1",
+        ".psd1",
+        ".cpl",
+        ".pif",
+        ".scf",
+        ".url",
+        ".chm",
+        ".cab",
+        ".msp",
+        ".msix",
+        ".appx",
+        ".appref-ms",
+        ".application"
     ];
 
     public static string Source(string value, string parameterName)

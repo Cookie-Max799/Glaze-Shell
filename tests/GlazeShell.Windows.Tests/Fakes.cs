@@ -36,11 +36,25 @@ internal sealed class StubProcessInspector : IProcessInspector
 
     internal IReadOnlyList<int> ByPackage { get; set; } = Array.Empty<int>();
 
+    /// <summary>Каталоги, по которым запрашивалось расширение поиска процессов.</summary>
+    internal List<string> DirectoryRequests { get; } = [];
+
+    /// <summary>Каталоги, по которым запрашивалось расширение по образу процесса.</summary>
+    internal List<string> ImageInDirectoryRequests { get; } = [];
+
     public IReadOnlyList<int> FindProcessesByPath(string executablePath, CancellationToken cancellationToken = default) => ByPath;
 
-    public IReadOnlyList<int> FindProcessesByDirectory(string directory, CancellationToken cancellationToken = default) => ByDirectory;
+    public IReadOnlyList<int> FindProcessesByDirectory(string directory, CancellationToken cancellationToken = default)
+    {
+        DirectoryRequests.Add(directory);
+        return ByDirectory;
+    }
 
-    public IReadOnlyList<int> FindProcessesByImageInDirectory(string directory, IReadOnlyCollection<string> imageNames, CancellationToken cancellationToken = default) => ByImageInDirectory;
+    public IReadOnlyList<int> FindProcessesByImageInDirectory(string directory, IReadOnlyCollection<string> imageNames, CancellationToken cancellationToken = default)
+    {
+        ImageInDirectoryRequests.Add(directory);
+        return ByImageInDirectory;
+    }
 
     public IReadOnlyList<int> FindProcessesByPackage(string packageFamilyName, CancellationToken cancellationToken = default) => ByPackage;
 }

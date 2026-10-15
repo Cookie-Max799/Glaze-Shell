@@ -1,5 +1,6 @@
 using System.Text.Json;
 using GlazeShell.Core.Models;
+using GlazeShell.Data.Persistence;
 using GlazeShell.Data.Serialization;
 
 namespace GlazeShell.Data.Themes;
@@ -12,8 +13,8 @@ namespace GlazeShell.Data.Themes;
 /// недоверенный вход.
 /// <list type="bullet">
 /// <item>Читаются только <c>*.json</c> верхнего уровня: подкаталоги и симлинки не обходятся.</item>
-/// <item>Размер файла проверяется до чтения, разбор ограничен по глубине и не допускает
-/// комментариев, лишних запятых и полей типа <c>object</c>.</item>
+/// <item>Размер файла ограничивается на открытом дескрипторе, разбор ограничен по глубине
+/// и не допускает комментариев, лишних запятых и полей типа <c>object</c>.</item>
 /// <item>Исполняемые ассеты и пути вне каталога темы отклоняет модель
 /// <see cref="Theme"/>: тема не может ни запустить код, ни указать файл за пределами себя.</item>
 /// <item>Непригодная тема отбрасывается по отдельности: пользовательский набор тем
@@ -99,14 +100,11 @@ public sealed class ThemeStore
         string content;
         try
         {
-            var info = new FileInfo(path);
-            if (info.Length > PersistenceLimits.MaxThemeBytes)
+            if (!BoundedTextFile.TryRead(path, PersistenceLimits.MaxThemeBytes, out content, out var byteLength))
             {
-                diagnostics.Add($"The theme file '{fileName}' is {info.Length} bytes, the limit is {PersistenceLimits.MaxThemeBytes} bytes; the theme was skipped.");
+                diagnostics.Add($"The theme file '{fileName}' is {byteLength} bytes, the limit is {PersistenceLimits.MaxThemeBytes} bytes; the theme was skipped.");
                 return false;
             }
-
-            content = File.ReadAllText(path);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or NotSupportedException or System.Security.SecurityException)
         {

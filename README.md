@@ -20,7 +20,7 @@
   <a href="#требования"><img alt="platform: Windows 10+" src="https://img.shields.io/badge/platform-Windows%2010%2B-0078D4?logo=windows&logoColor=white"></a>
   <a href="#требования"><img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white"></a>
   <a href="#требования"><img alt="Windows App SDK 2.5.1" src="https://img.shields.io/badge/Windows%20App%20SDK-2.5.1-512BD4"></a>
-  <a href="#roadmap"><img alt="status: Stage 10/13" src="https://img.shields.io/badge/status-Stage%2010%2F13-blue"></a>
+  <a href="#roadmap"><img alt="status: Stage 12/13" src="https://img.shields.io/badge/status-Stage%2012%2F13-blue"></a>
 </p>
 
 Glaze Shell — Windows-приложение для глубокой персонализации рабочего окружения поверх штатных возможностей Windows. Проект не изменяет системные файлы и не заменяет компоненты Windows: он работает только через официальные Win32 и COM API.
@@ -146,6 +146,10 @@ glaze.cmd Release
 - кастомизация рабочего стола и настройка визуальной стороны (темы, оформление) — дизайн-система и план функций в стиле macOS описаны в [docs/DESIGN.md](docs/DESIGN.md) и [docs/FEATURES.md](docs/FEATURES.md);
 - автозапуск приложения при входе в систему;
 - будущая система виджетов и расширений; см. подробный перечень в [docs/FEATURES.md](docs/FEATURES.md).
+
+## Дизайн-система
+
+Дизайн Glaze Shell основан на концепции «глазурованной керамики»: мягкое стекло, пастель, крупные скругления, плавающие панели и две равноправные темы (светлая и тёмная). Подробности — в [docs/DESIGN.md](docs/DESIGN.md). Токены, иконки и эталонные макеты расположены в `docs/design/`.
 
 ## Архитектура
 
@@ -319,9 +323,7 @@ dotnet test
 
 | Симптом | Причина и решение |
 | --- | --- |
-| `dotnet run` собирает долго или зависает | Первый restore NuGet. Дождитесь завершения или запустите `dotnet restore` отдельно. |
-| Ошибка о несовместимом SDK | Версия SDK вне диапазона `global.json`. Установите .NET SDK 10 (`10.0.401` или совместимый). |
-| Пустой список MSIX-приложений, warning `0x800401E5` | Ограничение окружения: `IShellItemArray` AppsFolder недоступен. Классические `.lnk` из меню «Пуск» продолжают работать. |
+ `IShellItemArray` AppsFolder недоступен. Классические `.lnk` из меню «Пуск» продолжают работать. |
 | `.lnk` не резолвятся через COM, `IShellLinkW.Save` возвращает `0x80070002` | Известная особенность среды. Резолв идёт managed-парсером `ShellLinkData`; создание фикстур использует managed-writer. |
 | Фокус окна не срабатывает | Фокусировка best-effort: Windows может отклонить `SetForegroundWindow` из-за foreground lock. Это ограничение системы, а не ошибка. |
 | Второй запуск сразу завершается | Так и задумано: работает уже запущенный экземпляр, его окно поднимается, а новый процесс закрывается. Закройте существующее окно, чтобы запустить заново. |
@@ -341,7 +343,7 @@ dotnet test --configuration Release
 
 `Windows.Tests` использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо COM `IShellLinkW.Save`, который в текущем окружении возвращает `0x80070002`.
 
-Текущий статус: 309 tests (`Core.Tests` 165/165, `Data.Tests` 68/68, `Windows.Tests` 76/76 при изолированном запуске) в Debug и Release; build — 0 warnings / 0 errors. В общем прогоне допустим единственный провал — environment-tolerant flake `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` (см. ниже); изолированный запуск `GlazeShell.Windows.Tests` даёт 76/76.
+Текущий статус: 357 tests (`Core.Tests` 195/195, `Data.Tests` 82/82, `Windows.Tests` 80/80 при изолированном запуске) в Debug и Release; build — 0 warnings / 0 errors. В общем прогоне допустим единственный провал — environment-tolerant flake `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` (см. ниже); изолированный запуск `GlazeShell.Windows.Tests` даёт 80/80.
 
 Остальные environment-tolerant тесты не падают из-за недоступных API, а завершаются `Inconclusive` с объясняющим warning: `AppsFolderSourceTests` и `MonitorManagerTests`. `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` зависит от доставки `EVENT_OBJECT_DESTROY` для собственного процесса и потому чувствителен к параллелизму прогонов: таймаут ожидания события истекает, когда тестовые сборки запускаются одновременно. Поведение воспроизводится и на commit до Stage 7, то есть не связано с persistence или темами; изолированный запуск `GlazeShell.Windows.Tests` проходит стабильно.
 
@@ -400,11 +402,12 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 | 9 | Windows Events — централизованная event-driven модель | ✅ |
 | 10 | Application Lifecycle — startup, shutdown и single-instance | ✅ |
 | 11 | Performance — profiling и оптимизация фоновых ресурсов | ✅ |
-| 12 | Security — security review и hardening boundaries | ⏳ |
+| 12 | Security — security review и hardening boundaries | ✅ |
 | 13 | Testing и Release — расширенное покрытие и первый релиз | ⏳ |
 
 ### Текущий статус по стадиям
 
+- **Stage 12 — Security завершён.** Проведён обзор поверхности безопасности и закрыты найденные границы: чтение документов и тем идёт через один открытый дескриптор с ограничением по байтам (подмена файла между проверкой размера и чтением больше не обходит лимит), имена документов дополнительно отклоняют зарезервированные имена устройств (`CON`, `NUL`, `COM1`…) и завершающие точку/пробел, которые Win32 отбрасывает, `LogRedactor` маскирует пути профиля в обоих разделителях и JSON-экране, многословные секреты, расширенный набор ключей и токены `Bearer` с нестандартными символами, а также не рвёт суррогатную пару при обрезке; список запрещённых расширений тем дополнен ярлыками и установщиками. Расширение принудительного завершения по каталогу больше не распространяется на `C:\Windows` и его подкаталоги и на общие корни установки (`C:\Program Files`, `C:\Program Files (x86)`, `C:\ProgramData`), при этом подкаталог конкретной программы остаётся безопасным. Снятие WinEvent-хуков выполняется потоком-владельцем, а не потоком остановки.
 - **Stage 11 — Performance завершён.** Добавлена измерительная инфраструктура для профилирования фоновых ресурсов без слепых оптимизаций: при запуске снимается baseline (working set, managed heap, потоки, handles, CPU, uptime) и по закрытию окна пишется итог сессии с приращениями и средней загрузкой CPU. Задержка синхронной доставки событий измеряется в `EventManager` через `EventLatencyRecorder` (count/avg/min/max). Постоянный таймер idle-профилирования выключен по умолчанию и включается переменной окружения `GLAZESHELL_PERF_INTERVAL_MS`.
 - **Stage 10 — Application Lifecycle завершён.** Реализован единый жизненный цикл экземпляра приложения: одиночность запуска через именованный mutex, который удерживается весь срок работы (`SingleInstanceLease`), а повторный запуск находит окно уже работающего экземпляра, поднимает его и завершает новый процесс. При закрытии окна освобождаются layout-writer, источники событий и сам mutex (последним), поэтому экземпляр можно запустить заново; окно, созданное другим процессом, сопоставляется по владеющему процессу, а не по пути модуля.
 - **Stage 9 — Windows Events завершён.** Источники системных событий запускаются из одной точки (`ShellEventCoordinator`): оконные события (`SetWinEventHook`), события дисплеев (hidden message window) и события процессов (`ProcessEventMonitor`). Отказ отдельного источника не прерывает запуск остальных — диагностика попадает в `ShellEventStatus.Diagnostics` и лог, а `Start()` возвращает флаг по каждому источнику. Состояние запущенных приложений обновляется по событиям `ProcessStarted`/`ProcessExited` вместо опроса каждые 3 секунды, а пачка событий одного запуска объединяется вместо пересчёта на каждое событие.
@@ -443,9 +446,5 @@ All product feature plans consolidated in [docs/FEATURES.md](docs/FEATURES.md) w
 - Используется системный title bar, поэтому его оформление не следует тёмной палитре контента; кастомный title bar запланирован вместе с Theme System.
 
 ## Лицензия
-
-## Дизайн-система
-
-Дизайн Glaze Shell основан на концепции «глазурованной керамики»: мягкое стекло, пастель, крупные скругления, плавающие панели и две равноправные темы (светлая и тёмная). Подробности — в [docs/DESIGN.md](docs/DESIGN.md). Токены, иконки и эталонные макеты расположены в `docs/design/`.
 
 Проект распространяется под лицензией MIT — полный текст в файле [LICENSE](LICENSE).
