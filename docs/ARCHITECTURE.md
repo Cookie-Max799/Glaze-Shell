@@ -21,8 +21,14 @@ GlazeShell/
 ├── .gitignore
 ├── docs/
 │   ├── assets/
+│   ├── design/
 │   ├── ARCHITECTURE.md
-│   └── SECURITY.md
+│   ├── DEVELOPMENT.md
+│   ├── DESIGN.md
+│   ├── FEATURES.md
+│   ├── ROADMAP.md
+│   ├── SECURITY.md
+│   └── features.json
 ├── src/
 │   ├── GlazeShell.App/
 │   │   ├── Assets/
