@@ -7,7 +7,7 @@
   "packaging": "unpackaged in Phase 1; MSIX/sparse later for D2",
   "workspacesModel": "own workspaces over DesktopManager",
   "taskbar": "overlay + hide/restore native taskbar",
-  "distribution": "own site + code signing at Release (Stage 13)",
+  "distribution": "own site; release process at Stage 13, code signing with Installer",
   "widgetExtensibility": "built-in only first",
   "accountConnectors": "none in v1; optional ICS later",
   "telemetry": "off by default"

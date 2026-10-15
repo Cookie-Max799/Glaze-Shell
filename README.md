@@ -20,7 +20,7 @@
   <a href="#требования"><img alt="platform: Windows 10+" src="https://img.shields.io/badge/platform-Windows%2010%2B-0078D4?logo=windows&logoColor=white"></a>
   <a href="#требования"><img alt=".NET 10" src="https://img.shields.io/badge/.NET-10-512BD4?logo=dotnet&logoColor=white"></a>
   <a href="#требования"><img alt="Windows App SDK 2.5.1" src="https://img.shields.io/badge/Windows%20App%20SDK-2.5.1-512BD4"></a>
-  <a href="#roadmap"><img alt="status: Stage 12/13" src="https://img.shields.io/badge/status-Stage%2012%2F13-blue"></a>
+  <a href="#roadmap"><img alt="status: Stage 13/13" src="https://img.shields.io/badge/status-Stage%2013%2F13-blue"></a>
 </p>
 
 Glaze Shell — Windows-приложение для глубокой персонализации рабочего окружения поверх штатных возможностей Windows. Проект не изменяет системные файлы и не заменяет компоненты Windows: он работает только через официальные Win32 и COM API.
@@ -203,7 +203,8 @@ GlazeShell/
 │   ├── FEATURES.md                # спецификация возможностей в стиле macOS (фазы 1–3)
 │   ├── features.json              # машинный индекс функций
 │   ├── ARCHITECTURE.md            # слои, решения по стадиям, Windows API, производительность
-│   └── SECURITY.md                # модель угроз и границы доверия
+│   ├── SECURITY.md                # модель угроз и границы доверия
+│   └── RELEASE.md                 # версионирование, процесс и чеклист релиза
 ├── glaze.cmd                      # скрипт быстрого запуска (сборка + запуск)
 ├── README.md
 ├── CHANGELOG.md
@@ -337,13 +338,13 @@ dotnet test --configuration Release
 
 Тестовые проекты:
 
-- `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service, `ApplicationProcessMatcher`, `DesktopManager`, `MonitorLayoutBinding`, `UserDataDirectoryName`, `ThemeManager`.
-- `tests/GlazeShell.Data.Tests` — `JsonUserDataStoreTests`, `SchemaMigrationRunnerTests`, `PersistenceServicesTests`, `ThemeStoreTests`; каждый тест работает в собственном временном каталоге (`TempUserData`), который удаляется после теста.
-- `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`, `WindowManagerTests`, `MonitorManagerTests`, `ProcessEventMonitorTests`, `ShellEventCoordinatorTests`, `SingleInstanceHelperTests`.
+- `tests/GlazeShell.Core.Tests` — модели и события (`CoreModel`, `GlazeEvents`), `EventManager`, `EventCoalescer`, `EventLatencyRecorder`, `InMemorySettingsManager`, `ApplicationProcessMatcher`, `ApplicationIdentity`, `ApplicationDiscoveryOptions`, `ApplicationDiscoveryService` (на фейковых источниках), `DesktopManager`, `MonitorLayoutBinding`, `MonitorMapLayout`, `UserDataDirectoryName`, `UserDataPaths`, `UserSettings`, `ThemeManager`, диагностика (`PerformanceSession`, `PerformanceMonitor`, `ProcessMetricsCollector`), `LogRedactor`, `FileLogger`.
+- `tests/GlazeShell.Data.Tests` — `JsonUserDataStoreTests`, `SchemaMigrationRunnerTests`, `PersistenceServicesTests`, `ThemeStoreTests`, `BoundedTextFileTests`, `UserDataDirectoryTests`, `PersistenceLimitsTests`, мапперы документов (`LayoutDocumentMapperTests`, `SettingsDocumentMapperTests`, `ConfigurationDocumentMapperTests`) и `MigrationResultTests`; каждый тест работает в собственном временном каталоге (`TempUserData`), который удаляется после теста.
+- `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`, `ProcessInspectorTests`, `ProcessWatchOptionsTests`, `WindowManagerTests`, `WindowEventMonitorTests`, `MonitorManagerTests`, `DisplaySignalTests`, `ProcessEventMonitorTests`, `ShellEventCoordinatorTests`, `SingleInstanceHelperTests`.
 
 `Windows.Tests` использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо COM `IShellLinkW.Save`, который в текущем окружении возвращает `0x80070002`.
 
-Текущий статус: 357 tests (`Core.Tests` 195/195, `Data.Tests` 82/82, `Windows.Tests` 80/80 при изолированном запуске) в Debug и Release; build — 0 warnings / 0 errors. В общем прогоне допустим единственный провал — environment-tolerant flake `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` (см. ниже); изолированный запуск `GlazeShell.Windows.Tests` даёт 80/80.
+Текущий статус: 475 tests (`Core.Tests` 250/250, `Data.Tests` 129/129, `Windows.Tests` 96/96 при изолированном запуске) в Debug и Release; build — 0 warnings / 0 errors. В общем прогоне допустим единственный провал — environment-tolerant flake `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` (см. ниже); изолированный запуск `GlazeShell.Windows.Tests` даёт 96/96.
 
 Остальные environment-tolerant тесты не падают из-за недоступных API, а завершаются `Inconclusive` с объясняющим warning: `AppsFolderSourceTests` и `MonitorManagerTests`. `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` зависит от доставки `EVENT_OBJECT_DESTROY` для собственного процесса и потому чувствителен к параллелизму прогонов: таймаут ожидания события истекает, когда тестовые сборки запускаются одновременно. Поведение воспроизводится и на commit до Stage 7, то есть не связано с persistence или темами; изолированный запуск `GlazeShell.Windows.Tests` проходит стабильно.
 
@@ -374,7 +375,7 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 6. Проверить diff.
 7. Создать отдельный commit в стиле проекта.
 
-Сообщения коммитов пишутся на русском языке в свободной форме — это фактический стиль истории проекта (см. `git log`). Release workflow появится на Stage 13; до его утверждения нельзя публиковать installer или собранные binaries как релиз.
+Сообщения коммитов пишутся на русском языке в свободной форме — это фактический стиль истории проекта (см. `git log`). Процесс выпуска версии, версионирование и чеклист релиза описаны в [docs/RELEASE.md](docs/RELEASE.md). Автоматический CI не вводится: сборку и публикацию выполняют локально по чеклисту. Приложение поставляется как unpackaged, Installer и MSIX отсутствуют, поэтому собранный `GlazeShell.exe` не публикуется как готовый релиз для конечных пользователей.
 
 ## Документация
 
@@ -382,6 +383,7 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 - [docs/FEATURES.md](docs/FEATURES.md) — спецификация возможностей в стиле macOS для Windows (приоритеты, фазы, детальные спецификации).
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — слои, dependency flow, решения по этапам, использованные Windows API и производительность.
 - [docs/SECURITY.md](docs/SECURITY.md) — модель угроз, границы доверия и принятые риски.
+- [docs/RELEASE.md](docs/RELEASE.md) — версионирование, процесс и чеклист релиза.
 - [CHANGELOG.md](CHANGELOG.md) — история изменений.
 
 ## Roadmap
@@ -403,10 +405,11 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 | 10 | Application Lifecycle — startup, shutdown и single-instance | ✅ |
 | 11 | Performance — profiling и оптимизация фоновых ресурсов | ✅ |
 | 12 | Security — security review и hardening boundaries | ✅ |
-| 13 | Testing и Release — расширенное покрытие и первый релиз | ⏳ |
+| 13 | Testing и Release — расширенное покрытие и первый релиз | ✅ |
 
 ### Текущий статус по стадиям
 
+- **Stage 13 — Testing и Release завершён.** Расширено покрытие: добавлены тесты для доменной логики, которая раньше проверялась только косвенно — идентификаторы приложений и ключи запуска (`ApplicationIdentity`), discovery-сервис на фейковых источниках (`ApplicationDiscoveryService` с кэшем, слиянием кандидатов, изоляцией отказа источника и лимитом предупреждений), валидация опций discovery и наблюдения за процессами, мапперы документов (`LayoutDocumentMapper`, `SettingsDocumentMapper`, `ConfigurationDocumentMapper`), лимиты `PersistenceLimits`, результат миграции, события оболочки (`GlazeEvents`), а также `ProcessInspector` по каталогу и по имени образа. Общее число тестов выросло с 357 до 475. Введён процесс релиза: версия задаётся один раз в `Directory.Build.props` (SemVer, `0.1.0`) и применяется ко всем проектам, а шаги и чеклист выпуска описаны в [docs/RELEASE.md](docs/RELEASE.md). Автоматический CI не вводится — сборка и публикация выполняются локально.
 - **Stage 12 — Security завершён.** Проведён обзор поверхности безопасности и закрыты найденные границы: чтение документов и тем идёт через один открытый дескриптор с ограничением по байтам (подмена файла между проверкой размера и чтением больше не обходит лимит), имена документов дополнительно отклоняют зарезервированные имена устройств (`CON`, `NUL`, `COM1`…) и завершающие точку/пробел, которые Win32 отбрасывает, `LogRedactor` маскирует пути профиля в обоих разделителях и JSON-экране, многословные секреты, расширенный набор ключей и токены `Bearer` с нестандартными символами, а также не рвёт суррогатную пару при обрезке; список запрещённых расширений тем дополнен ярлыками и установщиками. Расширение принудительного завершения по каталогу больше не распространяется на `C:\Windows` и его подкаталоги и на общие корни установки (`C:\Program Files`, `C:\Program Files (x86)`, `C:\ProgramData`), при этом подкаталог конкретной программы остаётся безопасным. Снятие WinEvent-хуков выполняется потоком-владельцем, а не потоком остановки.
 - **Stage 11 — Performance завершён.** Добавлена измерительная инфраструктура для профилирования фоновых ресурсов без слепых оптимизаций: при запуске снимается baseline (working set, managed heap, потоки, handles, CPU, uptime) и по закрытию окна пишется итог сессии с приращениями и средней загрузкой CPU. Задержка синхронной доставки событий измеряется в `EventManager` через `EventLatencyRecorder` (count/avg/min/max). Постоянный таймер idle-профилирования выключен по умолчанию и включается переменной окружения `GLAZESHELL_PERF_INTERVAL_MS`.
 - **Stage 10 — Application Lifecycle завершён.** Реализован единый жизненный цикл экземпляра приложения: одиночность запуска через именованный mutex, который удерживается весь срок работы (`SingleInstanceLease`), а повторный запуск находит окно уже работающего экземпляра, поднимает его и завершает новый процесс. При закрытии окна освобождаются layout-writer, источники событий и сам mutex (последним), поэтому экземпляр можно запустить заново; окно, созданное другим процессом, сопоставляется по владеющему процессу, а не по пути модуля.

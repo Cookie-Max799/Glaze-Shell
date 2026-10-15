@@ -203,6 +203,15 @@
 - Добавлены и расширены тесты Stage 12: `LogRedactorTests` (+7), `ThemeManagerTests` (запрет ярлыков, установщиков и control-ассетов), новые `BoundedTextFileTests` (6) и `UserDataDirectoryTests` (8), `WindowsApplicationLauncherTests` (+3: системный каталог, общий корень установки, положительный контроль — подкаталог приложения), новый `WindowEventMonitorTests` (перезапуск после остановки). Стаб `StubProcessInspector` теперь записывает запросы по каталогу и по имени образа.
 - Результат: 357/357 tests green (`GlazeShell.Core.Tests` 195/195, `GlazeShell.Data.Tests` 82/82, `GlazeShell.Windows.Tests` 80/80 при изолированном запуске). Debug build — 0 warnings / 0 errors.
 
+#### Stage 13 — Testing и Release
+
+- Расширено покрытие доменной логики в `GlazeShell.Core`: новые `ApplicationIdentityTests` (ключи запуска для AUMID, пути и package family name, нормализация путей, детерминированность хэша), `ApplicationDiscoveryOptionsTests` и `ApplicationDiscoveryServiceTests` (кэш discovery, слияние кандидатов, отсев без цели, системные приложения, изоляция отказа источника, лимит предупреждений, повторные обновления без изменений, `ApplicationChanged`/`DiscoveryCompleted`, идемпотентное освобождение, валидация опций), `GlazeEventsTests` (события оболочки).
+- Новые тесты в `GlazeShell.Data`: `PersistenceLimitsTests`, `LayoutDocumentMapperTests`, `SettingsDocumentMapperTests`, `ConfigurationDocumentMapperTests` (уникальность идентификаторов, лимиты, битые ссылки, нормализация значений), `MigrationResultTests`.
+- Новые тесты в `GlazeShell.Windows`: `ProcessWatchOptionsTests` (границы интервалов) и `ProcessInspectorTests` (поиск по каталогу и по имени образа для текущего процесса, отрицательные проверки для чужого пути и package family name, валидация аргументов) — environment-tolerant, без зависимости от установленных программ.
+- Добавлено версионирование релиза: `Directory.Build.props` теперь задаёт `Version` (`0.1.0`), `AssemblyVersion`, `FileVersion`, `Product`, `Company` и `Copyright` в одной точке для всех проектов решения.
+- Добавлен `docs/RELEASE.md` — процесс и чеклист релиза: предварительные условия, обновление версии и документации, сборка Debug/Release, тесты, ручная проверка, diff без секретов, коммит и тег. CI не вводится, публикация бинарников не выполняется: приложение unpackaged, Installer и MSIX отсутствуют.
+- Результат: 475/475 tests green (`GlazeShell.Core.Tests` 250/250, `GlazeShell.Data.Tests` 129/129, `GlazeShell.Windows.Tests` 96/96 при изолированном запуске). Debug и Release build — 0 warnings / 0 errors.
+
 #### UI
 
 - Добавлен простой лаунчер UI: поиск, список приложений с virtualization, статусная строка, кнопки «Запустить/Закрыть/Перезапустить/Обновить».
