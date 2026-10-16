@@ -23,7 +23,7 @@ Glaze Shell — Windows-приложение, которое переоформ�
   - `logo-dark.png` — знак + словесный знак для **тёмных** фонов (светлый текст), прозрачный;
   - `banner-light.png`, `banner-dark.png` — баннеры 1280×640 для GitHub/соцсетей;
   - `logo-mark.svg` — векторный исходник знака.
-- Использование в README: тёмная тема (`banner-dark.png`, `logo-dark.png`) — шапка README отображается в едином тёмном оформлении без переключения по `prefers-color-scheme`.
+- Использование в README: `<picture>` с `prefers-color-scheme: dark` → `logo-dark.png`, иначе `logo-light.png`.
 - Не перекрашивайте знак, не ставьте его на загруженный фон без плитки, не растягивайте.
 
 ## 3. Цвет

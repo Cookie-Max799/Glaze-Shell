@@ -1,6 +1,6 @@
 # Разработка Glaze Shell
 
-Инструкции по сборке, запуску, тестированию и отладке проекта. Обзор и возможности — в [README.md](../README.md), архитектура и решения по стадиям — в [ARCHITECTURE.md](ARCHITECTURE.md), план этапов — в [ROADMAP.md](ROADMAP.md).
+Инструкции по сборке, запуску, тестированию и отладке. Обзор проекта и возможности — в [README](../README.md), использование приложения — в [USAGE.md](USAGE.md), архитектура — в [ARCHITECTURE.md](ARCHITECTURE.md), стадии — в [ROADMAP.md](ROADMAP.md), релиз — в [RELEASE.md](RELEASE.md).
 
 ## Требования
 
@@ -73,6 +73,13 @@ dotnet build --configuration Release --arch x64
 dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 ```
 
+Или через скрипт быстрого запуска:
+
+```powershell
+glaze.cmd Debug
+glaze.cmd Release
+```
+
 Альтернативно можно запустить собранный исполняемый файл:
 
 ```powershell
@@ -83,7 +90,19 @@ dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 
 Из Visual Studio: откройте `GlazeShell.slnx`, выберите проект `GlazeShell.App` как стартовый, платформу `x64` и нажмите F5.
 
-### 6. Скрипт быстрого запуска
+### 6. Проверка тестами
+
+```powershell
+dotnet test
+```
+
+Подробности и известные особенности — в разделе [Тестирование](#тестирование).
+
+### 7. Данные и логи приложения
+
+Каталог пользовательских данных, его структура и содержимое описаны в [USAGE.md](USAGE.md#данные-и-логи).
+
+## Скрипт быстрого запуска
 
 В корне репозитория лежит `glaze.cmd`: двойной клик по нему собирает и запускает приложение (консоль закрывается, приложение продолжает работать). Конфигурация по умолчанию — `Debug`, можно передать `Release`:
 
@@ -91,24 +110,6 @@ dotnet run --project .\src\GlazeShell.App\GlazeShell.App.csproj
 glaze.cmd
 glaze.cmd Release
 ```
-
-## Данные и логи приложения
-
-При первом запуске создаётся каталог пользовательских данных `%LOCALAPPDATA%\GlazeShell`:
-
-```text
-%LOCALAPPDATA%\GlazeShell\
-├── config.json     # имя приложения и каталог данных
-├── settings.json   # пользовательские настройки
-├── layout.json     # вкладки, категории и раскладка
-├── themes/         # пользовательские темы (*.json)
-├── backups/        # резервные копии перед миграциями
-├── recovery/       # изолированные повреждённые документы
-└── logs/
-    └── glaze-shell.log   # startup-лог и диагностика
-```
-
-Имя каталога данных задаётся полем `dataDirectoryName` в `config.json`, поэтому путь к данным задаётся пользователем без правки кода. При смене каталога лог текущей сессии остаётся в исходном каталоге.
 
 ## Тестирование
 
@@ -119,13 +120,13 @@ dotnet test --configuration Release
 
 Тестовые проекты:
 
-- `tests/GlazeShell.Core.Tests` — модели, `EventManager`, `InMemorySettingsManager`, discovery service, `ApplicationProcessMatcher`, `DesktopManager`, `MonitorLayoutBinding`, `UserDataDirectoryName`, `ThemeManager`.
-- `tests/GlazeShell.Data.Tests` — `JsonUserDataStoreTests`, `SchemaMigrationRunnerTests`, `PersistenceServicesTests`, `ThemeStoreTests`; каждый тест работает в собственном временном каталоге (`TempUserData`), который удаляется после теста.
-- `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`, `WindowManagerTests`, `MonitorManagerTests`, `ProcessEventMonitorTests`, `ShellEventCoordinatorTests`, `SingleInstanceHelperTests`.
+- `tests/GlazeShell.Core.Tests` — модели и события (`CoreModel`, `GlazeEvents`), `EventManager`, `EventCoalescer`, `EventLatencyRecorder`, `InMemorySettingsManager`, `ApplicationProcessMatcher`, `ApplicationIdentity`, `ApplicationDiscoveryOptions`, `ApplicationDiscoveryService` (на фейковых источниках), `DesktopManager`, `MonitorLayoutBinding`, `MonitorMapLayout`, `UserDataDirectoryName`, `UserDataPaths`, `UserSettings`, `ThemeManager`, диагностика (`PerformanceSession`, `PerformanceMonitor`, `ProcessMetricsCollector`), `LogRedactor`, `FileLogger`.
+- `tests/GlazeShell.Data.Tests` — `JsonUserDataStoreTests`, `SchemaMigrationRunnerTests`, `PersistenceServicesTests`, `ThemeStoreTests`, `BoundedTextFileTests`, `UserDataDirectoryTests`, `PersistenceLimitsTests`, мапперы документов (`LayoutDocumentMapperTests`, `SettingsDocumentMapperTests`, `ConfigurationDocumentMapperTests`) и `MigrationResultTests`; каждый тест работает в собственном временном каталоге (`TempUserData`), который удаляется после теста.
+- `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`, `ProcessInspectorTests`, `ProcessWatchOptionsTests`, `WindowManagerTests`, `WindowEventMonitorTests`, `MonitorManagerTests`, `DisplaySignalTests`, `ProcessEventMonitorTests`, `ShellEventCoordinatorTests`, `SingleInstanceHelperTests`.
 
 `Windows.Tests` использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо COM `IShellLinkW.Save`, который в текущем окружении возвращает `0x80070002`.
 
-Текущий статус: 309 tests (`Core.Tests` 165/165, `Data.Tests` 68/68, `Windows.Tests` 76/76 при изолированном запуске) в Debug и Release; build — 0 warnings / 0 errors. В общем прогоне допустим единственный провал — environment-tolerant flake `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` (см. ниже); изолированный запуск `GlazeShell.Windows.Tests` даёт 76/76.
+Текущий статус: 475 tests (`Core.Tests` 250/250, `Data.Tests` 129/129, `Windows.Tests` 96/96 при изолированном запуске) в Debug и Release; build — 0 warnings / 0 errors. В общем прогоне допустим единственный провал — environment-tolerant flake `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` (см. ниже); изолированный запуск `GlazeShell.Windows.Tests` даёт 96/96.
 
 Остальные environment-tolerant тесты не падают из-за недоступных API, а завершаются `Inconclusive` с объясняющим warning: `AppsFolderSourceTests` и `MonitorManagerTests`. `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` зависит от доставки `EVENT_OBJECT_DESTROY` для собственного процесса и потому чувствителен к параллелизму прогонов: таймаут ожидания события истекает, когда тестовые сборки запускаются одновременно. Поведение воспроизводится и на commit до Stage 7, то есть не связано с persistence или темами; изолированный запуск `GlazeShell.Windows.Tests` проходит стабильно.
 
@@ -134,6 +135,15 @@ dotnet test --configuration Release
 ```powershell
 dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --configuration Release
 ```
+
+## Устранение неполадок
+
+| Симптом | Причина и решение |
+| --- | --- |
+| Приложения MSIX не обнаруживаются | `IShellItemArray` AppsFolder недоступен. Классические `.lnk` из меню «Пуск» продолжают работать. |
+| `.lnk` не резолвятся через COM, `IShellLinkW.Save` возвращает `0x80070002` | Известная особенность среды. Резолв идёт managed-парсером `ShellLinkData`; создание фикстур использует managed-writer. |
+| Фокус окна не срабатывает | Фокусировка best-effort: Windows может отклонить `SetForegroundWindow` из-за foreground lock. Это ограничение системы, а не ошибка. |
+| Второй запуск сразу завершается | Так и задумано: работает уже запущенный экземпляр, его окно поднимается, а новый процесс закрывается. Закройте существующее окно, чтобы запустить заново. |
 
 ## Правила кода
 
@@ -154,18 +164,7 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 6. Проверить diff.
 7. Создать отдельный commit в стиле проекта.
 
-Сообщения коммитов пишутся на русском языке в свободной форме — это фактический стиль истории проекта (см. `git log`). Release workflow появится на Stage 26; до его утверждения нельзя публиковать installer или собранные binaries как релиз.
-
-## Устранение неполадок
-
-| Симптом | Причина и решение |
-| --- | --- |
-| `dotnet run` собирает долго или зависает | Первый restore NuGet. Дождитесь завершения или запустите `dotnet restore` отдельно. |
-| Ошибка о несовместимом SDK | Версия SDK вне диапазона `global.json`. Установите .NET SDK 10 (`10.0.401` или совместимый). |
-| Пустой список MSIX-приложений, warning `0x800401E5` | Ограничение окружения: `IShellItemArray` AppsFolder недоступен. Классические `.lnk` из меню «Пуск» продолжают работать. |
-| `.lnk` не резолвятся через COM, `IShellLinkW.Save` возвращает `0x80070002` | Известная особенность среды. Резолв идёт managed-парсером `ShellLinkData`; создание фикстур использует managed-writer. |
-| Фокус окна не срабатывает | Фокусировка best-effort: Windows может отклонить `SetForegroundWindow` из-за foreground lock. Это ограничение системы, а не ошибка. |
-| Второй запуск сразу завершается | Так и задумано: работает уже запущенный экземпляр, его окно поднимается, а новый процесс закрывается. Закройте существующее окно, чтобы запустить заново. |
+Сообщения коммитов пишутся на русском языке в свободной форме — это фактический стиль истории проекта (см. `git log`). Процесс выпуска версии, версионирование и чеклист релиза описаны в [RELEASE.md](RELEASE.md). Автоматический CI не вводится: сборку и публикацию выполняют локально по чеклисту. Приложение поставляется как unpackaged, Installer и MSIX отсутствуют, поэтому собранный `GlazeShell.exe` не публикуется как готовый релиз для конечных пользователей.
 
 ## Известные ограничения
 
