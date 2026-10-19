@@ -8,6 +8,7 @@ using GlazeShell.Core.Glance;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
 using GlazeShell.Windows.Applications;
+using GlazeShell.Windows.Audio;
 using GlazeShell.Windows.SystemStatus;
 using Microsoft.UI.Dispatching;
 
@@ -54,6 +55,7 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         IWindowManager windows,
         IApplicationLauncher launcher,
         GlanceSearchCatalog catalog,
+        ISettingsManager settings,
         IEventManager events,
         DispatcherQueue dispatcher)
     {
@@ -61,19 +63,30 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
+        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(events);
+
+        QuickSettings = new QuickSettingsViewModel(settings, new SystemVolumeProvider());
 
         _foregroundChanged = events.Subscribe<ForegroundWindowChanged>(OnForegroundChanged);
 
         _timer = _dispatcher.CreateTimer();
         _timer.Interval = RefreshInterval;
-        _timer.Tick += (_, _) => RefreshClockAndStatus();
+        _timer.Tick += (_, _) =>
+        {
+            RefreshClockAndStatus();
+            QuickSettings.RefreshVolume();
+        };
+
         _timer.Start();
 
         RefreshClockAndStatus();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>Состояние popover «Центр управления» (D1).</summary>
+    public QuickSettingsViewModel QuickSettings { get; }
 
     public string AppName
     {
@@ -166,6 +179,13 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
                 return;
             }
 
+            // Поиск и «Центр управления» не показываются одновременно: они занимают
+            // одну и ту же полосу под панелью.
+            if (HasQuery)
+            {
+                QuickSettings.IsOpen = false;
+            }
+
             OnPropertyChanged(nameof(HasQuery));
             _ = UpdateResultsAsync();
         }
@@ -199,6 +219,20 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>Очищает строку поиска вместе с панелью результатов.</summary>
     public void ClearSearch() => SearchText = string.Empty;
+
+    /// <summary>
+    /// Открывает или закрывает popover «Центр управления» (D1). Открытие закрывает поиск:
+    /// обе панели живут под верхней панелью в одном месте.
+    /// </summary>
+    public void ToggleQuickSettings()
+    {
+        var open = !QuickSettings.IsOpen;
+        ClearSearch();
+        QuickSettings.IsOpen = open;
+    }
+
+    /// <summary>Закрывает popover «Центр управления», не трогая поиск.</summary>
+    public void CloseQuickSettings() => QuickSettings.IsOpen = false;
 
     /// <summary>Сдвигает выбор по списку результатов на <paramref name="offset"/> позиций.</summary>
     public void MoveSelection(int offset)
@@ -332,26 +366,13 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>Открывает системную цель оболочки (например, <c>ms-settings:display</c>) через ShellExecute.</summary>
-    private static void OpenShellTarget(string target)
-    {
-        try
-        {
-            Process.Start(new ProcessStartInfo
-            {
-                FileName = target,
-                UseShellExecute = true,
-            });
-        }
-        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
-        {
-            Trace.WriteLine($"GlazeShell.Glance: opening '{target}' failed. {exception}");
-        }
-    }
+    private static void OpenShellTarget(string target) => ShellTargets.Open(target);
 
     public void Dispose()
     {
         _timer.Stop();
         _foregroundChanged.Dispose();
+        QuickSettings.Dispose();
     }
 
     private void OnForegroundChanged(ForegroundWindowChanged changed)

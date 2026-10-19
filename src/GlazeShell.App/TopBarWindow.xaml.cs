@@ -27,8 +27,17 @@ public sealed partial class TopBarWindow : Window
     private const int TopOffset = 18;
     private const int SideMargin = 24;
 
+    /// <summary>Ширина строки поиска: она же служит ограничением при измерении панели результатов.</summary>
+    private const int SearchWidth = 440;
+
+    /// <summary>Ширина popover «Центр управления» (D1): как у popover-карточки папки в DESIGN §7.2.</summary>
+    private const int QuickSettingsWidth = 380;
+
     /// <summary>Радиус pill-плиток и панели результатов: половина высоты строки, то есть капсула (DESIGN §7.1).</summary>
     private const int PillRadius = BarHeight / 2;
+
+    /// <summary>Радиус всплывающих панелей (DESIGN §4: popover — 32).</summary>
+    private const int PanelRadius = 32;
 
     private readonly Window _owner;
     private readonly ThemeApplicator _themes;
@@ -57,6 +66,7 @@ public sealed partial class TopBarWindow : Window
             windows,
             launcher,
             new GlanceSearchCatalog(applications, windows),
+            settings,
             events,
             DispatcherQueue);
 
@@ -74,8 +84,10 @@ public sealed partial class TopBarWindow : Window
         SearchPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         StatusPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         ResultsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
+        QuickSettingsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
 
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        ViewModel.QuickSettings.PropertyChanged += OnQuickSettingsPropertyChanged;
         ViewModel.ActivateRequested += OnActivateRequested;
         _settingsChanged = events.Subscribe<SettingsChanged>(OnSettingsChanged);
         Activated += OnActivated;
@@ -83,6 +95,7 @@ public sealed partial class TopBarWindow : Window
         Closed += (_, _) =>
         {
             ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            ViewModel.QuickSettings.PropertyChanged -= OnQuickSettingsPropertyChanged;
             ViewModel.ActivateRequested -= OnActivateRequested;
             ViewModel.Dispose();
             _settingsChanged.Dispose();
@@ -113,6 +126,7 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
+        ViewModel.CloseQuickSettings();
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
         SearchBox.Focus(FocusState.Programmatic);
@@ -142,8 +156,8 @@ public sealed partial class TopBarWindow : Window
 
     /// <summary>
     /// Раскладывает окно по основному монитору (24 px по бокам, 18 px сверху) и увеличивает
-    /// его по высоте под панель результатов Glance. Рабочая область не резервируется, поэтому
-    /// панель не смещает окна приложений.
+    /// его по высоте под панель результатов Glance или popover «Центр управления». Рабочая
+    /// область не резервируется, поэтому панель не смещает окна приложений.
     /// </summary>
     private void UpdateOverlayBounds()
     {
@@ -165,15 +179,14 @@ public sealed partial class TopBarWindow : Window
         {
             // Панель измеряется независимо от текущей высоты окна: иначе Auto-строка
             // получила бы ноль доступной высоты и её натуральный размер был бы потерян.
-            var constraint = SearchPill.ActualWidth > 0 ? SearchPill.ActualWidth : 440;
-            ResultsPanel.Measure(new Size(constraint, double.PositiveInfinity));
-
-            var panelHeight = ResultsPanel.DesiredSize.Height;
-
-            if (panelHeight > 0)
-            {
-                logicalHeight = BarHeight + panelHeight;
-            }
+            var constraint = SearchPill.ActualWidth > 0 ? SearchPill.ActualWidth : SearchWidth;
+            logicalHeight += MeasurePanelHeight(ResultsPanel, constraint);
+        }
+        else if (ViewModel.QuickSettings.IsOpen)
+        {
+            // У popover «Центр управления» отступ сверху уже равен строке pill плюс зазор,
+            // поэтому он прижат к правому краю и сам задаёт нужную высоту окна.
+            logicalHeight = MeasurePanelHeight(QuickSettingsPanel, QuickSettingsWidth);
         }
 
         var pixelHeight = Math.Max(1, (int)Math.Round(logicalHeight * scale));
@@ -188,9 +201,25 @@ public sealed partial class TopBarWindow : Window
     }
 
     /// <summary>
-    /// Вырезает из окна три pill и панель результатов Glance по их фактическим границам:
-    /// системный acrylic-backdrop рисуется только внутри этих фигур, поэтому панель выглядит
-    /// как плавающие стекла, а не как одна полоса во всю ширину (DESIGN §7.1).
+    /// Измеряет всплывающую панель, пока её строка сетки ещё не получила высоту. Видимость
+    /// принудительно включается на время замера: свёрнутый элемент сообщил бы нулевой размер,
+    /// а окно осталось бы высотой в одну строку.
+    /// </summary>
+    private static double MeasurePanelHeight(FrameworkElement panel, double width)
+    {
+        var visibility = panel.Visibility;
+        panel.Visibility = Visibility.Visible;
+        panel.Measure(new Size(Math.Max(1, width), double.PositiveInfinity));
+        var height = panel.DesiredSize.Height;
+        panel.Visibility = visibility;
+        return height;
+    }
+
+    /// <summary>
+    /// Вырезает из окна три pill и всплывающую панель (результаты Glance или «Центр
+    /// управления») по их фактическим границам: системный acrylic-backdrop рисуется только
+    /// внутри этих фигур, поэтому панель выглядит как плавающие стёкла, а не как одна полоса
+    /// во всю ширину (DESIGN §7.1). Pills — капсулы, у панелей радиус popover (DESIGN §4).
     /// </summary>
     private void UpdateWindowRegion()
     {
@@ -200,16 +229,22 @@ public sealed partial class TopBarWindow : Window
         }
 
         var scale = OverlayWindow.GetScaleFactor(_hwnd);
-        var radius = (int)Math.Round(PillRadius * scale);
-        var regions = new List<PixelRect>(4);
+        var pillRadius = (int)Math.Round(PillRadius * scale);
+        var panelRadius = (int)Math.Round(PanelRadius * scale);
+        var regions = new List<PixelRegion>(5);
 
-        AddRegion(AppPill);
-        AddRegion(SearchPill);
-        AddRegion(StatusPill);
+        AddRegion(AppPill, pillRadius);
+        AddRegion(SearchPill, pillRadius);
+        AddRegion(StatusPill, pillRadius);
 
         if (ViewModel.HasResults)
         {
-            AddRegion(ResultsPanel);
+            AddRegion(ResultsPanel, panelRadius);
+        }
+
+        if (ViewModel.QuickSettings.IsOpen)
+        {
+            AddRegion(QuickSettingsPanel, panelRadius);
         }
 
         if (regions.Count == 0)
@@ -217,9 +252,9 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
-        OverlayWindow.ApplyRoundedRegions(_hwnd, regions, radius);
+        OverlayWindow.ApplyRoundedRegions(_hwnd, regions);
 
-        void AddRegion(FrameworkElement element)
+        void AddRegion(FrameworkElement element, int radius)
         {
             if (element.ActualWidth <= 0 || element.ActualHeight <= 0)
             {
@@ -229,11 +264,13 @@ public sealed partial class TopBarWindow : Window
             var elementBounds = element.TransformToVisual(Root).TransformBounds(
                 new Rect(0, 0, element.ActualWidth, element.ActualHeight));
 
-            regions.Add(new PixelRect(
-                (int)Math.Round(elementBounds.X * scale),
-                (int)Math.Round(elementBounds.Y * scale),
-                (int)Math.Round(elementBounds.Width * scale),
-                (int)Math.Round(elementBounds.Height * scale)));
+            regions.Add(new PixelRegion(
+                new PixelRect(
+                    (int)Math.Round(elementBounds.X * scale),
+                    (int)Math.Round(elementBounds.Y * scale),
+                    (int)Math.Round(elementBounds.Width * scale),
+                    (int)Math.Round(elementBounds.Height * scale)),
+                radius));
         }
     }
 
@@ -247,6 +284,25 @@ public sealed partial class TopBarWindow : Window
         Activate();
         SearchBox.Focus(FocusState.Programmatic);
     }
+
+    /// <summary>
+    /// Клик по правому pill открывает «Центр управления» (D1): окно разрешает активацию,
+    /// потому что в popover есть ползунок и другие элементы управления.
+    /// </summary>
+    private void OnStatusPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        OverlayWindow.SetNonActivating(_hwnd, false);
+        Activate();
+        ViewModel.ToggleQuickSettings();
+    }
+
+    private void OnToggleMute(object sender, RoutedEventArgs e) => ViewModel.QuickSettings.ToggleMute();
+
+    private void OnOpenNetworkSettings(object sender, RoutedEventArgs e) => ShellTargets.Open("ms-settings:network");
+
+    private void OnOpenBluetoothSettings(object sender, RoutedEventArgs e) => ShellTargets.Open("ms-settings:bluetooth");
+
+    private void OnOpenSoundSettings(object sender, RoutedEventArgs e) => ShellTargets.Open("ms-settings:sound");
 
     /// <summary>Клавиатура Glance: стрелки двигают выбор, Enter открывает, Escape очищает.</summary>
     private async void OnSearchKeyDown(object sender, KeyRoutedEventArgs e)
@@ -297,6 +353,18 @@ public sealed partial class TopBarWindow : Window
     }
 
     /// <summary>
+    /// Размер окна и регион зависят от видимости «Центра управления»: при открытии popover
+    /// окно растёт по высоте, при закрытии возвращается к строке pill.
+    /// </summary>
+    private void OnQuickSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(QuickSettingsViewModel.IsOpen))
+        {
+            UpdateOverlayBounds();
+        }
+    }
+
+    /// <summary>
     /// Команда поиска <c>open-shell</c> просит показать главное окно: панель им не владеет,
     /// поэтому переключение выполняет владелец.
     /// </summary>
@@ -331,7 +399,8 @@ public sealed partial class TopBarWindow : Window
         OverlayWindow.SetNonActivating(_hwnd, true);
 
         // Клик по рабочему столу или другому приложению — это «light dismiss»: поиск
-        // закрывается вместе с панелью результатов.
+        // и «Центр управления» закрываются вместе со своими панелями.
+        ViewModel.CloseQuickSettings();
         ViewModel.ClearSearch();
     }
 

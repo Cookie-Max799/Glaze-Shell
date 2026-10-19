@@ -199,6 +199,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly IDisposable _windowClosed;
     private readonly IDisposable _foregroundChanged;
     private readonly IDisposable _windowStateChanged;
+    private readonly IDisposable _settingsChanged;
     private readonly EventCoalescer _runningRefresh;
 
     private IReadOnlyList<ApplicationListViewModel> _visible = Array.Empty<ApplicationListViewModel>();
@@ -244,6 +245,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _displayChanged = events.Subscribe<DisplayChanged>(changed => ApplyMonitors(changed.Monitors));
         _processStarted = events.Subscribe<ProcessStarted>(changed => QueueRunningRefresh(changed.ExecutablePath, changed.ProcessName));
         _processExited = events.Subscribe<ProcessExited>(changed => QueueRunningRefresh(changed.ExecutablePath, changed.ProcessName));
+
+        // Тему можно поменять и не из главного окна (popover «Центр управления», D1):
+        // тогда переключатели здесь должны показать новое значение и перекрасить окно.
+        _settingsChanged = events.Subscribe<SettingsChanged>(OnSettingsChanged);
 
         _runningRefresh = new EventCoalescer(
             RunningRefreshDelay,
@@ -1091,6 +1096,21 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>
+    /// Подхватывает тему и акцент, изменённые вне главного окна (popover «Центр управления»),
+    /// и просит окно применить новое оформление.
+    /// </summary>
+    private void OnSettingsChanged(SettingsChanged changed)
+    {
+        _themeMode = changed.Settings.ThemeMode;
+        _accentId = changed.Settings.AccentId;
+
+        OnPropertyChanged(nameof(SelectedThemeMode));
+        OnPropertyChanged(nameof(SelectedAccent));
+
+        ThemeSelectionChanged?.Invoke(this, new ThemeSelectionChangedEventArgs(_themeMode, _accentId));
+    }
+
+    /// <summary>
     /// Сохраняет выбранную тему и акцент и уведомляет окно, чтобы оно применило оформление.
     /// </summary>
     private void ApplyThemeSelection()
@@ -1243,6 +1263,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _displayChanged.Dispose();
         _processStarted.Dispose();
         _processExited.Dispose();
+        _settingsChanged.Dispose();
         _runningRefresh.Dispose();
         _runningProbe.Cancel();
         _runningProbe.Dispose();

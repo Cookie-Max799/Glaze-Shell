@@ -10,6 +10,14 @@ namespace GlazeShell.Windows.WindowManagement;
 public readonly record struct PixelRect(int X, int Y, int Width, int Height);
 
 /// <summary>
+/// Скруглённый прямоугольник региональной маски с собственным радиусом: у капсул-плиток
+/// радиус равен половине высоты, у popover он больше (DESIGN §4).
+/// </summary>
+/// <param name="Bounds">Границы в физических пикселях окна.</param>
+/// <param name="CornerRadius">Радиус скругления углов.</param>
+public readonly record struct PixelRegion(PixelRect Bounds, int CornerRadius);
+
+/// <summary>
 /// Настройка окна-оверлея (верхняя панель): поверх всех окон, без записи в панели задач,
 /// со скруглёнными углами и возможностью показать окно без перехвата фокуса.
 /// </summary>
@@ -127,20 +135,44 @@ public static class OverlayWindow
     /// </summary>
     public static bool ApplyRoundedRegions(nint hwnd, IReadOnlyList<PixelRect> regions, int cornerRadius)
     {
+        if (regions is null || regions.Count == 0)
+        {
+            return false;
+        }
+
+        var regionsWithRadius = new List<PixelRegion>(regions.Count);
+
+        foreach (var rect in regions)
+        {
+            regionsWithRadius.Add(new PixelRegion(rect, cornerRadius));
+        }
+
+        return ApplyRoundedRegions(hwnd, regionsWithRadius);
+    }
+
+    /// <summary>
+    /// Придаёт окну форму набора скруглённых прямоугольников, каждый со своим радиусом.
+    /// Возвращает <c>false</c>, если маску задать не удалось: тогда окно остаётся прямоугольным.
+    /// </summary>
+    public static bool ApplyRoundedRegions(nint hwnd, IReadOnlyList<PixelRegion> regions)
+    {
         if (hwnd == 0 || regions is null || regions.Count == 0)
         {
             return false;
         }
 
-        var diameter = Math.Max(0, cornerRadius) * 2;
         nint combined = 0;
 
-        foreach (var rect in regions)
+        foreach (var region in regions)
         {
+            var rect = region.Bounds;
+
             if (rect.Width <= 0 || rect.Height <= 0)
             {
                 continue;
             }
+
+            var diameter = Math.Max(0, region.CornerRadius) * 2;
 
             var part = Gdi32.CreateRoundRectRgn(
                 rect.X,

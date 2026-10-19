@@ -139,7 +139,8 @@
                 Background="{StaticResource GlazeGlassBrush}"
                 BorderBrush="{StaticResource GlazeGlassBorderBrush}"
                 BorderThickness="1"
-                CornerRadius="24">
+                CornerRadius="24"
+                PointerPressed="OnStatusPointerPressed">
                 <StackPanel
                     Orientation="Horizontal"
                     Spacing="14"
@@ -283,5 +284,122 @@
                 </Grid>
             </Border>
         </Grid>
+
+        <!--  Popover «Центр управления» (D1): слой поверх сетки, прижат к правому краю
+              (под правым pill). Отдельный слой нужен потому, что колонка статуса имеет
+              ширину Auto: широкий дочерний элемент растянул бы сам pill.  -->
+        <Border
+            x:Name="QuickSettingsPanel"
+            Width="380"
+            Margin="0,56,0,0"
+            Padding="16"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Background="{StaticResource GlazeGlassBrush}"
+            BorderBrush="{StaticResource GlazeGlassBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="32"
+            Visibility="{x:Bind ViewModel.QuickSettings.IsOpen, Mode=OneWay}">
+            <StackPanel Spacing="16">
+                <TextBlock
+                    FontSize="19"
+                    FontWeight="SemiBold"
+                    Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                    Text="Центр управления" />
+
+                <StackPanel Spacing="8">
+                    <TextBlock
+                        FontSize="11.5"
+                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                        Text="ЗВУК" />
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Button
+                            Grid.Column="0"
+                            Width="40"
+                            Height="40"
+                            Padding="0"
+                            Background="{StaticResource GlazeElevatedBrush}"
+                            BorderThickness="0"
+                            Click="OnToggleMute"
+                            CornerRadius="20"
+                            IsEnabled="{x:Bind ViewModel.QuickSettings.IsVolumeAvailable, Mode=OneWay}"
+                            ToolTipService.ToolTip="Выключить звук">
+                            <FontIcon
+                                FontSize="15"
+                                Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                                Glyph="{x:Bind ViewModel.QuickSettings.VolumeGlyph, Mode=OneWay}" />
+                        </Button>
+
+                        <Slider
+                            Grid.Column="1"
+                            VerticalAlignment="Center"
+                            IsEnabled="{x:Bind ViewModel.QuickSettings.IsVolumeAvailable, Mode=OneWay}"
+                            Maximum="100"
+                            Minimum="0"
+                            Value="{x:Bind ViewModel.QuickSettings.VolumePercent, Mode=TwoWay}" />
+
+                        <TextBlock
+                            Grid.Column="2"
+                            Width="64"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                            Text="{x:Bind ViewModel.QuickSettings.VolumeLabel, Mode=OneWay}"
+                            TextAlignment="Right" />
+                    </Grid>
+
+                    <TextBlock
+                        FontSize="11.5"
+                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                        Text="Устройство вывода не найдено"
+                        Visibility="{x:Bind ViewModel.QuickSettings.HasNoVolume, Mode=OneWay}" />
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <TextBlock
+                        FontSize="11.5"
+                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                        Text="ОФОРМЛЕНИЕ" />
+                    <ComboBox
+                        HorizontalAlignment="Stretch"
+                        ItemsSource="{x:Bind ViewModel.QuickSettings.ThemeModeOptions}"
+                        SelectedItem="{x:Bind ViewModel.QuickSettings.SelectedThemeMode, Mode=TwoWay}"
+                        ToolTipService.ToolTip="Тема оформления Glaze Shell">
+                        <ComboBox.ItemTemplate>
+                            <DataTemplate x:DataType="presentation:ThemeModeOption">
+                                <TextBlock Text="{x:Bind Label}" />
+                            </DataTemplate>
+                        </ComboBox.ItemTemplate>
+                    </ComboBox>
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <TextBlock
+                        FontSize="11.5"
+                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                        Text="СИСТЕМА" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button
+                            Click="OnOpenNetworkSettings"
+                            Content="Сеть"
+                            CornerRadius="16" />
+                        <Button
+                            Click="OnOpenBluetoothSettings"
+                            Content="Bluetooth"
+                            CornerRadius="16" />
+                        <Button
+                            Click="OnOpenSoundSettings"
+                            Content="Звук"
+                            CornerRadius="16" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </Border>
     </Grid>
 </Window>
