@@ -39,6 +39,7 @@ GlazeShell/
 │   │   ├── Configuration/
 │   │   ├── Discovery/
 │   │   ├── Events/
+│   │   ├── Glance/
 │   │   ├── Interfaces/
 │   │   ├── Models/
 │   │   ├── Persistence/
@@ -107,6 +108,8 @@ WinUI 3 executable и composition root приложения. Содержит о
 - `ModelValidation` — единая валидация входных данных моделей.
 
 Discovery models: `ApplicationCandidate`, `ApplicationDiscoveryResult`, `ApplicationDiscoveryOptions`, `ApplicationIdentity`, `ApplicationLaunchResult`, `PackageIdentity`. Сопоставление процессов и окон с приложением выполняет framework-free `ApplicationProcessMatcher` (`Discovery/ApplicationProcessMatcher.cs`): одна и та же логика используется лаунчером и UI.
+
+Glance: `GlanceResult`, `GlanceResultKind` и `GlanceRanker` (`Glance/`) — framework-free ядро глобального поиска (B1). `GlanceResult` — нейтральный результат (категория, идентификатор, название, пояснение, ключевые слова), а `GlanceRanker` — чистая функция «кандидаты + запрос → топ-N» с весами по типу совпадения; Win32 и UI в него не проникают, поэтому ранжирование тестируется без WinUI.
 
 Интерфейсы: `IApplicationManager`, `IApplicationLauncher`, `IApplicationDiscoverySource`, `IProcessInspector`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IUserDataStore`, `IThemeManager`, `IEventManager`, `IMonitorManager`.
 
@@ -362,8 +365,9 @@ MVP закрывал инженерный фундамент (Stage 0–13); Pha
 - Позиционирование выполняется в физических пикселях относительно `DisplayArea` основного монитора с масштабированием по DPI (`OverlayWindow.GetScaleFactor`), поэтому панель не «плывёт» на мониторах с масштабом, отличным от 100%. Скругление окна задаётся через `DwmSetWindowAttribute` (corner preference), а по границам трёх pill окно дополнительно обрезается региональной маской `OverlayWindow.ApplyRoundedRegions` (`SetWindowRgn` + `CreateRoundRectRgn`/`CombineRgn`): системный Acrylic-фон заполняет только плитки, а промежутки пропускают рабочий стол.
 - Native-детали панели инкапсулированы в `GlazeShell.Windows`, чтобы Core не знал об `HWND`: `WindowManagement/OverlayWindow` (topmost/non-activating/скругление и регион/DPI), `SystemStatus/SystemStatusProvider` (батарея через `GetSystemPowerStatus` и сеть через `NetworkInterface`) и `Applications/ApplicationNameResolver` (понятное имя приложения через `FileDescription`).
 - Состояние панели — `Presentation/TopBarViewModel`: имя и расположение foreground-приложения (событие `ForegroundWindowChanged`, процесс запрашивается через `IWindowManager.GetWindow`), часы с датой, батарея и сеть. Обновление раз в секунду через `DispatcherQueueTimer`; собственный процесс (`Environment.ProcessId`) исключается.
-- Включение и выключение панели связано с настройкой `topBarEnabled` (`settings.json`): `MainViewModel` сохраняет её, `PersistingSettingsManager` публикует `SettingsChanged`, а `App` создаёт или закрывает `TopBarWindow`. Панель следует за сменой оформления (H1) и системной темой; фокус строки поиска включается только по клику.
-- Ограничения базового слайса: одна панель на основном мониторе (не на каждый монитор), рабочая область не резервируется (окна могут перекрывать панель), иконки трея не размещаются, popover часов и календаря (D4) не реализован, `Ctrl K` — визуальная подсказка без обработчика, уровень громкости пока не читается.
+- Включение и выключение панели связано с настройкой `topBarEnabled` (`settings.json`): `MainViewModel` сохраняет её, `PersistingSettingsManager` публикует `SettingsChanged`, а `App` создаёт или закрывает `TopBarWindow`. Панель следует за сменой оформления (H1) и системной темой; фокус строки поиска включается кликом или глобальной клавишей `Ctrl K`.
+- Строка поиска подключена к Glance (B1): результаты показываются в том же acrylic-окне отдельной стеклянной панелью под строкой поиска, окно при этом увеличивает высоту и расширяет региональную маску на панель результатов. Отдельное popup-окно не используется, чтобы не терять фокус ввода и сохранить настоящий Acrylic.
+- Ограничения базового слайса: одна панель на основном мониторе (не на каждый монитор), рабочая область не резервируется (окна могут перекрывать панель), иконки трея не размещаются, popover часов и календаря (D4) не реализован, уровень громкости пока не читается.
 
 ## Продуктовый UI Phase 1 — A1 (dock)
 
@@ -375,6 +379,17 @@ MVP закрывал инженерный фундамент (Stage 0–13); Pha
 - Подъём и масштаб плиток выполняет Composition-анимация (180 мс): на каждое движение курсора каждая плитка получает значение по гауссову спаду от расстояния до курсора (`exp(-(d/σ)²)`, σ ≈ 1.2 ширины плитки), поэтому под курсором вырастает непрерывный «горб» из нескольких плиток, как в dock macOS. Под курсором — 16 px подъёма и масштаб 1.2, сосед — около 6 px и 1.06 (DESIGN §7.5). Верхний отступ окна (24 px) выбран так, чтобы даже увеличенная плитка не выходила за пределы капсулы. Подпись плитки — стилизованный pill-`ToolTip` (13 px/600) в отдельном popup-окне, поэтому региональная маска не обрезает её. Вместо размытого ореола используется акцентная рамка под курсором: отдельный визуальный слой с blur не создаётся.
 - Замена панели задач вынесена в `GlazeShell.Windows` (`Shell/TaskbarHider`): окно `Shell_TrayWnd` не уничтожается и не отключается в реестре, а сдвигается `SetWindowPos` за нижнюю границу своего монитора (на 16 px). Исходное положение запоминается и возвращается при выходе, выключении dock или настройки; в `Shutdown` панель восстанавливается первым шагом, чтобы сбой остальных очисток не оставил пользователя без панели задач. После перезапуска Explorer или смены разрешения скрытие повторяется по `TaskbarCreated`/`WM_DISPLAYCHANGE`, а `RestoreIfOffScreen` при следующем запуске возвращает панель, если предыдущий процесс завершился аварийно.
 - Скрытие включается только при `dockEnabled && dockReplacesTaskbar`, поэтому выключение dock не оставляет систему без панели задач. Обе настройки добавлены в `settings.json` без повышения `schemaVersion`: отсутствующие поля дают dock и замену панели задач включёнными по умолчанию.
+
+## Продуктовый UI Phase 1 — B1 (Glance)
+
+Четвёртая функция Phase 1 — B1 «Glance»: глобальный поиск и лаунчер. Реализован базовый слайс (приложения, открытые окна, системные настройки и команды); полную спецификацию (файлы, калькулятор и конвертации, история буфера, веб-fallback) см. в [FEATURES.md](FEATURES.md).
+
+- Ранжирование вынесено в framework-free ядро `GlazeShell.Core/Glance`, поэтому оно тестируется без WinUI: `GlanceResult`/`GlanceResultKind` — нейтральная модель результата, `GlanceRanker` — чистая функция «кандидаты + запрос → топ-N». Веса совпадений: точное (1000) > префикс (800) > начало слова (600) > вхождение (400) > пояснение (250) > ключевые слова (150); должны совпасть все слова запроса, пустой запрос даёт пустой список.
+- Глобальная горячая клавиша — `GlazeShell.Windows/Shell/GlobalHotkey`: `RegisterHotKey` требует окна, поэтому на отдельном фоновом потоке создаётся невидимое окно класса `GlazeShellHotkey` с собственной петлёй `GetMessage`/`DispatchMessage`, а `WM_HOTKEY` поднимается в событие `Pressed`. Подменять оконную процедуру окон WinUI нельзя, а выделенный поток ещё и не мешает потоку интерфейса; тем же приёмом устроен `TaskbarHider`. Исключение из обработчика не выпускается сквозь нативную оконную процедуру — оно уходит в `errorHandler` и лог, иначе процесс завершился бы. `TryRegister` возвращает `null`, если комбинацию занял другой процесс: приложение продолжает работать без неё.
+- Источник кандидатов — `GlazeShell.App/Presentation/GlanceSearchCatalog`: приложения (`IApplicationManager.DiscoverAsync`, сканирование один раз с мемоизацией задачи и кэшем), открытые окна (`IWindowManager.GetWindows`, свежий снимок, свои окна и окна без заголовка исключены), страницы `ms-settings:` и команды Glaze Shell. Ключевые слова приложения включают имя исполняемого файла, поэтому программа находится по exe-имени; английские названия настроек добавлены в ключевые слова для второго языка.
+- `TopBarViewModel` держит `Results`/`SelectedResult`, ранжирует кандидатов при изменении `SearchText` и открывает выбранное: приложения — `IApplicationLauncher.LaunchAsync`, окна — `IWindowManager.FocusWindow`, настройки — ShellExecute по URI, команды — `open-shell` (через событие `ActivateRequested` к владельцу главного окна), `refresh-apps`, `open-downloads`, `open-recycle-bin`. Во время ожидания сканирования запрос может смениться — устаревший результат не применяется.
+- UI: панель результатов живёт в том же окне `TopBarWindow` под строкой поиска (та же колонка, что и поиск). При появлении результатов окно увеличивает высоту, а `UpdateWindowRegion` добавляет прямоугольник панели в региональную маску — Acrylic рисуется и там. Клавиши: стрелки двигают выбор, `Enter` открывает, `Esc` очищает; клик мимо панели (деактивация окна) закрывает поиск как «light dismiss».
+- Ограничения базового слайса: поиск по файлам (индекс Windows Search), калькулятор и конвертации, история буфера, веб-fallback, обучение на выборах и префикс `>` не реализованы; результаты выводятся без иконок приложений (глиф категории).
 
 ## Windows API
 
@@ -409,6 +424,7 @@ Glaze Shell использует только официальные Win32 и CO
 | DPI | `GetDpiForMonitor` (`MDT_EFFECTIVE_DPI`), `GetDpiForSystem`, `GetDpiForWindow` | `Win32/Shcore.cs`, `Win32/User32.cs` |
 | Display events | `WM_DISPLAYCHANGE` (`0x007E`), `WM_DEVICECHANGE` (`0x0219`), `WM_SETTINGCHANGE` (`0x001A`), `WM_DPICHANGED` (`0x02E0`) в hidden message window, `DisplayChanged` | `DisplayManagement/MonitorEventMonitor.cs`, `DisplayManagement/DisplaySignal.cs`, `Win32/User32.cs` |
 | Taskbar | `FindWindow` (`Shell_TrayWnd`), `RegisterWindowMessage` (`TaskbarCreated`), `SetWindowPos` (`SWP_NOSIZE`/`SWP_NOZORDER`/`SWP_NOACTIVATE`), `MonitorFromWindow`, `GetMonitorInfoW` | `Shell/TaskbarHider.cs`, `Win32/User32.cs` |
+| Hotkeys | `RegisterHotKey`/`UnregisterHotKey` (`WM_HOTKEY` `0x0312`, `MOD_CONTROL`), `CreateWindowExW`/`RegisterClassW`/`DestroyWindow`, выделенный поток с петлёй `GetMessage` | `Shell/GlobalHotkey.cs`, `Win32/User32.cs`, `Win32/Kernel32.cs` |
 | Known folders | `SHGetKnownFolderPath`, `SHGetKnownFolderItem` | `Win32/Shell32.cs` |
 | Threads | `GetCurrentThreadId` | `Win32/Kernel32.cs` |
 

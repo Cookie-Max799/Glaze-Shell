@@ -5,24 +5,32 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:presentation="using:GlazeShell.App.Presentation"
     mc:Ignorable="d">
 
     <!--
         Окно верхней панели (A6). Стекло рисует системный acrylic-backdrop, но окно имеет
         региональную маску: видны только три pill (A6.xaml.cs), промежутки пропускают рабочий
-        стол. Содержимое — приложение, поиск, статус+часы.
+        стол. Содержимое — приложение, поиск, статус+часы. Панель результатов Glance (B1)
+        живёт в этом же окне под строкой поиска: так сохраняется настоящий acrylic, а фокус
+        ввода не переключается на отдельное popup-окно.
     -->
     <Grid x:Name="Root" Background="Transparent">
-        <Grid ColumnSpacing="12">
+        <Grid x:Name="Layout" ColumnSpacing="12">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="48" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
             <!--  Левая плитка: активное приложение, шеврон и расположение.  -->
             <Border
                 x:Name="AppPill"
+                Grid.Row="0"
                 Grid.Column="0"
                 Padding="12,0"
                 Background="{StaticResource GlazeGlassBrush}"
@@ -73,6 +81,7 @@
             <!--  Центральная плитка: строка поиска.  -->
             <Border
                 x:Name="SearchPill"
+                Grid.Row="0"
                 Grid.Column="1"
                 Width="440"
                 Padding="14,0"
@@ -103,6 +112,7 @@
                         Background="Transparent"
                         BorderThickness="0"
                         FontSize="13"
+                        KeyDown="OnSearchKeyDown"
                         PlaceholderText="Поиск приложений, файлов, настроек…"
                         Text="{x:Bind ViewModel.SearchText, Mode=TwoWay}" />
 
@@ -123,6 +133,7 @@
             <!--  Правая плитка: статус и часы.  -->
             <Border
                 x:Name="StatusPill"
+                Grid.Row="0"
                 Grid.Column="2"
                 Padding="16,0"
                 Background="{StaticResource GlazeGlassBrush}"
@@ -178,6 +189,98 @@
                             Text="{x:Bind ViewModel.ClockDate, Mode=OneWay}" />
                     </StackPanel>
                 </StackPanel>
+            </Border>
+
+            <!--  Панель результатов Glance (B1) под строкой поиска: та же колонка, что и поиск.  -->
+            <Border
+                x:Name="ResultsPanel"
+                Grid.Row="1"
+                Grid.Column="1"
+                Width="440"
+                Margin="0,8,0,0"
+                Padding="6"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Background="{StaticResource GlazeGlassBrush}"
+                BorderBrush="{StaticResource GlazeGlassBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="24"
+                Visibility="{x:Bind ViewModel.HasResults, Mode=OneWay}">
+                <Grid>
+                    <ListView
+                        x:Name="ResultsList"
+                        MaxHeight="336"
+                        Background="Transparent"
+                        IsItemClickEnabled="True"
+                        ItemClick="OnResultClicked"
+                        ItemsSource="{x:Bind ViewModel.Results}"
+                        SelectedItem="{x:Bind ViewModel.SelectedResult, Mode=TwoWay}"
+                        SelectionMode="Single">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="MinHeight" Value="44" />
+                                <Setter Property="Padding" Value="8,4" />
+                                <Setter Property="CornerRadius" Value="14" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="presentation:GlanceResultViewModel">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border
+                                        Width="32"
+                                        Height="32"
+                                        Background="{StaticResource GlazeElevatedBrush}"
+                                        CornerRadius="10">
+                                        <FontIcon
+                                            FontSize="14"
+                                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                            Glyph="{x:Bind Glyph}" />
+                                    </Border>
+
+                                    <StackPanel
+                                        Grid.Column="1"
+                                        VerticalAlignment="Center">
+                                        <TextBlock
+                                            FontSize="13"
+                                            FontWeight="SemiBold"
+                                            Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                                            Text="{x:Bind Title}"
+                                            TextTrimming="CharacterEllipsis" />
+                                        <TextBlock
+                                            FontSize="11.5"
+                                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                            Text="{x:Bind Subtitle}"
+                                            TextTrimming="CharacterEllipsis"
+                                            Visibility="{x:Bind HasSubtitle}" />
+                                    </StackPanel>
+
+                                    <TextBlock
+                                        Grid.Column="2"
+                                        VerticalAlignment="Center"
+                                        FontSize="11.5"
+                                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                                        Text="{x:Bind KindLabel}" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+
+                    <TextBlock
+                        Margin="14,18"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        FontSize="13"
+                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                        Text="Ничего не найдено"
+                        Visibility="{x:Bind ViewModel.ShowEmptyState, Mode=OneWay}" />
+                </Grid>
             </Border>
         </Grid>
     </Grid>

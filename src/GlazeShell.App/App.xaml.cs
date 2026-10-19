@@ -47,6 +47,12 @@ public partial class App : Application
     /// </summary>
     private TaskbarHider? _taskbarHider;
 
+    /// <summary>
+    /// Глобальная горячая клавиша <c>Ctrl K</c> (B1): открывает поиск Glance в верхней
+    /// панели, даже когда приложение не в фокусе.
+    /// </summary>
+    private GlobalHotkey? _hotkey;
+
     private IDisposable? _settingsChangedSubscription;
 
     /// <summary>
@@ -128,7 +134,14 @@ public partial class App : Application
         {
             if (enabled)
             {
-                _topBar ??= new TopBarWindow(settingsManager, windowManager, eventManager, themeApplicator);
+                _topBar ??= new TopBarWindow(
+                    settingsManager,
+                    discovery,
+                    launcher,
+                    windowManager,
+                    eventManager,
+                    themeApplicator,
+                    window);
             }
             else
             {
@@ -177,6 +190,26 @@ public partial class App : Application
         ApplyTaskbarReplacement(
             settingsManager.GetSettings().DockEnabled &&
             settingsManager.GetSettings().DockReplacesTaskbar);
+
+        // Ctrl K открывает поиск Glance (B1). Комбинацию может занимать другая программа:
+        // тогда приложение работает без неё, а причина попадает в лог.
+        _hotkey = GlobalHotkey.TryRegister(
+            GlobalHotkey.Modifier.Control,
+            (uint)'K',
+            exception => _logger.Write(GlazeLogLevel.Error, "Hotkey", "The Ctrl K handler failed.", exception));
+
+        if (_hotkey is not null)
+        {
+            _hotkey.Pressed += OnHotkeyPressed;
+        }
+        else
+        {
+            _logger.Write(
+                GlazeLogLevel.Warning,
+                "Hotkey",
+                "The Ctrl K shortcut is unavailable; it is probably taken by another application.");
+        }
+
         _settingsChangedSubscription = eventManager.Subscribe<SettingsChanged>(
             changed =>
             {
@@ -229,6 +262,14 @@ public partial class App : Application
         {
             _taskbarHider?.Dispose();
             _taskbarHider = null;
+        });
+
+        // Горячая клавиша снимается до закрытия панели: иначе нажатие Ctrl K могло бы
+        // прийти в уже закрывающееся окно.
+        TryShutdownStep("hotkey", () =>
+        {
+            _hotkey?.Dispose();
+            _hotkey = null;
         });
 
         TryShutdownStep("top bar", () =>
@@ -437,6 +478,27 @@ public partial class App : Application
 
     private void ReportEventFailure(Exception exception) =>
         _logger.Write(GlazeLogLevel.Warning, "Events", "A system event source failed.", exception);
+
+    /// <summary>
+    /// Обработка нажатия глобальной горячей клавиши <c>Ctrl K</c>. Приходит с потока
+    /// слушателя, поэтому <see cref="TopBarWindow.FocusSearch"/> сам переключается на
+    /// поток интерфейса.
+    /// </summary>
+    private void OnHotkeyPressed(object? sender, EventArgs e)
+    {
+        var topBar = _topBar;
+
+        if (topBar is null)
+        {
+            _logger.Write(
+                GlazeLogLevel.Information,
+                "Hotkey",
+                "The Ctrl K shortcut was pressed, but the top bar is disabled.");
+            return;
+        }
+
+        topBar.FocusSearch();
+    }
 
     /// <summary>
     /// Пишет результат запуска источников системных событий. Отдельный отказ не является

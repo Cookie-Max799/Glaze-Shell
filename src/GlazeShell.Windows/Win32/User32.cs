@@ -164,6 +164,15 @@ internal static class User32
     internal const uint WmSettingChange = 0x001A;
     internal const uint WmDeviceChange = 0x0219;
     internal const uint WmDpiChanged = 0x02E0;
+    internal const uint WmHotkey = 0x0312;
+
+    internal const uint ModAlt = 0x0001;
+    internal const uint ModControl = 0x0002;
+    internal const uint ModShift = 0x0004;
+    internal const uint ModWin = 0x0008;
+
+    /// <summary>Не повторять WM_HOTKEY, пока клавиши удерживаются.</summary>
+    internal const uint ModNoRepeat = 0x4000;
 
     internal const uint SpiSetWorkArea = 0x005B;
     internal const uint SpiSetLogicalDpiOverride = 0x009F;
@@ -264,6 +273,23 @@ internal static class User32
     /// </summary>
     [DllImport("user32.dll", ExactSpelling = true)]
     internal static extern int SetWindowRgn(nint hwnd, nint region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
+
+    /// <summary>
+    /// Регистрирует системную горячую клавишу для окна: WM_HOTKEY приходит в его процедуру,
+    /// даже когда приложение не в фокусе. Возвращает <see langword="false"/>, если комбинацию
+    /// уже занял другой процесс.
+    /// </summary>
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool RegisterHotKey(nint hwnd, int id, uint modifiers, uint virtualKey);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool UnregisterHotKey(nint hwnd, int id);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DestroyWindow(nint hwnd);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]

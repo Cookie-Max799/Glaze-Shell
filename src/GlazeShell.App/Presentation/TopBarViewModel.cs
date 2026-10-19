@@ -1,7 +1,10 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using GlazeShell.Core.Events;
+using GlazeShell.Core.Glance;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
 using GlazeShell.Windows.Applications;
@@ -20,9 +23,14 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Интервал обновления часов и индикаторов — 1 секунда (требование A6).</summary>
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1);
 
+    /// <summary>Сколько результатов Glance показывается одновременно (B1).</summary>
+    private const int MaxResults = 8;
+
     private const string DefaultAppName = "Glaze Shell";
 
     private readonly IWindowManager _windows;
+    private readonly IApplicationLauncher _launcher;
+    private readonly GlanceSearchCatalog _catalog;
     private readonly DispatcherQueue _dispatcher;
     private readonly IDisposable _foregroundChanged;
     private readonly DispatcherQueueTimer _timer;
@@ -37,16 +45,21 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     private string _networkGlyph = "\uE702";
     private string _networkText = "Нет сети";
     private string _searchText = string.Empty;
+    private GlanceResultViewModel? _selectedResult;
     private bool _hasBattery;
     private bool _isCharging;
     private bool _isOnline;
 
     public TopBarViewModel(
         IWindowManager windows,
+        IApplicationLauncher launcher,
+        GlanceSearchCatalog catalog,
         IEventManager events,
         DispatcherQueue dispatcher)
     {
         _windows = windows ?? throw new ArgumentNullException(nameof(windows));
+        _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
+        _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _dispatcher = dispatcher ?? throw new ArgumentNullException(nameof(dispatcher));
         ArgumentNullException.ThrowIfNull(events);
 
@@ -139,11 +152,200 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         private set => Set(ref _isCharging, value);
     }
 
-    /// <summary>Текст строки поиска. Глобальный поиск появится в функции B1; пока поле информативное.</summary>
+    /// <summary>
+    /// Текст строки поиска Glance (B1). Изменение запускает ранжирование кандидатов;
+    /// результаты появляются в <see cref="Results"/>.
+    /// </summary>
     public string SearchText
     {
         get => _searchText;
-        set => Set(ref _searchText, value);
+        set
+        {
+            if (!Set(ref _searchText, value))
+            {
+                return;
+            }
+
+            OnPropertyChanged(nameof(HasQuery));
+            _ = UpdateResultsAsync();
+        }
+    }
+
+    /// <summary>Результаты поиска в порядке убывания релевантности.</summary>
+    public ObservableCollection<GlanceResultViewModel> Results { get; } = [];
+
+    /// <summary>Выбранная клавиатурой строка результата.</summary>
+    public GlanceResultViewModel? SelectedResult
+    {
+        get => _selectedResult;
+        set => Set(ref _selectedResult, value);
+    }
+
+    /// <summary>Есть ли результаты: панель результатов показывается только при них.</summary>
+    public bool HasResults => Results.Count > 0;
+
+    /// <summary>В строке поиска есть запрос (не только пробелы).</summary>
+    public bool HasQuery => !string.IsNullOrWhiteSpace(_searchText);
+
+    /// <summary>Показывать «ничего не найдено»: запрос есть, список просканирован, совпадений нет.</summary>
+    public bool ShowEmptyState => HasQuery && !HasResults && _catalog.IsApplicationListLoaded;
+
+    /// <summary>
+    /// Просьба вывести главное окно Glaze Shell (команда <c>open-shell</c>). Окно
+    /// верхней панели не владеет главным окном, поэтому переключает его владелец —
+    /// приложение.
+    /// </summary>
+    public event EventHandler? ActivateRequested;
+
+    /// <summary>Очищает строку поиска вместе с панелью результатов.</summary>
+    public void ClearSearch() => SearchText = string.Empty;
+
+    /// <summary>Сдвигает выбор по списку результатов на <paramref name="offset"/> позиций.</summary>
+    public void MoveSelection(int offset)
+    {
+        if (Results.Count == 0)
+        {
+            return;
+        }
+
+        var current = SelectedResult is null ? -1 : Results.IndexOf(SelectedResult);
+        var next = Math.Clamp(current + offset, 0, Results.Count - 1);
+        SelectedResult = Results[next];
+    }
+
+    /// <summary>
+    /// Открывает выбранный результат: запускает приложение, переключает окно, открывает
+    /// страницу настроек или выполняет команду. Строка поиска очищается, панель скрывается.
+    /// </summary>
+    public async Task ActivateSelectedAsync()
+    {
+        if (SelectedResult is not { } selected)
+        {
+            return;
+        }
+
+        var result = selected.Result;
+        ClearSearch();
+
+        try
+        {
+            switch (result.Kind)
+            {
+                case GlanceResultKind.Application:
+                    await _launcher.LaunchAsync(result.Id);
+                    break;
+
+                case GlanceResultKind.Window:
+                    _windows.FocusWindow(result.Id);
+                    break;
+
+                case GlanceResultKind.Setting:
+                    OpenShellTarget(result.Id);
+                    break;
+
+                case GlanceResultKind.Command:
+                    await RunCommandAsync(result.Id);
+                    break;
+
+                default:
+                    break;
+            }
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            Trace.WriteLine($"GlazeShell.Glance: opening '{result.Id}' failed. {exception}");
+        }
+    }
+
+    private async Task UpdateResultsAsync()
+    {
+        var query = _searchText;
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            ApplyResults([]);
+            return;
+        }
+
+        // Приложения сканируются лениво при первом запросе; повторные запросы ждут тот же
+        // проход, поэтому поиск не дублирует сканирование меню «Пуск».
+        if (!_catalog.IsApplicationListLoaded)
+        {
+            try
+            {
+                await _catalog.EnsureApplicationsAsync();
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+            {
+                Trace.WriteLine($"GlazeShell.Glance: application discovery failed. {exception}");
+            }
+        }
+
+        // Пока грузились приложения, запрос мог смениться: устаревший результат не применяем.
+        if (!string.Equals(query, _searchText, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        var ranked = GlanceRanker.Rank(_catalog.BuildCandidates(), query, MaxResults);
+
+        ApplyResults(ranked.Select(result => new GlanceResultViewModel(result)));
+    }
+
+    private void ApplyResults(IEnumerable<GlanceResultViewModel> results)
+    {
+        Results.Clear();
+
+        foreach (var result in results)
+        {
+            Results.Add(result);
+        }
+
+        SelectedResult = Results.Count > 0 ? Results[0] : null;
+        OnPropertyChanged(nameof(HasResults));
+        OnPropertyChanged(nameof(ShowEmptyState));
+    }
+
+    private async Task RunCommandAsync(string commandId)
+    {
+        switch (commandId)
+        {
+            case "open-shell":
+                ActivateRequested?.Invoke(this, EventArgs.Empty);
+                break;
+
+            case "refresh-apps":
+                await _catalog.RefreshApplicationsAsync();
+                break;
+
+            case "open-downloads":
+                OpenShellTarget("shell:Downloads");
+                break;
+
+            case "open-recycle-bin":
+                OpenShellTarget("shell:RecycleBinFolder");
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    /// <summary>Открывает системную цель оболочки (например, <c>ms-settings:display</c>) через ShellExecute.</summary>
+    private static void OpenShellTarget(string target)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = target,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            Trace.WriteLine($"GlazeShell.Glance: opening '{target}' failed. {exception}");
+        }
     }
 
     public void Dispose()

@@ -1,3 +1,5 @@
+using System.ComponentModel;
+using System.Diagnostics;
 using GlazeShell.App.Presentation;
 using GlazeShell.App.Theming;
 using GlazeShell.Core.Events;
@@ -5,16 +7,19 @@ using GlazeShell.Core.Interfaces;
 using GlazeShell.Windows.WindowManagement;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.Foundation;
 using Windows.Graphics;
+using Windows.System;
 
 namespace GlazeShell.App;
 
 /// <summary>
-/// Плавающая верхняя панель (A6, базовый слайс): topmost-окно без записи в панели задач,
-/// со стеклянным фоном и скруглёнными углами. Показывается без перехвата фокуса.
+/// Плавающая верхняя панель (A6): topmost-окно без записи в панели задач, со стеклянным
+/// фоном и скруглёнными углами. Показывается без перехвата фокуса, а по <c>Ctrl K</c>
+/// разрешает активацию и ставит фокус в строку поиска Glance (B1).
 /// </summary>
 public sealed partial class TopBarWindow : Window
 {
@@ -22,25 +27,38 @@ public sealed partial class TopBarWindow : Window
     private const int TopOffset = 18;
     private const int SideMargin = 24;
 
-    /// <summary>Радиус pill-плиток: половина высоты, то есть капсула (DESIGN §7.1, radius 999).</summary>
+    /// <summary>Радиус pill-плиток и панели результатов: половина высоты строки, то есть капсула (DESIGN §7.1).</summary>
     private const int PillRadius = BarHeight / 2;
 
+    private readonly Window _owner;
     private readonly ThemeApplicator _themes;
     private readonly IDisposable _settingsChanged;
     private nint _hwnd;
+    private int _pixelHeight;
 
     public TopBarWindow(
         ISettingsManager settings,
+        IApplicationManager applications,
+        IApplicationLauncher launcher,
         IWindowManager windows,
         IEventManager events,
-        ThemeApplicator themes)
+        ThemeApplicator themes,
+        Window owner)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(applications);
+        ArgumentNullException.ThrowIfNull(launcher);
         ArgumentNullException.ThrowIfNull(events);
 
         _themes = themes ?? throw new ArgumentNullException(nameof(themes));
+        _owner = owner ?? throw new ArgumentNullException(nameof(owner));
 
-        ViewModel = new TopBarViewModel(windows, events, DispatcherQueue);
+        ViewModel = new TopBarViewModel(
+            windows,
+            launcher,
+            new GlanceSearchCatalog(applications, windows),
+            events,
+            DispatcherQueue);
 
         InitializeComponent();
         Title = "Glaze Shell — Верхняя панель";
@@ -49,24 +67,56 @@ public sealed partial class TopBarWindow : Window
 
         ConfigureOverlay();
 
-        // Регион окна зависит от разметки: сначала применяем после загрузки, а затем
-        // при каждом изменении ширины pill (текст активного приложения меняет её).
-        Root.Loaded += (_, _) => UpdateWindowRegion();
-        AppPill.SizeChanged += (_, _) => UpdateWindowRegion();
-        SearchPill.SizeChanged += (_, _) => UpdateWindowRegion();
-        StatusPill.SizeChanged += (_, _) => UpdateWindowRegion();
+        // Регион и высота окна зависят от разметки: сначала применяем после загрузки, а
+        // затем при изменении ширины pill и высоты панели результатов.
+        Root.Loaded += (_, _) => UpdateOverlayBounds();
+        AppPill.SizeChanged += (_, _) => UpdateOverlayBounds();
+        SearchPill.SizeChanged += (_, _) => UpdateOverlayBounds();
+        StatusPill.SizeChanged += (_, _) => UpdateOverlayBounds();
+        ResultsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
 
+        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
+        ViewModel.ActivateRequested += OnActivateRequested;
         _settingsChanged = events.Subscribe<SettingsChanged>(OnSettingsChanged);
         Activated += OnActivated;
 
         Closed += (_, _) =>
         {
+            ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
+            ViewModel.ActivateRequested -= OnActivateRequested;
             ViewModel.Dispose();
             _settingsChanged.Dispose();
         };
     }
 
     public TopBarViewModel ViewModel { get; }
+
+    /// <summary>
+    /// Показывает панель, временно разрешает активацию окна и ставит фокус в строку поиска.
+    /// Вызывается по глобальной горячей клавише <c>Ctrl K</c>.
+    /// </summary>
+    public void FocusSearch()
+    {
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            FocusSearchCore();
+            return;
+        }
+
+        _ = DispatcherQueue.TryEnqueue(FocusSearchCore);
+    }
+
+    private void FocusSearchCore()
+    {
+        if (_hwnd == 0)
+        {
+            return;
+        }
+
+        OverlayWindow.SetNonActivating(_hwnd, false);
+        Activate();
+        SearchBox.Focus(FocusState.Programmatic);
+    }
 
     private void ConfigureOverlay()
     {
@@ -86,31 +136,61 @@ public sealed partial class TopBarWindow : Window
         OverlayWindow.SetNonActivating(_hwnd, true);
         OverlayWindow.UseRoundedCorners(_hwnd);
 
-        PositionOnPrimaryDisplay();
+        UpdateOverlayBounds();
         OverlayWindow.ShowWithoutActivation(_hwnd);
     }
 
     /// <summary>
-    /// Верхняя панель базового слайса показывается на основном мониторе: 24 px по бокам и
-    /// 18 px сверху. Рабочая область не резервируется, поэтому панель не смещает окна.
+    /// Раскладывает окно по основному монитору (24 px по бокам, 18 px сверху) и увеличивает
+    /// его по высоте под панель результатов Glance. Рабочая область не резервируется, поэтому
+    /// панель не смещает окна приложений.
     /// </summary>
-    private void PositionOnPrimaryDisplay()
+    private void UpdateOverlayBounds()
     {
-        var bounds = DisplayArea.Primary.OuterBounds;
+        if (_hwnd == 0)
+        {
+            return;
+        }
+
         var scale = OverlayWindow.GetScaleFactor(_hwnd);
+        var bounds = DisplayArea.Primary.OuterBounds;
 
         var margin = (int)Math.Round(SideMargin * scale);
         var top = (int)Math.Round(TopOffset * scale);
-        var height = (int)Math.Round(BarHeight * scale);
         var width = Math.Max(1, bounds.Width - (margin * 2));
 
-        AppWindow.MoveAndResize(new RectInt32(bounds.X + margin, bounds.Y + top, width, height));
+        var logicalHeight = (double)BarHeight;
+
+        if (ViewModel.HasResults)
+        {
+            // Панель измеряется независимо от текущей высоты окна: иначе Auto-строка
+            // получила бы ноль доступной высоты и её натуральный размер был бы потерян.
+            var constraint = SearchPill.ActualWidth > 0 ? SearchPill.ActualWidth : 440;
+            ResultsPanel.Measure(new Size(constraint, double.PositiveInfinity));
+
+            var panelHeight = ResultsPanel.DesiredSize.Height;
+
+            if (panelHeight > 0)
+            {
+                logicalHeight = BarHeight + panelHeight;
+            }
+        }
+
+        var pixelHeight = Math.Max(1, (int)Math.Round(logicalHeight * scale));
+
+        if (pixelHeight != _pixelHeight)
+        {
+            AppWindow.MoveAndResize(new RectInt32(bounds.X + margin, bounds.Y + top, width, pixelHeight));
+            _pixelHeight = pixelHeight;
+        }
+
+        UpdateWindowRegion();
     }
 
     /// <summary>
-    /// Вырезает из окна три pill по их фактическим границам: системный acrylic-backdrop
-    /// рисуется только внутри плиток, поэтому панель выглядит как три плавающих стекла,
-    /// а не как одна полоса во всю ширину (DESIGN §7.1). Промежутки пропускают рабочий стол.
+    /// Вырезает из окна три pill и панель результатов Glance по их фактическим границам:
+    /// системный acrylic-backdrop рисуется только внутри этих фигур, поэтому панель выглядит
+    /// как плавающие стекла, а не как одна полоса во всю ширину (DESIGN §7.1).
     /// </summary>
     private void UpdateWindowRegion()
     {
@@ -121,11 +201,21 @@ public sealed partial class TopBarWindow : Window
 
         var scale = OverlayWindow.GetScaleFactor(_hwnd);
         var radius = (int)Math.Round(PillRadius * scale);
-        var regions = new List<PixelRect>(3);
+        var regions = new List<PixelRect>(4);
 
         AddRegion(AppPill);
         AddRegion(SearchPill);
         AddRegion(StatusPill);
+
+        if (ViewModel.HasResults)
+        {
+            AddRegion(ResultsPanel);
+        }
+
+        if (regions.Count == 0)
+        {
+            return;
+        }
 
         OverlayWindow.ApplyRoundedRegions(_hwnd, regions, radius);
 
@@ -136,14 +226,14 @@ public sealed partial class TopBarWindow : Window
                 return;
             }
 
-            var bounds = element.TransformToVisual(Root).TransformBounds(
+            var elementBounds = element.TransformToVisual(Root).TransformBounds(
                 new Rect(0, 0, element.ActualWidth, element.ActualHeight));
 
             regions.Add(new PixelRect(
-                (int)Math.Round(bounds.X * scale),
-                (int)Math.Round(bounds.Y * scale),
-                (int)Math.Round(bounds.Width * scale),
-                (int)Math.Round(bounds.Height * scale)));
+                (int)Math.Round(elementBounds.X * scale),
+                (int)Math.Round(elementBounds.Y * scale),
+                (int)Math.Round(elementBounds.Width * scale),
+                (int)Math.Round(elementBounds.Height * scale)));
         }
     }
 
@@ -158,12 +248,91 @@ public sealed partial class TopBarWindow : Window
         SearchBox.Focus(FocusState.Programmatic);
     }
 
+    /// <summary>Клавиатура Glance: стрелки двигают выбор, Enter открывает, Escape очищает.</summary>
+    private async void OnSearchKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case VirtualKey.Enter:
+                e.Handled = true;
+                await ViewModel.ActivateSelectedAsync();
+                break;
+
+            case VirtualKey.Escape:
+                e.Handled = true;
+                ViewModel.ClearSearch();
+                break;
+
+            case VirtualKey.Down:
+                e.Handled = true;
+                ViewModel.MoveSelection(1);
+                break;
+
+            case VirtualKey.Up:
+                e.Handled = true;
+                ViewModel.MoveSelection(-1);
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    private async void OnResultClicked(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is GlanceResultViewModel result)
+        {
+            ViewModel.SelectedResult = result;
+        }
+
+        await ViewModel.ActivateSelectedAsync();
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(TopBarViewModel.HasResults))
+        {
+            UpdateOverlayBounds();
+        }
+    }
+
+    /// <summary>
+    /// Команда поиска <c>open-shell</c> просит показать главное окно: панель им не владеет,
+    /// поэтому переключение выполняет владелец.
+    /// </summary>
+    private void OnActivateRequested(object? sender, EventArgs e)
+    {
+        try
+        {
+            var appWindow = AppWindow.GetFromWindowId(Microsoft.UI.Win32Interop.GetWindowIdFromWindow(
+                WinRT.Interop.WindowNative.GetWindowHandle(_owner)));
+
+            if (appWindow.Presenter is OverlappedPresenter presenter &&
+                presenter.State == OverlappedPresenterState.Minimized)
+            {
+                presenter.Restore();
+            }
+
+            _owner.Activate();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            Trace.WriteLine($"GlazeShell.TopBar: activating the main window failed. {exception}");
+        }
+    }
+
     private void OnActivated(object sender, WindowActivatedEventArgs e)
     {
-        if (e.WindowActivationState == WindowActivationState.Deactivated)
+        if (e.WindowActivationState != WindowActivationState.Deactivated)
         {
-            OverlayWindow.SetNonActivating(_hwnd, true);
+            return;
         }
+
+        OverlayWindow.SetNonActivating(_hwnd, true);
+
+        // Клик по рабочему столу или другому приложению — это «light dismiss»: поиск
+        // закрывается вместе с панелью результатов.
+        ViewModel.ClearSearch();
     }
 
     private void OnSettingsChanged(SettingsChanged changed) => _themes.ApplyFromSettings(Root);
