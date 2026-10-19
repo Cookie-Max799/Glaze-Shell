@@ -27,22 +27,26 @@ public sealed partial class DockWindow : Window
 {
     private const int TileSize = 60;
     private const int Gap = 5;
-    private const int SeparatorWidth = 1;
+    private const int SeparatorWidth = 2;
     private const int PaddingHorizontal = 14;
-    private const int PaddingTop = 16;
-    private const int PaddingBottom = 12;
+    private const int PaddingTop = 24;
+    private const int PaddingBottom = 16;
     private const int BottomOffset = 18;
 
+    /// <summary>Радиус капсулы dock (DESIGN §7.5: радиус 36).</summary>
+    private const int PillRadius = 36;
+
     /// <summary>
-    /// Подъём и масштаб плитки при наведении. Отличаются от значений дизайна (16 px, 1.2):
-    /// плитка увеличивается внутри окна, а всё, что вышло за его границы, было бы обрезано.
+    /// Подъём и масштаб плитки при наведении и её соседей (DESIGN §7.5: 16 px / 1.2 и
+    /// 6 px / 1.06). Верхний отступ окна (24 px) подобран так, чтобы увеличенная плитка
+    /// не выходила за границы капсулы.
     /// </summary>
-    private const double HoverLift = 10;
-    private const double HoverScale = 1.18;
-    private const double NeighborLift = 4;
+    private const double HoverLift = 16;
+    private const double HoverScale = 1.2;
+    private const double NeighborLift = 6;
     private const double NeighborScale = 1.06;
 
-    private static readonly TimeSpan HoverDuration = TimeSpan.FromMilliseconds(140);
+    private static readonly TimeSpan HoverDuration = TimeSpan.FromMilliseconds(180);
 
     private readonly Window _owner;
     private readonly ThemeApplicator _themes;
@@ -146,6 +150,16 @@ public sealed partial class DockWindow : Window
         var top = bounds.Y + bounds.Height - height - (int)Math.Round(BottomOffset * scale);
 
         AppWindow.MoveAndResize(new RectInt32(left, top, width, height));
+
+        // Капсула: окно обрезается скруглённым прямоугольником, поэтому acrylic-backdrop
+        // заполняет только саму плавающую панель, а не прямоугольник вокруг неё.
+        if (OverlayWindow.TryGetClientSize(_hwnd, out var clientWidth, out var clientHeight))
+        {
+            OverlayWindow.ApplyRoundedRegions(
+                _hwnd,
+                new[] { new PixelRect(0, 0, clientWidth, clientHeight) },
+                (int)Math.Round(PillRadius * scale));
+        }
     }
 
     private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e) => UpdateDockSize();
@@ -224,6 +238,12 @@ public sealed partial class DockWindow : Window
         {
             var open = new MenuFlyoutItem { Text = "Открыть Glaze Shell" };
             open.Click += (_, _) => OnActivateRequested(this, EventArgs.Empty);
+            flyout.Items.Add(open);
+        }
+        else if (item.IsFolder || item.IsTrash)
+        {
+            var open = new MenuFlyoutItem { Text = "Открыть" };
+            open.Click += async (_, _) => await ViewModel.ActivateItemAsync(item);
             flyout.Items.Add(open);
         }
         else if (item.ApplicationId is not null)

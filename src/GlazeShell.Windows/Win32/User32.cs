@@ -248,10 +248,22 @@ internal static class User32
     internal static extern bool GetWindowRect(nint hwnd, out Rect rect);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetClientRect(nint hwnd, out Rect rect);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern long GetWindowLongPtr(nint hwnd, long index);
 
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", CharSet = CharSet.Unicode)]
     internal static extern nint SetWindowLongPtr(nint hwnd, long index, nint value);
+
+    /// <summary>
+    /// Задаёт региональную маску окна: за её пределами система не рисует содержимое.
+    /// При успехе владельцем области становится система, поэтому повторно удалять её нельзя.
+    /// Возвращает 0 при ошибке.
+    /// </summary>
+    [DllImport("user32.dll", ExactSpelling = true)]
+    internal static extern int SetWindowRgn(nint hwnd, nint region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]

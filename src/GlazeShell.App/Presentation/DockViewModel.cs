@@ -25,6 +25,8 @@ public enum DockItemKind
 {
     Start,
     Application,
+    Folder,
+    Trash,
     Separator,
 }
 
@@ -45,7 +47,8 @@ public sealed class DockItemViewModel : INotifyPropertyChanged
         string name,
         string? applicationId = null,
         string? executablePath = null,
-        bool isPinned = false)
+        bool isPinned = false,
+        string? glyph = null)
     {
         Kind = kind;
         Key = key;
@@ -53,6 +56,7 @@ public sealed class DockItemViewModel : INotifyPropertyChanged
         ApplicationId = applicationId;
         ExecutablePath = executablePath;
         IsPinned = isPinned;
+        Glyph = glyph;
         FallbackBrush = CreateFallbackBrush(key);
     }
 
@@ -72,7 +76,19 @@ public sealed class DockItemViewModel : INotifyPropertyChanged
 
     public bool IsPinned { get; }
 
+    /// <summary>
+    /// Глиф Segoe Fluent Icons для системных плиток (папка «Загрузки», корзина), если
+    /// у элемента нет настоящей иконки.
+    /// </summary>
+    public string? Glyph { get; }
+
+    public bool HasGlyph => !string.IsNullOrEmpty(Glyph);
+
     public bool IsStart => Kind == DockItemKind.Start;
+
+    public bool IsFolder => Kind == DockItemKind.Folder;
+
+    public bool IsTrash => Kind == DockItemKind.Trash;
 
     public bool IsSeparator => Kind == DockItemKind.Separator;
 
@@ -99,13 +115,18 @@ public sealed class DockItemViewModel : INotifyPropertyChanged
             }
 
             OnPropertyChanged(nameof(HasIcon));
-            OnPropertyChanged(nameof(HasNoIcon));
+            OnPropertyChanged(nameof(HasPlate));
+            OnPropertyChanged(nameof(ShowLetter));
         }
     }
 
     public bool HasIcon => _icon is not null;
 
-    public bool HasNoIcon => _icon is null;
+    /// <summary>Показывать ли пастельную подложку плитки: она нужна, когда нет настоящей иконки.</summary>
+    public bool HasPlate => _icon is null;
+
+    /// <summary>Показывать ли букву-заглушку: только когда нет ни иконки, ни глифа.</summary>
+    public bool ShowLetter => _icon is null && !HasGlyph;
 
     public bool IsRunning
     {
@@ -310,6 +331,18 @@ public sealed class DockViewModel : IDisposable
             return;
         }
 
+        if (item.IsFolder)
+        {
+            OpenShellTarget("shell:Downloads");
+            return;
+        }
+
+        if (item.IsTrash)
+        {
+            OpenShellTarget("shell:RecycleBinFolder");
+            return;
+        }
+
         if (item.ApplicationId is not { } applicationId)
         {
             return;
@@ -371,6 +404,25 @@ public sealed class DockViewModel : IDisposable
 
         PersistPins();
         Rebuild();
+    }
+
+    /// <summary>
+    /// Открывает системную цель оболочки (например, <c>shell:Downloads</c>) через ShellExecute.
+    /// </summary>
+    private static void OpenShellTarget(string target)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = target,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            Trace.WriteLine($"GlazeShell.Dock: opening '{target}' failed. {exception}");
+        }
     }
 
     /// <summary>
@@ -651,6 +703,11 @@ public sealed class DockViewModel : IDisposable
             }
         }
 
+        // Секция системных папок по DESIGN §7.5: папка «Загрузки» и корзина в конце dock.
+        desired.Add(GetOrCreateSeparator("sep-folders"));
+        desired.Add(GetOrCreateDownloads());
+        desired.Add(GetOrCreateTrash());
+
         foreach (var item in desired)
         {
             if (item.ApplicationId is not { } applicationId)
@@ -700,6 +757,34 @@ public sealed class DockViewModel : IDisposable
         _itemsByKey.TryGetValue(key, out var existing)
             ? existing
             : Register(new DockItemViewModel(DockItemKind.Separator, key, string.Empty));
+
+    /// <summary>Папка «Загрузки» — открывается в проводнике (DESIGN §7.5).</summary>
+    private DockItemViewModel GetOrCreateDownloads()
+    {
+        const string key = "folder:downloads";
+
+        return _itemsByKey.TryGetValue(key, out var existing)
+            ? existing
+            : Register(new DockItemViewModel(
+                DockItemKind.Folder,
+                key,
+                "Загрузки",
+                glyph: "\uE8B7"));
+    }
+
+    /// <summary>Корзина — открывает системную папку «Корзина» (DESIGN §7.5).</summary>
+    private DockItemViewModel GetOrCreateTrash()
+    {
+        const string key = "trash";
+
+        return _itemsByKey.TryGetValue(key, out var existing)
+            ? existing
+            : Register(new DockItemViewModel(
+                DockItemKind.Trash,
+                key,
+                "Корзина",
+                glyph: "\uE74D"));
+    }
 
     private DockItemViewModel GetOrCreatePinned(CoreApplication application)
     {

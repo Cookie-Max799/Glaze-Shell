@@ -8,8 +8,9 @@
     mc:Ignorable="d">
 
     <!--
-        Окно верхней панели (A6). Фон прозрачный: стекло рисует системный acrylic-backdrop,
-        а плитки лежат поверх него. Содержимое — три «pill»: приложение, поиск, статус+часы.
+        Окно верхней панели (A6). Стекло рисует системный acrylic-backdrop, но окно имеет
+        региональную маску: видны только три pill (A6.xaml.cs), промежутки пропускают рабочий
+        стол. Содержимое — приложение, поиск, статус+часы.
     -->
     <Grid x:Name="Root" Background="Transparent">
         <Grid ColumnSpacing="12">
@@ -19,12 +20,13 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <!--  Левая плитка: активное приложение и расположение.  -->
+            <!--  Левая плитка: активное приложение, шеврон и расположение.  -->
             <Border
+                x:Name="AppPill"
                 Grid.Column="0"
-                Padding="14,0"
-                Background="{StaticResource GlazeSurfaceBrush}"
-                BorderBrush="{StaticResource GlazeBorderBrush}"
+                Padding="12,0"
+                Background="{StaticResource GlazeGlassBrush}"
+                BorderBrush="{StaticResource GlazeGlassBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="24">
                 <StackPanel
@@ -32,9 +34,9 @@
                     Spacing="10"
                     VerticalAlignment="Center">
                     <Border
-                        Width="30"
-                        Height="30"
-                        Background="{StaticResource GlazeAccentBrush}"
+                        Width="32"
+                        Height="32"
+                        Background="{StaticResource GlazeBrandGradientBrush}"
                         CornerRadius="10">
                         <TextBlock
                             HorizontalAlignment="Center"
@@ -44,33 +46,39 @@
                             Foreground="White"
                             Text="{x:Bind ViewModel.AppInitial, Mode=OneWay}" />
                     </Border>
-                    <StackPanel VerticalAlignment="Center">
-                        <TextBlock
-                            MaxWidth="220"
-                            FontSize="13"
-                            FontWeight="SemiBold"
-                            Foreground="{StaticResource GlazeTextPrimaryBrush}"
-                            Text="{x:Bind ViewModel.AppName, Mode=OneWay}"
-                            TextTrimming="CharacterEllipsis" />
-                        <TextBlock
-                            MaxWidth="220"
-                            FontSize="11"
-                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                            Text="{x:Bind ViewModel.AppLocation, Mode=OneWay}"
-                            TextTrimming="CharacterEllipsis"
-                            Visibility="{x:Bind ViewModel.HasLocation, Mode=OneWay}" />
-                    </StackPanel>
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        MaxWidth="200"
+                        FontSize="13"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                        Text="{x:Bind ViewModel.AppName, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis" />
+                    <FontIcon
+                        VerticalAlignment="Center"
+                        FontSize="11"
+                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                        Glyph="&#xE70D;" />
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        MaxWidth="220"
+                        FontSize="12"
+                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                        Text="{x:Bind ViewModel.AppLocation, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis"
+                        Visibility="{x:Bind ViewModel.HasLocation, Mode=OneWay}" />
                 </StackPanel>
             </Border>
 
             <!--  Центральная плитка: строка поиска.  -->
             <Border
+                x:Name="SearchPill"
                 Grid.Column="1"
                 Width="440"
                 Padding="14,0"
                 HorizontalAlignment="Center"
-                Background="{StaticResource GlazeElevatedBrush}"
-                BorderBrush="{StaticResource GlazeBorderBrush}"
+                Background="{StaticResource GlazeGlassBrush}"
+                BorderBrush="{StaticResource GlazeGlassBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="24"
                 PointerPressed="OnSearchPointerPressed">
@@ -102,7 +110,7 @@
                         Grid.Column="2"
                         Padding="6,2"
                         VerticalAlignment="Center"
-                        Background="{StaticResource GlazeSurfaceBrush}"
+                        Background="{StaticResource GlazeElevatedBrush}"
                         CornerRadius="6">
                         <TextBlock
                             FontSize="11"
@@ -114,10 +122,11 @@
 
             <!--  Правая плитка: статус и часы.  -->
             <Border
+                x:Name="StatusPill"
                 Grid.Column="2"
                 Padding="16,0"
-                Background="{StaticResource GlazeSurfaceBrush}"
-                BorderBrush="{StaticResource GlazeBorderBrush}"
+                Background="{StaticResource GlazeGlassBrush}"
+                BorderBrush="{StaticResource GlazeGlassBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="24">
                 <StackPanel

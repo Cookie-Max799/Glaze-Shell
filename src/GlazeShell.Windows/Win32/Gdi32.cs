@@ -11,6 +11,9 @@ internal static class Gdi32
     internal const uint DibRgbColors = 0;
     internal const uint BiRgb = 0;
 
+    /// <summary>Режим <see cref="CombineRgn"/>: объединение областей.</summary>
+    internal const int RgnOr = 2;
+
     /// <summary>Размер <see cref="BitmapInfoHeader"/> (BITMAPINFOHEADER).</summary>
     internal const uint BitmapInfoHeaderSize = 40;
 
@@ -64,4 +67,21 @@ internal static class Gdi32
         byte[]? bits,
         ref BitmapInfoHeader bitmapInfoHeader,
         uint usage);
+
+    /// <summary>
+    /// Создаёт прямоугольник со скруглёнными углами для региональной маски окна.
+    /// Правый и нижний края не входят в область.
+    /// </summary>
+    [DllImport("gdi32.dll", ExactSpelling = true)]
+    internal static extern nint CreateRoundRectRgn(
+        int left,
+        int top,
+        int right,
+        int bottom,
+        int widthEllipse,
+        int heightEllipse);
+
+    /// <summary>Объединяет две области в целевую (режим <see cref="RgnOr"/>).</summary>
+    [DllImport("gdi32.dll", ExactSpelling = true)]
+    internal static extern int CombineRgn(nint dest, nint src1, nint src2, int mode);
 }

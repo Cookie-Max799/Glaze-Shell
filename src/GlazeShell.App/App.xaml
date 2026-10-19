@@ -18,6 +18,15 @@
             <SolidColorBrush x:Key="GlazeSurfaceBrush" Color="#1E1B3D" />
             <SolidColorBrush x:Key="GlazeElevatedBrush" Color="#2A2754" />
             <SolidColorBrush x:Key="GlazeBorderBrush" Color="#3A3670" />
+            <SolidColorBrush x:Key="GlazeGlassBrush" Color="#8C221E4A" />
+            <SolidColorBrush x:Key="GlazeGlassBorderBrush" Color="#24FFFFFF" />
+
+            <!--  Бренд-градиент (Sky → Cobalt → Orchid): логотип, активные индикаторы.  -->
+            <LinearGradientBrush x:Key="GlazeBrandGradientBrush" StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Offset="0" Color="#64D2FF" />
+                <GradientStop Offset="0.5" Color="#5E7BFF" />
+                <GradientStop Offset="1" Color="#BF5AF2" />
+            </LinearGradientBrush>
             <SolidColorBrush x:Key="GlazeTextPrimaryBrush" Color="#F4F1FF" />
             <SolidColorBrush x:Key="GlazeTextSecondaryBrush" Color="#B2AED8" />
             <SolidColorBrush x:Key="GlazeTextMutedBrush" Color="#7773A8" />

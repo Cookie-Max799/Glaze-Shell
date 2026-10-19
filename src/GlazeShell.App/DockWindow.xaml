@@ -9,14 +9,14 @@
     mc:Ignorable="d">
 
     <!--
-        Окно dock (A1, базовый слайс). Фон прозрачный: «стекло» рисует системный
-        acrylic-backdrop. Содержимое — горизонтальная лента плиток, разделённая на секции:
-        «Пуск», закреплённые приложения и запущенные приложения с индикатором.
+        Окно dock (A1). Стекло рисует системный acrylic-backdrop, но окно имеет региональную
+        маску-капсулу (A1.xaml.cs), поэтому видна только сама плавающая панель. Содержимое —
+        лента плиток: «Пуск», закреплённые и запущенные приложения, папка «Загрузки», корзина.
     -->
     <Grid x:Name="Root" Background="Transparent">
         <ItemsControl
             x:Name="Tiles"
-            Padding="14,16,14,12"
+            Padding="14,24,14,16"
             VerticalAlignment="Center"
             ItemsSource="{x:Bind ViewModel.Items}">
             <ItemsControl.ItemsPanel>
@@ -32,14 +32,12 @@
             <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="p:DockItemViewModel">
                     <Grid>
-                        <!--  Плитка приложения.  -->
+                        <!--  Плитка приложения: только значок, без подложки.  -->
                         <Border
                             Width="60"
                             Height="60"
-                            Background="{StaticResource GlazeSurfaceBrush}"
-                            BorderBrush="{StaticResource GlazeBorderBrush}"
-                            BorderThickness="1"
-                            CornerRadius="16"
+                            Background="Transparent"
+                            CornerRadius="18"
                             PointerEntered="OnTilePointerEntered"
                             PointerExited="OnTilePointerExited"
                             RightTapped="OnTileRightTapped"
@@ -47,24 +45,34 @@
                             ToolTipService.ToolTip="{x:Bind ToolTip, Mode=OneWay}"
                             Visibility="{x:Bind TileVisibility}">
                             <Grid>
-                                <!--  Запасной вид: буква на устойчивом пастельном градиенте.  -->
+                                <!--  Пастельная подложка: буква-заглушка или глиф системной плитки.  -->
                                 <Border
                                     Background="{x:Bind FallbackBrush}"
-                                    CornerRadius="14"
-                                    Visibility="{x:Bind HasNoIcon, Mode=OneWay}">
-                                    <TextBlock
-                                        HorizontalAlignment="Center"
-                                        VerticalAlignment="Center"
-                                        FontSize="20"
-                                        FontWeight="SemiBold"
-                                        Foreground="White"
-                                        Text="{x:Bind Initial}" />
+                                    CornerRadius="18"
+                                    Visibility="{x:Bind HasPlate, Mode=OneWay}">
+                                    <Grid>
+                                        <TextBlock
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            FontSize="20"
+                                            FontWeight="SemiBold"
+                                            Foreground="White"
+                                            Text="{x:Bind Initial}"
+                                            Visibility="{x:Bind ShowLetter, Mode=OneWay}" />
+                                        <FontIcon
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            FontSize="26"
+                                            Foreground="White"
+                                            Glyph="{x:Bind Glyph}"
+                                            Visibility="{x:Bind HasGlyph, Mode=OneWay}" />
+                                    </Grid>
                                 </Border>
 
                                 <!--  Настоящий значок оболочки Windows.  -->
                                 <Image
-                                    Width="36"
-                                    Height="36"
+                                    Width="46"
+                                    Height="46"
                                     Source="{x:Bind Icon, Mode=OneWay}"
                                     Stretch="Uniform"
                                     Visibility="{x:Bind HasIcon, Mode=OneWay}" />
@@ -76,22 +84,18 @@
                                     Margin="0,0,0,5"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Bottom"
+                                    Background="{StaticResource GlazeBrandGradientBrush}"
                                     CornerRadius="2"
-                                    Visibility="{x:Bind HasIndicator, Mode=OneWay}">
-                                    <Border.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                            <GradientStop Offset="0" Color="#5E9BFF" />
-                                            <GradientStop Offset="1" Color="#BF5AF2" />
-                                        </LinearGradientBrush>
-                                    </Border.Background>
-                                </Border>
+                                    Visibility="{x:Bind HasIndicator, Mode=OneWay}" />
                             </Grid>
                         </Border>
 
                         <!--  Разделитель секций.  -->
                         <Rectangle
-                            Width="1"
-                            Height="30"
+                            Width="2"
+                            Height="34"
+                            RadiusX="1"
+                            RadiusY="1"
                             VerticalAlignment="Center"
                             Fill="{StaticResource GlazeBorderBrush}"
                             Visibility="{x:Bind SeparatorVisibility}" />
