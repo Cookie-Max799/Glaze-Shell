@@ -12,8 +12,26 @@
         Окно dock (A1). Стекло рисует системный acrylic-backdrop, но окно имеет региональную
         маску-капсулу (A1.xaml.cs), поэтому видна только сама плавающая панель. Содержимое —
         лента плиток: «Пуск», закреплённые и запущенные приложения, папка «Загрузки», корзина.
+        Курсор отслеживается на всём окне: магнификация считается по расстоянию до него.
     -->
-    <Grid x:Name="Root" Background="Transparent">
+    <Grid
+        x:Name="Root"
+        Background="Transparent"
+        PointerExited="OnPointerExited"
+        PointerMoved="OnPointerMoved">
+        <Grid.Resources>
+            <!--  Подпись плитки: компактная «pill» над значком, как в dock macOS (DESIGN §7.5).  -->
+            <Style TargetType="ToolTip">
+                <Setter Property="Background" Value="{StaticResource GlazeElevatedBrush}" />
+                <Setter Property="Foreground" Value="{StaticResource GlazeTextPrimaryBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource GlazeGlassBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="Padding" Value="10,5" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+            </Style>
+        </Grid.Resources>
         <ItemsControl
             x:Name="Tiles"
             Padding="14,24,14,16"
@@ -38,10 +56,9 @@
                             Height="60"
                             Background="Transparent"
                             CornerRadius="18"
-                            PointerEntered="OnTilePointerEntered"
-                            PointerExited="OnTilePointerExited"
                             RightTapped="OnTileRightTapped"
                             Tapped="OnTileTapped"
+                            ToolTipService.Placement="Top"
                             ToolTipService.ToolTip="{x:Bind ToolTip, Mode=OneWay}"
                             Visibility="{x:Bind TileVisibility}">
                             <Grid>

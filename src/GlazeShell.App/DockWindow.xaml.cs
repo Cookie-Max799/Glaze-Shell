@@ -14,6 +14,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
 using Windows.Graphics;
 
 namespace GlazeShell.App;
@@ -37,22 +38,41 @@ public sealed partial class DockWindow : Window
     private const int PillRadius = 36;
 
     /// <summary>
-    /// Подъём и масштаб плитки при наведении и её соседей (DESIGN §7.5: 16 px / 1.2 и
-    /// 6 px / 1.06). Верхний отступ окна (24 px) подобран так, чтобы увеличенная плитка
-    /// не выходила за границы капсулы.
+    /// Максимальный подъём и масштаб плитки под курсором (DESIGN §7.5: 16 px / 1.2).
+    /// Верхний отступ окна (24 px) подобран так, чтобы увеличенная плитка не выходила
+    /// за границы капсулы: 6 px прироста + 16 px подъёма = 22 px.
     /// </summary>
     private const double HoverLift = 16;
     private const double HoverScale = 1.2;
-    private const double NeighborLift = 6;
-    private const double NeighborScale = 1.06;
+
+    /// <summary>
+    /// Радиус зоны магнификации: влияние курсора на плитку спадает как гауссова кривая
+    /// <c>exp(-(d/σ)²)</c>. При σ ≈ 1.2·плитки сосед получает около 1.08 / 6 px, как в
+    /// DESIGN §7.5, а вторая плитка — уже почти ноль. Это даёт непрерывный «горб» вокруг
+    /// курсора, как в dock macOS, вместо увеличения строго одной плитки с соседями.
+    /// </summary>
+    private const double MagnifySigma = TileSize * 1.2;
 
     private static readonly TimeSpan HoverDuration = TimeSpan.FromMilliseconds(180);
+
+    /// <summary>Порог, ниже которого пересчёт визуала пропускается (меньше пиксельного шума).</summary>
+    private const double MagnifyScaleEpsilon = 0.002;
+    private const double MagnifyLiftEpsilon = 0.05;
 
     private readonly Window _owner;
     private readonly ThemeApplicator _themes;
     private readonly IDisposable _settingsChanged;
 
     private nint _hwnd;
+
+    // Кэш раскладки плиток в координатах ItemsControl: пересчитывается после изменения состава
+    // и при изменении размеров, чтобы на каждое движение курсора не обходить визуальное дерево.
+    private double[] _tileCenters = [];
+    private double[] _tileHalfWidths = [];
+    private double[] _lastScale = [];
+    private double[] _lastLift = [];
+    private bool _centersDirty = true;
+    private int _glowIndex = -1;
 
     public DockWindow(
         ISettingsManager settings,
@@ -77,6 +97,7 @@ public sealed partial class DockWindow : Window
 
         ViewModel.ActivateRequested += OnActivateRequested;
         ViewModel.Items.CollectionChanged += OnItemsChanged;
+        Tiles.SizeChanged += OnTilesSizeChanged;
         _settingsChanged = events.Subscribe<SettingsChanged>(_ => _themes.ApplyFromSettings(Root));
 
         ConfigureOverlay();
@@ -85,6 +106,7 @@ public sealed partial class DockWindow : Window
         {
             ViewModel.ActivateRequested -= OnActivateRequested;
             ViewModel.Items.CollectionChanged -= OnItemsChanged;
+            Tiles.SizeChanged -= OnTilesSizeChanged;
             _settingsChanged.Dispose();
             ViewModel.Dispose();
         };
@@ -162,7 +184,12 @@ public sealed partial class DockWindow : Window
         }
     }
 
-    private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e) => UpdateDockSize();
+    private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        _centersDirty = true;
+        _glowIndex = -1;
+        UpdateDockSize();
+    }
 
     private void OnActivateRequested(object? sender, EventArgs e)
     {
@@ -185,22 +212,108 @@ public sealed partial class DockWindow : Window
         }
     }
 
-    private void OnTilePointerEntered(object sender, PointerRoutedEventArgs e)
+    /// <summary>
+    /// Непрерывная магнификация: на каждое движение курсора каждая плитка получает масштаб и
+    /// подъём по гауссову спаду от расстояния до курсора. Плитка под курсором дополнительно
+    /// подсвечивается акцентной рамкой. Так dock ведёт себя как в macOS: под курсором
+    /// вырастает «горб» из нескольких плиток, а не одна плитка с двумя соседями.
+    /// </summary>
+    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is not Border { DataContext: DockItemViewModel item })
+        var x = e.GetCurrentPoint(Tiles).Position.X;
+        ApplyMagnification(x);
+    }
+
+    private void OnPointerExited(object sender, PointerRoutedEventArgs e) => ResetTiles();
+
+    private void ApplyMagnification(double pointerX)
+    {
+        EnsureTileLayout();
+
+        var maxDelta = HoverScale - 1.0;
+        var sigma = MagnifySigma;
+        var hovered = -1;
+
+        for (var index = 0; index < ViewModel.Items.Count; index++)
+        {
+            if (ViewModel.Items[index].IsSeparator)
+            {
+                continue;
+            }
+
+            var center = _tileCenters[index];
+
+            if (double.IsNaN(center) || TileAt(index) is not { } tile)
+            {
+                continue;
+            }
+
+            var distance = Math.Abs(pointerX - center);
+            var normalized = distance / sigma;
+            var influence = Math.Exp(-(normalized * normalized));
+            var scale = 1.0 + (maxDelta * influence);
+            var lift = HoverLift * influence;
+
+            if (Math.Abs(scale - _lastScale[index]) > MagnifyScaleEpsilon ||
+                Math.Abs(lift - _lastLift[index]) > MagnifyLiftEpsilon)
+            {
+                _lastScale[index] = scale;
+                _lastLift[index] = lift;
+                Animate(tile, lift, scale);
+            }
+
+            if (distance <= _tileHalfWidths[index])
+            {
+                hovered = index;
+            }
+        }
+
+        if (hovered != _glowIndex)
+        {
+            SetGlow(TileAt(_glowIndex), false);
+            SetGlow(TileAt(hovered), true);
+            _glowIndex = hovered;
+        }
+    }
+
+    private void OnTilesSizeChanged(object sender, SizeChangedEventArgs e) => _centersDirty = true;
+
+    /// <summary>
+    /// Пересчитывает кэш центров и полуширин плиток в координатах <see cref="Tiles"/>. Вызывается
+    /// лениво из <see cref="ApplyMagnification"/>: к моменту движения курсора раскладка готова,
+    /// а после изменения состава плиток (<see cref="_centersDirty"/>) кэш обновляется один раз.
+    /// </summary>
+    private void EnsureTileLayout()
+    {
+        var count = ViewModel.Items.Count;
+
+        if (!_centersDirty && _tileCenters.Length == count)
         {
             return;
         }
 
-        var index = ViewModel.Items.IndexOf(item);
+        _tileCenters = new double[count];
+        _tileHalfWidths = new double[count];
+        _lastScale = new double[count];
+        _lastLift = new double[count];
 
-        Animate(TileAt(index), HoverLift, HoverScale);
-        SetGlow(TileAt(index), true);
-        Animate(TileAt(index - 1), NeighborLift, NeighborScale);
-        Animate(TileAt(index + 1), NeighborLift, NeighborScale);
+        for (var index = 0; index < count; index++)
+        {
+            _lastScale[index] = 1.0;
+            _tileCenters[index] = double.NaN;
+
+            if (TileAt(index) is not { } tile)
+            {
+                continue;
+            }
+
+            var origin = tile.TransformToVisual(Tiles).TransformPoint(new Point(0, 0));
+            _tileCenters[index] = origin.X + (tile.ActualWidth / 2);
+            _tileHalfWidths[index] = tile.ActualWidth / 2;
+        }
+
+        _centersDirty = false;
     }
-
-    private void OnTilePointerExited(object sender, PointerRoutedEventArgs e) => ResetTiles();
 
     private async void OnTileTapped(object sender, TappedRoutedEventArgs e)
     {
@@ -317,6 +430,14 @@ public sealed partial class DockWindow : Window
             Animate(tile, 0, 1.0);
             SetGlow(tile, false);
         }
+
+        for (var index = 0; index < _lastScale.Length; index++)
+        {
+            _lastScale[index] = 1.0;
+            _lastLift[index] = 0.0;
+        }
+
+        _glowIndex = -1;
     }
 
     /// <summary>
