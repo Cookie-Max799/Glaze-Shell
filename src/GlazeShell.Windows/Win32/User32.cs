@@ -148,8 +148,13 @@ internal static class User32
 
     internal const long WsThickFrame = 0x0004_0000;
     internal const long WsExToolWindow = 0x0000_0080;
+    internal const long WsExTopmost = 0x0000_0008;
+    internal const long WsExNoActivate = 0x0800_0000;
+
+    internal const nint HwndTopmost = -1;
 
     internal const int SwShow = 5;
+    internal const int SwShowNoActivate = 4;
     internal const int SwMinimize = 6;
     internal const int SwRestore = 9;
     internal const int SwMaximize = 3;
@@ -167,7 +172,9 @@ internal static class User32
 
     internal const uint SwpNoSize = 0x0001;
     internal const uint SwpNoMove = 0x0002;
+    internal const uint SwpNoZOrder = 0x0004;
     internal const uint SwpShowWindow = 0x0040;
+    internal const uint SwpNoActivate = 0x0010;
 
     internal const uint EventSystemForeground = 0x0003;
     internal const uint EventObjectCreate = 0x8000;
@@ -186,6 +193,8 @@ internal static class User32
 
     internal const uint MonitorInfoFPrimary = 0x0000_0001;
 
+    internal const uint MonitorDefaultToNearest = 0x0000_0002;
+
     internal const uint EnumCurrentSettings = unchecked((uint)-1);
 
     internal const uint DmDisplayOrientation = 0x0000_0080;
@@ -198,6 +207,12 @@ internal static class User32
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool EnumWindows(EnumWindowsProc callback, nint parameter);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern nint FindWindow(string? className, string? windowName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern uint RegisterWindowMessage(string message);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -234,6 +249,13 @@ internal static class User32
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern long GetWindowLongPtr(nint hwnd, long index);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", CharSet = CharSet.Unicode)]
+    internal static extern nint SetWindowLongPtr(nint hwnd, long index, nint value);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ShowWindow(nint hwnd, int command);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern nint GetWindow(nint hwnd, int command);

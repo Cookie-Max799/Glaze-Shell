@@ -1,8 +1,7 @@
 <Application
     x:Class="GlazeShell.App.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    RequestedTheme="Dark">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -10,30 +9,36 @@
             </ResourceDictionary.MergedDictionaries>
 
             <!--
-                Палитра взята из логотипа Glaze Shell: почти чёрная подложка, светлый текст
-                и индиго-фиолетовый акцент (градиент #5F7CFF → #8E8CFF → #8B6CF9).
+                Токены оформления Glaze Shell. Значения — тёмная палитра по умолчанию;
+                ThemeApplicator перекрашивает эти же кисти при старте и при смене темы,
+                поэтому элементы обновляются без перезагрузки XAML. Источник значений —
+                docs/DESIGN.md и docs/design/tokens/tokens.json.
             -->
-            <Color x:Key="GlazeBackgroundColor">#131316</Color>
-            <Color x:Key="GlazeSurfaceColor">#1C1C1E</Color>
-            <Color x:Key="GlazeRaisedColor">#232326</Color>
-            <Color x:Key="GlazeTextPrimaryColor">#F5F5F7</Color>
-            <Color x:Key="GlazeTextSecondaryColor">#A1A1AA</Color>
-            <Color x:Key="GlazeTextMutedColor">#6E6E76</Color>
-            <Color x:Key="GlazeAccentColor">#8E8CFF</Color>
+            <SolidColorBrush x:Key="GlazeBackgroundBrush" Color="#14122B" />
+            <SolidColorBrush x:Key="GlazeSurfaceBrush" Color="#1E1B3D" />
+            <SolidColorBrush x:Key="GlazeElevatedBrush" Color="#2A2754" />
+            <SolidColorBrush x:Key="GlazeBorderBrush" Color="#3A3670" />
+            <SolidColorBrush x:Key="GlazeTextPrimaryBrush" Color="#F4F1FF" />
+            <SolidColorBrush x:Key="GlazeTextSecondaryBrush" Color="#B2AED8" />
+            <SolidColorBrush x:Key="GlazeTextMutedBrush" Color="#7773A8" />
+            <SolidColorBrush x:Key="GlazeAccentBrush" Color="#A99BFF" />
+            <SolidColorBrush x:Key="GlazeSelectionBrush" Color="#33A99BFF" />
+            <SolidColorBrush x:Key="GlazeStatusSuccessBrush" Color="#3FCF9B" />
+            <SolidColorBrush x:Key="GlazeStatusCriticalBrush" Color="#FF6B81" />
 
             <!--
                 Стандартная подсветка выбранного элемента списка почти незаметна на тёмном
                 фоне. Кисти заданы прямо в корневом словаре: он ищется раньше влитых
                 XamlControlsResources, поэтому перекрывает значения темы.
             -->
-            <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#26262B" />
-            <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#2C2C33" />
-            <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#33314A" />
-            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#3B3860" />
-            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#423F6B" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#2A2754" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#2A2754" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#33A99BFF" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#33A99BFF" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#33A99BFF" />
 
             <Style x:Key="ApplicationCardStyle" TargetType="ListViewItem">
-            <Setter Property="Background" Value="#1C1C1E" />
+            <Setter Property="Background" Value="{StaticResource GlazeSurfaceBrush}" />
             <Setter Property="CornerRadius" Value="12" />
             <Setter Property="Margin" Value="0,0,0,8" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />

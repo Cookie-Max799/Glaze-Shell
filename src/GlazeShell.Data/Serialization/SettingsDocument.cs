@@ -23,6 +23,20 @@ public sealed class SettingsDocument
 
     public string? ActiveThemeId { get; set; }
 
+    public string? ThemeMode { get; set; }
+
+    public string? AccentId { get; set; }
+
+    public bool TopBarEnabled { get; set; } = true;
+
+    public bool DockEnabled { get; set; } = true;
+
+    /// <summary>Заменяет ли dock системную панель задач, скрывая её на время работы.</summary>
+    public bool DockReplacesTaskbar { get; set; } = true;
+
+    /// <summary>Идентификаторы приложений, закреплённых в dock, в порядке отображения.</summary>
+    public List<string>? DockPinnedApps { get; set; }
+
     public Dictionary<string, string>? MonitorNames { get; set; }
 
     public static SettingsDocument FromSettings(UserSettings settings)
@@ -38,6 +52,14 @@ public sealed class SettingsDocument
             RestoreLastLayout = settings.RestoreLastLayout,
             Language = settings.Language,
             ActiveThemeId = settings.ActiveThemeId,
+            ThemeMode = settings.ThemeMode.ToId(),
+            AccentId = settings.AccentId,
+            TopBarEnabled = settings.TopBarEnabled,
+            DockEnabled = settings.DockEnabled,
+            DockReplacesTaskbar = settings.DockReplacesTaskbar,
+            DockPinnedApps = settings.DockPinnedApps.Count == 0
+                ? null
+                : new List<string>(settings.DockPinnedApps),
             MonitorNames = settings.MonitorNames.Count == 0
                 ? null
                 : new Dictionary<string, string>(settings.MonitorNames, StringComparer.OrdinalIgnoreCase)
@@ -72,7 +94,19 @@ public static class SettingsDocumentMapper
             messages.Add($"The theme identifier '{document.ActiveThemeId}' is not valid.");
         }
 
+        var themeMode = ThemeMode.System;
+        if (document.ThemeMode is not null && !ThemeModeExtensions.TryParse(document.ThemeMode, out themeMode))
+        {
+            messages.Add($"The theme mode '{document.ThemeMode}' is not valid.");
+        }
+
+        if (document.AccentId is not null && !AccentPalette.IsKnown(document.AccentId))
+        {
+            messages.Add($"The accent '{document.AccentId}' is not valid.");
+        }
+
         var monitorNames = MapMonitorNames(document.MonitorNames, messages);
+        var dockPinnedApps = MapDockPinnedApps(document.DockPinnedApps, messages);
 
         if (messages.Count > 0)
         {
@@ -88,7 +122,13 @@ public static class SettingsDocumentMapper
             document.RestoreLastLayout,
             language,
             document.ActiveThemeId,
-            monitorNames);
+            monitorNames,
+            themeMode,
+            document.AccentId,
+            document.TopBarEnabled,
+            document.DockEnabled,
+            dockPinnedApps,
+            document.DockReplacesTaskbar);
         diagnostics = Array.Empty<string>();
         return true;
     }
@@ -125,6 +165,40 @@ public static class SettingsDocumentMapper
             }
 
             parsed[key] = value;
+        }
+
+        return parsed;
+    }
+
+    private static List<string> MapDockPinnedApps(List<string>? apps, List<string> messages)
+    {
+        var parsed = new List<string>();
+
+        if (apps is null || apps.Count == 0)
+        {
+            return parsed;
+        }
+
+        if (apps.Count > UserSettings.MaxDockPinnedApps)
+        {
+            messages.Add($"The settings document contains more than {UserSettings.MaxDockPinnedApps} dock pinned applications.");
+            return parsed;
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var appId in apps)
+        {
+            if (!PersistenceLimits.IsValidIdentifier(appId))
+            {
+                messages.Add($"The dock pinned application '{appId}' is not valid.");
+                continue;
+            }
+
+            if (seen.Add(appId))
+            {
+                parsed.Add(appId);
+            }
         }
 
         return parsed;

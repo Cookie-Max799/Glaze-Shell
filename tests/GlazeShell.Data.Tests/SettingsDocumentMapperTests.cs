@@ -18,6 +18,10 @@ public sealed class SettingsDocumentMapperTests
         Assert.IsNotNull(settings);
         Assert.AreEqual(SettingsDocument.DefaultLanguage, settings.Language);
         Assert.IsTrue(settings.ShowDesktopOnStartup);
+        Assert.IsTrue(settings.TopBarEnabled);
+        Assert.IsTrue(settings.DockEnabled);
+        Assert.IsTrue(settings.DockReplacesTaskbar);
+        Assert.IsEmpty(settings.DockPinnedApps);
         Assert.IsEmpty(settings.MonitorNames);
     }
 
@@ -55,6 +59,46 @@ public sealed class SettingsDocumentMapperTests
 
         Assert.IsFalse(SettingsDocumentMapper.TryMap(document, out _, out var diagnostics));
         StringAssert.Contains(diagnostics.Single(), "theme identifier");
+    }
+
+    [TestMethod]
+    public void MapsThemeModeAndAccent()
+    {
+        var document = new SettingsDocument { ThemeMode = "dark", AccentId = "mint" };
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+
+        Assert.AreEqual(ThemeMode.Dark, settings!.ThemeMode);
+        Assert.AreEqual("mint", settings.AccentId);
+    }
+
+    [TestMethod]
+    public void DefaultsThemeModeWhenNull()
+    {
+        var document = new SettingsDocument { ThemeMode = null, AccentId = null };
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+
+        Assert.AreEqual(ThemeMode.System, settings!.ThemeMode);
+        Assert.IsNull(settings.AccentId);
+    }
+
+    [TestMethod]
+    public void RejectsInvalidThemeMode()
+    {
+        var document = new SettingsDocument { ThemeMode = "sepia" };
+
+        Assert.IsFalse(SettingsDocumentMapper.TryMap(document, out _, out var diagnostics));
+        StringAssert.Contains(diagnostics.Single(), "theme mode");
+    }
+
+    [TestMethod]
+    public void RejectsInvalidAccent()
+    {
+        var document = new SettingsDocument { AccentId = "neon" };
+
+        Assert.IsFalse(SettingsDocumentMapper.TryMap(document, out _, out var diagnostics));
+        StringAssert.Contains(diagnostics.Single(), "accent");
     }
 
     [TestMethod]
@@ -111,6 +155,73 @@ public sealed class SettingsDocumentMapperTests
     }
 
     [TestMethod]
+    public void MapsDisabledTopBar()
+    {
+        var document = new SettingsDocument { TopBarEnabled = false };
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+
+        Assert.IsFalse(settings!.TopBarEnabled);
+    }
+
+    [TestMethod]
+    public void MapsDisabledDock()
+    {
+        var document = new SettingsDocument { DockEnabled = false };
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+
+        Assert.IsFalse(settings!.DockEnabled);
+    }
+
+    [TestMethod]
+    public void MapsDisabledTaskbarReplacement()
+    {
+        var document = new SettingsDocument { DockReplacesTaskbar = false };
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+
+        Assert.IsFalse(settings!.DockReplacesTaskbar);
+    }
+
+    [TestMethod]
+    public void MapsDockPinsDeduplicatedInOrder()
+    {
+        var document = new SettingsDocument { DockPinnedApps = ["app-1", "APP-1", "app-2"] };
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+
+        Assert.HasCount(2, settings!.DockPinnedApps);
+        Assert.AreEqual("app-1", settings.DockPinnedApps[0]);
+        Assert.AreEqual("app-2", settings.DockPinnedApps[1]);
+    }
+
+    [TestMethod]
+    public void RejectsInvalidDockPin()
+    {
+        var document = new SettingsDocument { DockPinnedApps = ["bad\npin"] };
+
+        Assert.IsFalse(SettingsDocumentMapper.TryMap(document, out _, out var diagnostics));
+        StringAssert.Contains(diagnostics.Single(), "dock pinned application");
+    }
+
+    [TestMethod]
+    public void RejectsTooManyDockPins()
+    {
+        var document = new SettingsDocument
+        {
+            DockPinnedApps = Enumerable.Range(0, UserSettings.MaxDockPinnedApps + 1)
+                .Select(static index => $"app-{index}")
+                .ToList()
+        };
+
+        Assert.IsFalse(SettingsDocumentMapper.TryMap(document, out _, out var diagnostics));
+        StringAssert.Contains(
+            diagnostics.Single(),
+            UserSettings.MaxDockPinnedApps.ToString(CultureInfo.InvariantCulture));
+    }
+
+    [TestMethod]
     public void FromSettingsMapsValues()
     {
         var settings = new UserSettings(
@@ -118,7 +229,13 @@ public sealed class SettingsDocumentMapperTests
             minimizeToTray: true,
             language: "de-DE",
             activeThemeId: "midnight",
-            monitorNames: new Dictionary<string, string> { ["monitor-1"] = "Left" });
+            monitorNames: new Dictionary<string, string> { ["monitor-1"] = "Left" },
+            themeMode: ThemeMode.Light,
+            accentId: "rose",
+            topBarEnabled: false,
+            dockEnabled: false,
+            dockPinnedApps: ["app-1", "app-2"],
+            dockReplacesTaskbar: false);
 
         var document = SettingsDocument.FromSettings(settings);
 
@@ -126,7 +243,21 @@ public sealed class SettingsDocumentMapperTests
         Assert.IsTrue(document.MinimizeToTray);
         Assert.AreEqual("de-DE", document.Language);
         Assert.AreEqual("midnight", document.ActiveThemeId);
+        Assert.AreEqual("light", document.ThemeMode);
+        Assert.AreEqual("rose", document.AccentId);
+        Assert.IsFalse(document.TopBarEnabled);
+        Assert.IsFalse(document.DockEnabled);
+        Assert.IsFalse(document.DockReplacesTaskbar);
+        Assert.HasCount(2, document.DockPinnedApps!);
         Assert.HasCount(1, document.MonitorNames!);
+    }
+
+    [TestMethod]
+    public void FromSettingsOmitsEmptyDockPins()
+    {
+        var document = SettingsDocument.FromSettings(new UserSettings());
+
+        Assert.IsNull(document.DockPinnedApps);
     }
 
     [TestMethod]

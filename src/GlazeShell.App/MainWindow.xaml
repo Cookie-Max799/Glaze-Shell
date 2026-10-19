@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Window
     x:Class="GlazeShell.App.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -8,7 +8,7 @@
     xmlns:p="using:GlazeShell.App.Presentation"
     mc:Ignorable="d">
 
-    <Grid x:Name="Root" Background="#131316">
+    <Grid x:Name="Root" Background="{StaticResource GlazeBackgroundBrush}">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="360" />
@@ -25,7 +25,7 @@
             <Border
                 Grid.Row="0"
                 Padding="36,30,36,22"
-                Background="#1C1C1E">
+                Background="{StaticResource GlazeSurfaceBrush}">
                 <Grid ColumnSpacing="16">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
@@ -36,21 +36,76 @@
                         <TextBlock
                             FontSize="30"
                             FontWeight="SemiBold"
-                            Foreground="#F5F5F7"
+                            Foreground="{StaticResource GlazeTextPrimaryBrush}"
                             Text="Glaze Shell" />
                         <TextBlock
                             FontSize="14"
-                            Foreground="#A1A1AA"
+                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
                             Text="Запуск установленных приложений: меню «Пуск» и пакеты MSIX."
                             TextWrapping="Wrap" />
                     </StackPanel>
 
-                    <ProgressRing
+                    <StackPanel
                         Grid.Column="1"
-                        Width="26"
-                        Height="26"
-                        Foreground="#8E8CFF"
-                        IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+                        HorizontalAlignment="Right"
+                        Spacing="10">
+                        <ProgressRing
+                            Width="26"
+                            Height="26"
+                            HorizontalAlignment="Right"
+                            Foreground="{StaticResource GlazeAccentBrush}"
+                            IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+
+                        <StackPanel Orientation="Horizontal" Spacing="10">
+                            <ComboBox
+                                MinWidth="130"
+                                ItemsSource="{x:Bind ViewModel.ThemeModeOptions, Mode=OneWay}"
+                                SelectedItem="{x:Bind ViewModel.SelectedThemeMode, Mode=TwoWay}"
+                                ToolTipService.ToolTip="Тема оформления">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="p:ThemeModeOption">
+                                        <TextBlock Text="{x:Bind Label}" />
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <ComboBox
+                                MinWidth="150"
+                                ItemsSource="{x:Bind ViewModel.AccentOptions, Mode=OneWay}"
+                                SelectedItem="{x:Bind ViewModel.SelectedAccent, Mode=TwoWay}"
+                                ToolTipService.ToolTip="Акцентный цвет">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate x:DataType="p:AccentOption">
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Border
+                                                Width="16"
+                                                Height="16"
+                                                Background="{x:Bind Preview}"
+                                                CornerRadius="8" />
+                                            <TextBlock Text="{x:Bind Label}" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <CheckBox
+                                VerticalAlignment="Center"
+                                Content="Верхняя панель"
+                                IsChecked="{x:Bind ViewModel.IsTopBarEnabled, Mode=OneWay}"
+                                Click="OnTopBarToggle"
+                                ToolTipService.ToolTip="Плавающая верхняя панель (A6)" />
+                            <CheckBox
+                                VerticalAlignment="Center"
+                                Content="Dock"
+                                IsChecked="{x:Bind ViewModel.IsDockEnabled, Mode=OneWay}"
+                                Click="OnDockToggle"
+                                ToolTipService.ToolTip="Плавающий dock снизу (A1)" />
+                            <CheckBox
+                                VerticalAlignment="Center"
+                                Content="Вместо панели задач"
+                                IsChecked="{x:Bind ViewModel.IsDockReplacesTaskbar, Mode=OneWay}"
+                                Click="OnReplaceTaskbarToggle"
+                                ToolTipService.ToolTip="Скрывать системную панель задач, пока работает dock" />
+                        </StackPanel>
+                    </StackPanel>
                 </Grid>
             </Border>
 
@@ -115,13 +170,13 @@
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
                                                 FontSize="18"
-                                                Foreground="#5A5A63"
+                                                Foreground="{StaticResource GlazeTextMutedBrush}"
                                                 Text="{x:Bind RunningGlyph, Mode=OneWay}"
                                                 Visibility="{x:Bind IsNotLaunching, Mode=OneWay}" />
                                             <ProgressRing
                                                 Width="20"
                                                 Height="20"
-                                                Foreground="#8E8CFF"
+                                                Foreground="{StaticResource GlazeAccentBrush}"
                                                 IsActive="{x:Bind IsLaunching, Mode=OneWay}"
                                                 Visibility="{x:Bind IsLaunching, Mode=OneWay}" />
                                         </Grid>
@@ -131,7 +186,7 @@
                                                 <TextBlock
                                                     FontSize="15"
                                                     FontWeight="SemiBold"
-                                                    Foreground="#F5F5F7"
+                                                    Foreground="{StaticResource GlazeTextPrimaryBrush}"
                                                     Text="{x:Bind Name, Mode=OneWay}"
                                                     TextTrimming="CharacterEllipsis" />
                                                 <Grid ColumnSpacing="8">
@@ -141,7 +196,7 @@
                                                     </Grid.ColumnDefinitions>
                                                     <TextBlock
                                                         FontSize="12"
-                                                        Foreground="#A1A1AA"
+                                                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
                                                         Text="{x:Bind Description, Mode=OneWay}"
                                                         TextTrimming="CharacterEllipsis"
                                                         ToolTipService.ToolTip="{x:Bind Path, Mode=OneWay}" />
@@ -165,7 +220,7 @@
                                                         <Border
                                                             Margin="0,2,0,0"
                                                             Padding="10,6"
-                                                            Background="#232326"
+                                                            Background="{StaticResource GlazeElevatedBrush}"
                                                             CornerRadius="6">
                                                             <Grid ColumnSpacing="8">
                                                                 <Grid.ColumnDefinitions>
@@ -184,7 +239,7 @@
                                                                     <TextBlock
                                                                         FontSize="12.5"
                                                                         FontWeight="SemiBold"
-                                                                        Foreground="#F5F5F7"
+                                                                        Foreground="{StaticResource GlazeTextPrimaryBrush}"
                                                                         Text="{x:Bind Title, Mode=OneWay}"
                                                                         TextTrimming="CharacterEllipsis" />
                                                                     <StackPanel Orientation="Horizontal" Spacing="6">
@@ -194,7 +249,7 @@
                                                                             Text="{x:Bind StateText, Mode=OneWay}" />
                                                                         <TextBlock
                                                                             FontSize="11"
-                                                                            Foreground="#6E6E76"
+                                                                            Foreground="{StaticResource GlazeTextMutedBrush}"
                                                                             Text="{x:Bind MonitorLabel, Mode=OneWay}"
                                                                             Visibility="{x:Bind HasMonitor, Mode=OneWay}" />
                                                                     </StackPanel>
@@ -241,11 +296,11 @@
                                             Grid.Column="2"
                                             Padding="10,3"
                                             VerticalAlignment="Center"
-                                            Background="#232326"
+                                            Background="{StaticResource GlazeElevatedBrush}"
                                             CornerRadius="6">
                                             <TextBlock
                                                 FontSize="11"
-                                                Foreground="#6E6E76"
+                                                Foreground="{StaticResource GlazeTextMutedBrush}"
                                                 Text="{x:Bind TypeBadge, Mode=OneWay}" />
                                         </Border>
                                     </Grid>
@@ -253,7 +308,7 @@
                                     <Border
                                         Width="4"
                                         HorizontalAlignment="Left"
-                                        Background="#8E8CFF"
+                                        Background="{StaticResource GlazeAccentBrush}"
                                         CornerRadius="12,0,0,12"
                                         Visibility="{x:Bind IsSelected, Mode=OneWay}" />
                                 </Grid>
@@ -265,7 +320,7 @@
                         Margin="0,40,0,0"
                         HorizontalAlignment="Center"
                         FontSize="14"
-                        Foreground="#6E6E76"
+                        Foreground="{StaticResource GlazeTextMutedBrush}"
                         Text="Приложения не найдены"
                         Visibility="{x:Bind ViewModel.IsEmpty, Mode=OneWay}" />
 
@@ -304,16 +359,16 @@
             <Border
                 Grid.Row="2"
                 Padding="36,14,36,20"
-                Background="#1C1C1E">
+                Background="{StaticResource GlazeSurfaceBrush}">
                 <StackPanel Spacing="8">
                     <TextBlock
                         FontSize="12"
-                        Foreground="#A1A1AA"
+                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
                         Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
                         TextTrimming="CharacterEllipsis" />
                     <TextBlock
                         FontSize="12"
-                        Foreground="#5A5A63"
+                        Foreground="{StaticResource GlazeTextMutedBrush}"
                         Text="Логи и данные: %LOCALAPPDATA%\GlazeShell" />
                 </StackPanel>
             </Border>
@@ -323,8 +378,8 @@
         <Border
             Grid.Column="1"
             Padding="20,24,20,20"
-            Background="#1C1C1E"
-            BorderBrush="#26262B"
+            Background="{StaticResource GlazeSurfaceBrush}"
+            BorderBrush="{StaticResource GlazeBorderBrush}"
             BorderThickness="1,0,0,0">
             <Grid RowSpacing="10">
                 <Grid.RowDefinitions>
@@ -336,13 +391,13 @@
                 <TextBlock
                     FontSize="12"
                     FontWeight="SemiBold"
-                    Foreground="#F5F5F7"
+                    Foreground="{StaticResource GlazeTextPrimaryBrush}"
                     Text="МОНИТОРЫ" />
                 <TextBlock
                     Grid.Row="1"
                     FontSize="14"
                     FontWeight="SemiBold"
-                    Foreground="#F5F5F7"
+                    Foreground="{StaticResource GlazeTextPrimaryBrush}"
                     Text="{x:Bind ViewModel.MonitorSummary, Mode=OneWay}"
                     TextWrapping="Wrap" />
 
@@ -356,7 +411,7 @@
                                 <Border
                                     Margin="0,0,0,10"
                                     Padding="12"
-                                    Background="#232326"
+                                    Background="{StaticResource GlazeElevatedBrush}"
                                     CornerRadius="8">
                                     <StackPanel Spacing="6">
                                         <Grid ColumnSpacing="12">
@@ -369,24 +424,24 @@
                                             <FontIcon
                                                 VerticalAlignment="Center"
                                                 FontSize="15"
-                                                Foreground="#8E8CFF"
+                                                Foreground="{StaticResource GlazeAccentBrush}"
                                                 Glyph="&#xE7F4;" />
                                             <StackPanel Grid.Column="1" Spacing="2">
                                                 <TextBlock
                                                     FontSize="15"
                                                     FontWeight="SemiBold"
-                                                    Foreground="#F5F5F7"
+                                                    Foreground="{StaticResource GlazeTextPrimaryBrush}"
                                                     Text="{x:Bind DisplayName, Mode=OneWay}"
                                                     TextTrimming="CharacterEllipsis"
                                                     ToolTipService.ToolTip="{x:Bind DeviceName, Mode=OneWay}" />
                                                 <TextBlock
                                                     FontSize="12"
-                                                    Foreground="#A1A1AA"
+                                                    Foreground="{StaticResource GlazeTextSecondaryBrush}"
                                                     Text="{x:Bind Label, Mode=OneWay}"
                                                     TextTrimming="CharacterEllipsis" />
                                                 <TextBlock
                                                     FontSize="12"
-                                                    Foreground="#6E6E76"
+                                                    Foreground="{StaticResource GlazeTextMutedBrush}"
                                                     Text="{x:Bind Summary, Mode=OneWay}" />
                                             </StackPanel>
                                             <StackPanel
@@ -396,11 +451,11 @@
                                                 <Border
                                                     Padding="8,2"
                                                     HorizontalAlignment="Right"
-                                                    Background="#1C1C1E"
+                                                    Background="{StaticResource GlazeSurfaceBrush}"
                                                     CornerRadius="4">
                                                     <TextBlock
                                                         FontSize="11"
-                                                        Foreground="#A1A1AA"
+                                                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
                                                         Text="{x:Bind Badge, Mode=OneWay}" />
                                                 </Border>
                                                 <Button
@@ -416,7 +471,7 @@
 
                                         <TextBlock
                                             FontSize="11"
-                                            Foreground="#6E6E76"
+                                            Foreground="{StaticResource GlazeTextMutedBrush}"
                                             Text="{x:Bind WindowCountText, Mode=OneWay}" />
 
                                         <ItemsControl ItemsSource="{x:Bind Windows, Mode=OneWay}">
@@ -435,7 +490,7 @@
                                                         <TextBlock
                                                             Grid.Column="1"
                                                             FontSize="11"
-                                                            Foreground="#C7C7CE"
+                                                            Foreground="{StaticResource GlazeTextPrimaryBrush}"
                                                             Text="{x:Bind Title, Mode=OneWay}"
                                                             TextTrimming="CharacterEllipsis" />
                                                         <TextBlock

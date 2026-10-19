@@ -1,7 +1,9 @@
 using System.Globalization;
+using GlazeShell.App.Theming;
 using GlazeShell.Core.Configuration;
 using GlazeShell.Core.Diagnostics;
 using GlazeShell.Core.Discovery;
+using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Persistence;
 using GlazeShell.Core.Services;
@@ -26,6 +28,26 @@ public partial class App : Application
     private readonly FileLogger _logger;
     private Window? _window;
     private SingleInstanceLease? _singleInstanceLease;
+
+    /// <summary>
+    /// Верхняя панель (A6) — отдельное окно. Создаётся и закрывается по настройке
+    /// <see cref="GlazeShell.Core.Models.UserSettings.TopBarEnabled"/>.
+    /// </summary>
+    private TopBarWindow? _topBar;
+
+    /// <summary>
+    /// Плавающий dock (A1) — отдельное окно. Создаётся и закрывается по настройке
+    /// <see cref="GlazeShell.Core.Models.UserSettings.DockEnabled"/>.
+    /// </summary>
+    private DockWindow? _dock;
+
+    /// <summary>
+    /// Скрытие системной панели задач, пока dock её заменяет (A1). Состояние живёт
+    /// в настройке <see cref="GlazeShell.Core.Models.UserSettings.DockReplacesTaskbar"/>.
+    /// </summary>
+    private TaskbarHider? _taskbarHider;
+
+    private IDisposable? _settingsChangedSubscription;
 
     /// <summary>
     /// Активная тема хранится в поле, а не в локальной переменной: менеджер должен
@@ -86,6 +108,8 @@ public partial class App : Application
 
         _themeManager = CreateThemeManager(store, eventManager, settingsManager.GetSettings().ActiveThemeId);
 
+        var themeApplicator = new ThemeApplicator(settingsManager);
+
         var window = new MainWindow(
             configuration.ApplicationName,
             discovery,
@@ -94,8 +118,72 @@ public partial class App : Application
             monitorManager,
             desktopManager,
             settingsManager,
-            eventManager);
+            eventManager,
+            themeApplicator);
         _window = window;
+
+        // Верхняя панель создаётся до активации главного окна: панель показывается без
+        // перехвата фокуса, поэтому фокус остаётся у главного окна.
+        void ApplyTopBar(bool enabled)
+        {
+            if (enabled)
+            {
+                _topBar ??= new TopBarWindow(settingsManager, windowManager, eventManager, themeApplicator);
+            }
+            else
+            {
+                _topBar?.Close();
+                _topBar = null;
+            }
+        }
+
+        void ApplyDock(bool enabled)
+        {
+            if (enabled)
+            {
+                _dock ??= new DockWindow(settingsManager, discovery, launcher, windowManager, eventManager, themeApplicator, window);
+            }
+            else
+            {
+                _dock?.Close();
+                _dock = null;
+            }
+        }
+
+        // Панель задач скрывается только вместе с dock: без него переключение окон
+        // осталось бы без штатной панели. Скрытие обратимо и повторяется после
+        // перезапуска Explorer; при выходе панель возвращается на место.
+        void ApplyTaskbarReplacement(bool enabled)
+        {
+            if (enabled)
+            {
+                _taskbarHider ??= new TaskbarHider();
+                _taskbarHider.Hide();
+            }
+            else
+            {
+                _taskbarHider?.Dispose();
+                _taskbarHider = null;
+            }
+        }
+
+        // Предыдущий запуск мог завершиться аварийно и оставить панель задач за краем
+        // экрана: сохранённого положения в этом случае нет, поэтому панель возвращается
+        // к нижней границе монитора до решения о новом скрытии.
+        _ = TaskbarHider.RestoreIfOffScreen();
+
+        ApplyTopBar(settingsManager.GetSettings().TopBarEnabled);
+        ApplyDock(settingsManager.GetSettings().DockEnabled);
+        ApplyTaskbarReplacement(
+            settingsManager.GetSettings().DockEnabled &&
+            settingsManager.GetSettings().DockReplacesTaskbar);
+        _settingsChangedSubscription = eventManager.Subscribe<SettingsChanged>(
+            changed =>
+            {
+                ApplyTopBar(changed.Settings.TopBarEnabled);
+                ApplyDock(changed.Settings.DockEnabled);
+                ApplyTaskbarReplacement(changed.Settings.DockEnabled && changed.Settings.DockReplacesTaskbar);
+            });
 
         // Координатор запускается после создания окна: подписчики уже зарегистрированы,
         // поэтому ни одно событие не теряется между подпиской и первым проходом источника.
@@ -134,6 +222,28 @@ public partial class App : Application
         EventLatencyRecorder eventLatency)
     {
         _logger.Write(GlazeLogLevel.Information, "App", "Application window closed, releasing resources.");
+
+        // Панель задач возвращается первой: даже если закрытие панелей или запись
+        // данных ниже сорвётся, пользователь не останется без системной панели.
+        TryShutdownStep("taskbar", () =>
+        {
+            _taskbarHider?.Dispose();
+            _taskbarHider = null;
+        });
+
+        TryShutdownStep("top bar", () =>
+        {
+            _settingsChangedSubscription?.Dispose();
+            _settingsChangedSubscription = null;
+            _topBar?.Close();
+            _topBar = null;
+        });
+
+        TryShutdownStep("dock", () =>
+        {
+            _dock?.Close();
+            _dock = null;
+        });
 
         TryShutdownStep("layout writer", () =>
         {
