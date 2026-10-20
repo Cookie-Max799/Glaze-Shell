@@ -50,6 +50,11 @@ public partial class App : Application
     private ExplorerWindow? _explorer;
 
     /// <summary>
+    /// Окно настроек Glaze (I1) — создаётся лениво и переиспользуется.
+    /// </summary>
+    private SettingsWindow? _settingsWindow;
+
+    /// <summary>
     /// Скрытие системной панели задач, пока dock её заменяет (A1). Состояние живёт
     /// в настройке <see cref="GlazeShell.Core.Models.UserSettings.DockReplacesTaskbar"/>.
     /// </summary>
@@ -163,8 +168,24 @@ public partial class App : Application
             }
         }
 
+        // Настройки Glaze Shell (I1): создаются лениво и переиспользуются, чтобы не плодить окна.
+        void OpenSettings()
+        {
+            if (_settingsWindow is null)
+            {
+                _settingsWindow = new SettingsWindow(settingsManager, eventManager, themeApplicator);
+
+                _settingsWindow.Closed += (_, _) => _settingsWindow = null;
+                _settingsWindow.Activate();
+                return;
+            }
+
+            _settingsWindow.Activate();
+        }
+
         // Кнопка «Проводник» в главном окне и команда open-explorer в Glance ведут в одно окно.
         window.ExplorerRequested += (_, path) => OpenExplorer(path);
+        window.SettingsRequested += (_, _) => OpenSettings();
 
         // Верхняя панель создаётся до активации главного окна: панель показывается без
         // перехвата фокуса, поэтому фокус остаётся у главного окна.
@@ -332,6 +353,12 @@ public partial class App : Application
         {
             _explorer?.Close();
             _explorer = null;
+        });
+
+        TryShutdownStep("settings", () =>
+        {
+            _settingsWindow?.Close();
+            _settingsWindow = null;
         });
 
         TryShutdownStep("layout writer", () =>

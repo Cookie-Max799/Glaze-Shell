@@ -66,55 +66,15 @@
                             </StackPanel>
                         </Button>
 
-                        <StackPanel Orientation="Horizontal" Spacing="10">
-                            <ComboBox
-                                MinWidth="130"
-                                ItemsSource="{x:Bind ViewModel.ThemeModeOptions, Mode=OneWay}"
-                                SelectedItem="{x:Bind ViewModel.SelectedThemeMode, Mode=TwoWay}"
-                                ToolTipService.ToolTip="Тема оформления">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate x:DataType="p:ThemeModeOption">
-                                        <TextBlock Text="{x:Bind Label}" />
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                            <ComboBox
-                                MinWidth="150"
-                                ItemsSource="{x:Bind ViewModel.AccentOptions, Mode=OneWay}"
-                                SelectedItem="{x:Bind ViewModel.SelectedAccent, Mode=TwoWay}"
-                                ToolTipService.ToolTip="Акцентный цвет">
-                                <ComboBox.ItemTemplate>
-                                    <DataTemplate x:DataType="p:AccentOption">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <Border
-                                                Width="16"
-                                                Height="16"
-                                                Background="{x:Bind Preview}"
-                                                CornerRadius="8" />
-                                            <TextBlock Text="{x:Bind Label}" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ComboBox.ItemTemplate>
-                            </ComboBox>
-                            <CheckBox
-                                VerticalAlignment="Center"
-                                Content="Верхняя панель"
-                                IsChecked="{x:Bind ViewModel.IsTopBarEnabled, Mode=OneWay}"
-                                Click="OnTopBarToggle"
-                                ToolTipService.ToolTip="Плавающая верхняя панель (A6)" />
-                            <CheckBox
-                                VerticalAlignment="Center"
-                                Content="Dock"
-                                IsChecked="{x:Bind ViewModel.IsDockEnabled, Mode=OneWay}"
-                                Click="OnDockToggle"
-                                ToolTipService.ToolTip="Плавающий dock снизу (A1)" />
-                            <CheckBox
-                                VerticalAlignment="Center"
-                                Content="Вместо панели задач"
-                                IsChecked="{x:Bind ViewModel.IsDockReplacesTaskbar, Mode=OneWay}"
-                                Click="OnReplaceTaskbarToggle"
-                                ToolTipService.ToolTip="Скрывать системную панель задач, пока работает dock" />
-                        </StackPanel>
+                        <Button
+                            HorizontalAlignment="Right"
+                            Click="OnSettingsClick"
+                            ToolTipService.ToolTip="Настройки Glaze Shell (I1)">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="15" Glyph="&#xE713;" />
+                                <TextBlock Text="Настройки" />
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
                 </Grid>
             </Border>

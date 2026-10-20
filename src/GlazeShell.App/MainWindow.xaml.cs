@@ -61,10 +61,17 @@ public sealed partial class MainWindow : Window
     /// </summary>
     public event EventHandler<string?>? ExplorerRequested;
 
+    /// <summary>
+    /// Запрос на открытие окна настроек (I1). Окном владеет приложение, а не главное окно.
+    /// </summary>
+    public event EventHandler? SettingsRequested;
+
     private void OnThemeSelectionChanged(object? sender, ThemeSelectionChangedEventArgs e) =>
         _themes.Apply(Root, e.Mode, e.AccentId);
 
     private void OnExplorerClick(object sender, RoutedEventArgs e) => ExplorerRequested?.Invoke(this, null);
+
+    private void OnSettingsClick(object sender, RoutedEventArgs e) => SettingsRequested?.Invoke(this, EventArgs.Empty);
 
     private void OnRefreshClick(object sender, RoutedEventArgs e) =>
         ViewModel.RefreshCommand.Execute(null);
