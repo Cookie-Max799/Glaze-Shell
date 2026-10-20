@@ -9,17 +9,14 @@
     mc:Ignorable="d">
 
     <!--
-        Окно dock (A1). Стекло рисует системный acrylic-backdrop, но окно имеет региональную
-        маску со скруглёнными только верхними углами (DockWindow.xaml.cs), поэтому панель
-        прижата к нижнему краю экрана и растворяется в нём. Содержимое — лента плиток:
-        «Пуск», закреплённые и запущенные приложения, папка «Загрузки», корзина.
-        Курсор отслеживается на всём окне: магнификация считается по расстоянию до него.
+        Окно dock (A1). Стекло рисует системный acrylic-backdrop поверх прозрачного окна:
+        окно имеет региональную маску со скруглёнными только верхними углами
+        (DockWindow.xaml.cs), поэтому панель прижата к нижнему краю экрана и растворяется
+        в нём. Содержимое — лента плиток: «Пуск», закреплённые и запущенные приложения,
+        папка «Загрузки», корзина. Курсор отслеживается на всём окне: магнификация
+        считается по расстоянию до него.
     -->
-    <Grid
-        x:Name="Root"
-        Background="Transparent"
-        PointerExited="OnPointerExited"
-        PointerMoved="OnPointerMoved">
+    <Grid x:Name="Root" Background="Transparent">
         <Grid.Resources>
             <!--  Подпись плитки: компактная «pill» над значком, как в dock macOS (DESIGN §7.5).  -->
             <Style TargetType="ToolTip">
@@ -33,9 +30,19 @@
             </Style>
         </Grid.Resources>
 
+        <!--
+            Заливка стекла: сам Acrylic даёт преломление фона, а лёгкая тонированная
+            подложка делает панель читаемой как стекло, а не как серый прямоугольник.
+            Контур не рисуется — форму задаёт региональная маска окна.
+        -->
+        <Border
+            Background="{StaticResource GlazeGlassBrush}"
+            CornerRadius="22,22,0,0"
+            IsHitTestVisible="False" />
+
         <ItemsControl
             x:Name="Tiles"
-            Padding="12,20,12,10"
+            Padding="28,16,28,8"
             VerticalAlignment="Center"
             ItemsSource="{x:Bind ViewModel.Items}">
             <ItemsControl.ItemsPanel>
@@ -53,10 +60,10 @@
                     <Grid>
                         <!--  Плитка приложения: только значок, без подложки.  -->
                         <Border
-                            Width="48"
-                            Height="48"
+                            Width="40"
+                            Height="40"
                             Background="Transparent"
-                            CornerRadius="14"
+                            CornerRadius="12"
                             RightTapped="OnTileRightTapped"
                             Tapped="OnTileTapped"
                             ToolTipService.Placement="Top"
@@ -66,13 +73,13 @@
                                 <!--  Пастельная подложка: буква-заглушка или глиф системной плитки.  -->
                                 <Border
                                     Background="{x:Bind FallbackBrush}"
-                                    CornerRadius="14"
+                                    CornerRadius="12"
                                     Visibility="{x:Bind HasPlate, Mode=OneWay}">
                                     <Grid>
                                         <TextBlock
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
-                                            FontSize="17"
+                                            FontSize="15"
                                             FontWeight="SemiBold"
                                             Foreground="White"
                                             Text="{x:Bind Initial}"
@@ -80,7 +87,7 @@
                                         <FontIcon
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
-                                            FontSize="20"
+                                            FontSize="18"
                                             Foreground="White"
                                             Glyph="{x:Bind Glyph}"
                                             Visibility="{x:Bind HasGlyph, Mode=OneWay}" />
@@ -89,17 +96,17 @@
 
                                 <!--  Настоящий значок оболочки Windows.  -->
                                 <Image
-                                    Width="36"
-                                    Height="36"
+                                    Width="30"
+                                    Height="30"
                                     Source="{x:Bind Icon, Mode=OneWay}"
                                     Stretch="Uniform"
                                     Visibility="{x:Bind HasIcon, Mode=OneWay}" />
 
                                 <!--  Индикатор запущенного приложения.  -->
                                 <Border
-                                    Width="13"
+                                    Width="12"
                                     Height="3"
-                                    Margin="0,0,0,3"
+                                    Margin="0,0,0,2"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Bottom"
                                     Background="{StaticResource GlazeBrandGradientBrush}"
@@ -111,7 +118,7 @@
                         <!--  Разделитель секций: без контура, только мягкая заливка.  -->
                         <Rectangle
                             Width="2"
-                            Height="28"
+                            Height="24"
                             RadiusX="1"
                             RadiusY="1"
                             VerticalAlignment="Center"

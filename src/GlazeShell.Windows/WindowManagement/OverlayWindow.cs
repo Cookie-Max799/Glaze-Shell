@@ -128,6 +128,28 @@ public static class OverlayWindow
     }
 
     /// <summary>
+    /// Позиция курсора относительно клиентской области окна в физических пикселях.
+    /// Нужна окнам, показанным без активации: WinUI не всегда доставляет им события ввода,
+    /// поэтому позицию приходится читать глобально.
+    /// </summary>
+    public static bool TryGetCursorPosition(nint hwnd, out int x, out int y)
+    {
+        x = 0;
+        y = 0;
+
+        if (hwnd == 0
+            || !User32.GetCursorPos(out var cursor)
+            || !User32.GetWindowRect(hwnd, out var bounds))
+        {
+            return false;
+        }
+
+        x = cursor.X - bounds.Left;
+        y = cursor.Y - bounds.Top;
+        return true;
+    }
+
+    /// <summary>
     /// Придаёт окну форму набора скруглённых прямоугольников (регион окна) в физических
     /// пикселях. Так «стеклянный» backdrop рисуется только внутри pill, а промежутки между
     /// ними пропускают рабочий стол. Возвращает <c>false</c>, если маску задать не удалось:

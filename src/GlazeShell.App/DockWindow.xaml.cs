@@ -1,19 +1,17 @@
 ﻿using System.Collections.Specialized;
 using System.Diagnostics;
-using System.Numerics;
 using GlazeShell.App.Presentation;
 using GlazeShell.App.Theming;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Windows.WindowManagement;
-using Microsoft.UI.Composition;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
-using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Animation;
 using Windows.Foundation;
 using Windows.Graphics;
 
@@ -26,22 +24,22 @@ namespace GlazeShell.App;
 /// </summary>
 public sealed partial class DockWindow : Window
 {
-    private const int TileSize = 48;
+    private const int TileSize = 40;
     private const int Gap = 5;
     private const int SeparatorWidth = 2;
-    private const int PaddingHorizontal = 12;
-    private const int PaddingTop = 20;
-    private const int PaddingBottom = 10;
+    private const int PaddingHorizontal = 28;
+    private const int PaddingTop = 16;
+    private const int PaddingBottom = 8;
 
     /// <summary>Радиус капсулы dock (DESIGN §7.5: радиус 36).</summary>
-    private const int PillRadius = 36;
+    private const int PillRadius = 22;
 
     /// <summary>
     /// Максимальный подъём и масштаб плитки под курсором (DESIGN §7.5: 16 px / 1.2).
-    /// Верхний отступ окна (20 px) подобран так, чтобы увеличенная плитка не выходила
-    /// за границы капсулы: 4.8 px прироста + 15 px подъёма = 19.8 px.
+    /// Верхний отступ окна (16 px) подобран так, чтобы увеличенная плитка не выходила
+    /// за границы капсулы: 4 px прироста + 12 px подъёма = 16 px.
     /// </summary>
-    private const double HoverLift = 15;
+    private const double HoverLift = 12;
     private const double HoverScale = 1.2;
 
     /// <summary>
@@ -62,7 +60,16 @@ public sealed partial class DockWindow : Window
     private readonly ThemeApplicator _themes;
     private readonly IDisposable _settingsChanged;
 
+    // Магнификация не может опираться только на PointerMoved: окно показано без активации
+    // (WS_EX_NOACTIVATE), и WinUI не всегда доставляет ему события ввода. Поэтому позиция
+    // курсора читается глобально таймером и переводится в координаты ленты плиток.
+    private readonly DispatcherTimer _cursorWatch = new() { Interval = TimeSpan.FromMilliseconds(33) };
+
     private nint _hwnd;
+    private double _windowLeft;
+    private double _windowTop;
+    private bool _cursorInside;
+    private bool _cursorWatchRunning;
 
     // Кэш раскладки плиток в координатах ItemsControl: пересчитывается после изменения состава
     // и при изменении размеров, чтобы на каждое движение курсора не обходить визуальное дерево.
@@ -99,10 +106,14 @@ public sealed partial class DockWindow : Window
         Tiles.SizeChanged += OnTilesSizeChanged;
         _settingsChanged = events.Subscribe<SettingsChanged>(_ => _themes.ApplyFromSettings(Root));
 
+        _cursorWatch.Tick += OnCursorWatchTick;
+
         ConfigureOverlay();
 
         Closed += (_, _) =>
         {
+            _cursorWatch.Stop();
+            _cursorWatch.Tick -= OnCursorWatchTick;
             ViewModel.ActivateRequested -= OnActivateRequested;
             ViewModel.Items.CollectionChanged -= OnItemsChanged;
             Tiles.SizeChanged -= OnTilesSizeChanged;
@@ -173,6 +184,15 @@ public sealed partial class DockWindow : Window
 
         AppWindow.MoveAndResize(new RectInt32(left, top, width, height));
 
+        _windowLeft = left;
+        _windowTop = top;
+
+        if (!_cursorWatchRunning)
+        {
+            _cursorWatchRunning = true;
+            _cursorWatch.Start();
+        }
+
         // Капсула: окно обрезается прямоугольником со скруглённым верхом, поэтому
         // acrylic-backdrop заполняет только саму панель, а не прямоугольник вокруг неё.
         if (OverlayWindow.TryGetClientSize(_hwnd, out var clientWidth, out var clientHeight))
@@ -213,19 +233,48 @@ public sealed partial class DockWindow : Window
     }
 
     /// <summary>
+    /// Таймер читает глобальную позицию курсора и, если он над dock, ведёт магнификацию.
+    /// Так эффект не зависит от того, доставляет ли WinUI события ввода окну, показанному
+    /// без активации. Когда курсор уходит с панели, плитки плавно возвращаются на место.
+    /// </summary>
+    private void OnCursorWatchTick(object? sender, object e)
+    {
+        if (_hwnd == 0 || !OverlayWindow.TryGetCursorPosition(_hwnd, out var clientX, out var clientY))
+        {
+            return;
+        }
+
+        if (!OverlayWindow.TryGetClientSize(_hwnd, out var clientWidth, out var clientHeight))
+        {
+            return;
+        }
+
+        var inside = clientX >= 0 && clientY >= 0 && clientX < clientWidth && clientY < clientHeight;
+
+        if (!inside)
+        {
+            if (_cursorInside)
+            {
+                _cursorInside = false;
+                ResetTiles();
+            }
+
+            return;
+        }
+
+        _cursorInside = true;
+
+        var scale = OverlayWindow.GetScaleFactor(_hwnd);
+        var tilesX = clientX / (scale <= 0 ? 1.0 : scale);
+        ApplyMagnification(tilesX);
+    }
+
+    /// <summary>
     /// Непрерывная магнификация: на каждое движение курсора каждая плитка получает масштаб и
     /// подъём по гауссову спаду от расстояния до курсора. Плитка под курсором дополнительно
     /// подсвечивается акцентной рамкой. Так dock ведёт себя как в macOS: под курсором
     /// вырастает «горб» из нескольких плиток, а не одна плитка с двумя соседями.
     /// </summary>
-    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        var x = e.GetCurrentPoint(Tiles).Position.X;
-        ApplyMagnification(x);
-    }
-
-    private void OnPointerExited(object sender, PointerRoutedEventArgs e) => ResetTiles();
-
     private void ApplyMagnification(double pointerX)
     {
         EnsureTileLayout();
@@ -441,8 +490,11 @@ public sealed partial class DockWindow : Window
     }
 
     /// <summary>
-    /// Подъём и масштаб выполняются визуальным слоем (Composition), а не анимацией свойств
-    /// разметки: так плитка не пересчитывает соседей, а реакция укладывается в 50 мс.
+    /// Подъём и масштаб выполняются визуальным слоем: масштаб — Composition-анимацией
+    /// <see cref="Visual.Scale"/>, а подъём — свойством <see cref="UIElement.Translation"/>,
+    /// которое учитывает раскладка. Анимировать <see cref="Visual.Offset"/> напрямую нельзя:
+    /// раскладка перезаписывает его на каждом проходе, и подъём пропадает. Оба свойства
+    /// анимируются одной длительностью, поэтому плитка реагирует плавно и предсказуемо.
     /// </summary>
     private static void Animate(Border? tile, double lift, double scale)
     {
@@ -451,27 +503,32 @@ public sealed partial class DockWindow : Window
             return;
         }
 
-        try
+        var duration = HoverDuration;
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var (scaleTransform, translateTransform) = EnsureTransforms(tile);
+
+        var scaleAnimation = new DoubleAnimation
         {
-            var visual = ElementCompositionPreview.GetElementVisual(tile);
-            var compositor = visual.Compositor;
+            To = scale,
+            Duration = duration,
+            EasingFunction = easing,
+        };
+        Storyboard.SetTarget(scaleAnimation, scaleTransform);
+        Storyboard.SetTargetProperty(scaleAnimation, nameof(ScaleTransform.ScaleX));
 
-            visual.CenterPoint = new Vector3(TileSize / 2f, TileSize / 2f, 0f);
-
-            var scaleAnimation = compositor.CreateVector3KeyFrameAnimation();
-            scaleAnimation.InsertKeyFrame(1f, new Vector3((float)scale, (float)scale, 1f));
-            scaleAnimation.Duration = HoverDuration;
-            visual.StartAnimation(nameof(Visual.Scale), scaleAnimation);
-
-            var offsetAnimation = compositor.CreateVector3KeyFrameAnimation();
-            offsetAnimation.InsertKeyFrame(1f, new Vector3(0f, -(float)lift, 0f));
-            offsetAnimation.Duration = HoverDuration;
-            visual.StartAnimation(nameof(Visual.Offset), offsetAnimation);
-        }
-        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        var liftAnimation = new DoubleAnimation
         {
-            Trace.WriteLine($"GlazeShell.Dock: a hover animation failed. {exception}");
-        }
+            To = -lift,
+            Duration = duration,
+            EasingFunction = easing,
+        };
+        Storyboard.SetTarget(liftAnimation, translateTransform);
+        Storyboard.SetTargetProperty(liftAnimation, nameof(TranslateTransform.Y));
+
+        var storyboard = new Storyboard();
+        storyboard.Children.Add(scaleAnimation);
+        storyboard.Children.Add(liftAnimation);
+        storyboard.Begin();
     }
 
     /// <summary>
@@ -495,4 +552,30 @@ public sealed partial class DockWindow : Window
         Application.Current.Resources.TryGetValue(key, out var resource) && resource is Brush brush
             ? brush
             : null;
+
+    /// <summary>
+    /// Возвращает пару трансформаций плитки (масштаб + перенос), создавая
+    /// <see cref="TransformGroup"/> при первом обращении. Масштаб растёт от нижней кромки
+    /// (<see cref="ScaleTransform.CenterY"/> = 1), поэтому плитка «тянется» вверх, как в dock
+    /// macOS, а не раздувается в обе стороны. Композиция из двух преобразований нужна потому,
+    /// что Storyboard адресует одно свойство за анимацию: <c>ScaleX</c> и <c>Y</c> — разные
+    /// элементы группы.
+    /// </summary>
+    private static (ScaleTransform Scale, TranslateTransform Translate) EnsureTransforms(Border tile)
+    {
+        if (tile.RenderTransform is TransformGroup { Children.Count: >= 2 } group
+            && group.Children[0] is ScaleTransform scale
+            && group.Children[1] is TranslateTransform translate)
+        {
+            return (scale, translate);
+        }
+
+        var newScale = new ScaleTransform { CenterX = 0.5, CenterY = 1.0 };
+        var newTranslate = new TranslateTransform();
+        var newGroup = new TransformGroup();
+        newGroup.Children.Add(newScale);
+        newGroup.Children.Add(newTranslate);
+        tile.RenderTransform = newGroup;
+        return (newScale, newTranslate);
+    }
 }

@@ -260,6 +260,11 @@ internal static class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool GetClientRect(nint hwnd, out Rect rect);
 
+    /// <summary>Позиция курсора в физических пикселях экрана.</summary>
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetCursorPos(out Point point);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern long GetWindowLongPtr(nint hwnd, long index);
 
