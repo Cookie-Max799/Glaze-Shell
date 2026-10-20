@@ -81,6 +81,18 @@ internal static class Gdi32
         int widthEllipse,
         int heightEllipse);
 
+    /// <summary>
+    /// Создаёт прямоугольную область для региональной маски окна — например, нижнюю полосу,
+    /// которая закрывает скруглённые нижние углы капсулы и делает нижний край прямым.
+    /// Правый и нижний края не входят в область.
+    /// </summary>
+    [DllImport("gdi32.dll", ExactSpelling = true)]
+    internal static extern nint CreateRectRgn(
+        int left,
+        int top,
+        int right,
+        int bottom);
+
     /// <summary>Объединяет две области в целевую (режим <see cref="RgnOr"/>).</summary>
     [DllImport("gdi32.dll", ExactSpelling = true)]
     internal static extern int CombineRgn(nint dest, nint src1, nint src2, int mode);

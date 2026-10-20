@@ -151,6 +151,63 @@ public static class OverlayWindow
     }
 
     /// <summary>
+    /// Придаёт окну форму прямоугольника со скруглёнными <b>только верхними</b> углами:
+    /// нижний край остаётся прямым, поэтому панель не парит над краем экрана, а
+    /// «растворяется» в нём. Нужная форма получается объединением капсулы с нижней
+    /// полосой прямоугольника высотой в радиус. Возвращает <c>false</c>, если маску
+    /// задать не удалось: тогда окно остаётся прямоугольным.
+    /// </summary>
+    public static bool ApplyTopRoundedRegion(nint hwnd, PixelRect rect, int cornerRadius)
+    {
+        if (hwnd == 0 || rect.Width <= 0 || rect.Height <= 0)
+        {
+            return false;
+        }
+
+        var radius = Math.Clamp(cornerRadius, 0, Math.Min(rect.Width, rect.Height) / 2);
+        var diameter = radius * 2;
+
+        var shape = Gdi32.CreateRoundRectRgn(
+            rect.X,
+            rect.Y,
+            rect.X + rect.Width + 1,
+            rect.Y + rect.Height + 1,
+            diameter,
+            diameter);
+
+        if (shape == 0)
+        {
+            return false;
+        }
+
+        if (radius > 0)
+        {
+            // Полоса начинается там, где у капсулы заканчиваются дуги нижних углов:
+            // объединение закрывает только углы, верхнее скругление не меняется.
+            var band = Gdi32.CreateRectRgn(
+                rect.X,
+                rect.Y + rect.Height - radius,
+                rect.X + rect.Width + 1,
+                rect.Y + rect.Height + 1);
+
+            if (band != 0)
+            {
+                _ = Gdi32.CombineRgn(shape, shape, band, Gdi32.RgnOr);
+                _ = Gdi32.DeleteObject(band);
+            }
+        }
+
+        // При успехе владельцем области становится система: повторно удалять её нельзя.
+        if (User32.SetWindowRgn(hwnd, shape, true) == 0)
+        {
+            _ = Gdi32.DeleteObject(shape);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Придаёт окну форму набора скруглённых прямоугольников, каждый со своим радиусом.
     /// Возвращает <c>false</c>, если маску задать не удалось: тогда окно остаётся прямоугольным.
     /// </summary>

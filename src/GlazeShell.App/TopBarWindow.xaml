@@ -37,45 +37,51 @@
                 BorderBrush="{StaticResource GlazeGlassBorderBrush}"
                 BorderThickness="1"
                 CornerRadius="24">
-                <StackPanel
-                    Orientation="Horizontal"
-                    Spacing="10"
-                    VerticalAlignment="Center">
+                <Grid>
                     <Border
-                        Width="32"
-                        Height="32"
-                        Background="{StaticResource GlazeBrandGradientBrush}"
-                        CornerRadius="10">
+                        Background="{StaticResource GlazeGlassGlossBrush}"
+                        CornerRadius="23"
+                        IsHitTestVisible="False" />
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="10"
+                        VerticalAlignment="Center">
+                        <Border
+                            Width="32"
+                            Height="32"
+                            Background="{StaticResource GlazeBrandGradientBrush}"
+                            CornerRadius="10">
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontSize="14"
+                                FontWeight="SemiBold"
+                                Foreground="White"
+                                Text="{x:Bind ViewModel.AppInitial, Mode=OneWay}" />
+                        </Border>
                         <TextBlock
-                            HorizontalAlignment="Center"
                             VerticalAlignment="Center"
-                            FontSize="14"
+                            MaxWidth="200"
+                            FontSize="13"
                             FontWeight="SemiBold"
-                            Foreground="White"
-                            Text="{x:Bind ViewModel.AppInitial, Mode=OneWay}" />
-                    </Border>
-                    <TextBlock
-                        VerticalAlignment="Center"
-                        MaxWidth="200"
-                        FontSize="13"
-                        FontWeight="SemiBold"
-                        Foreground="{StaticResource GlazeTextPrimaryBrush}"
-                        Text="{x:Bind ViewModel.AppName, Mode=OneWay}"
-                        TextTrimming="CharacterEllipsis" />
-                    <FontIcon
-                        VerticalAlignment="Center"
-                        FontSize="11"
-                        Foreground="{StaticResource GlazeTextMutedBrush}"
-                        Glyph="&#xE70D;" />
-                    <TextBlock
-                        VerticalAlignment="Center"
-                        MaxWidth="220"
-                        FontSize="12"
-                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                        Text="{x:Bind ViewModel.AppLocation, Mode=OneWay}"
-                        TextTrimming="CharacterEllipsis"
-                        Visibility="{x:Bind ViewModel.HasLocation, Mode=OneWay}" />
-                </StackPanel>
+                            Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                            Text="{x:Bind ViewModel.AppName, Mode=OneWay}"
+                            TextTrimming="CharacterEllipsis" />
+                        <FontIcon
+                            VerticalAlignment="Center"
+                            FontSize="11"
+                            Foreground="{StaticResource GlazeTextMutedBrush}"
+                            Glyph="&#xE70D;" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            MaxWidth="220"
+                            FontSize="12"
+                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                            Text="{x:Bind ViewModel.AppLocation, Mode=OneWay}"
+                            TextTrimming="CharacterEllipsis"
+                            Visibility="{x:Bind ViewModel.HasLocation, Mode=OneWay}" />
+                    </StackPanel>
+                </Grid>
             </Border>
 
             <!--  Центральная плитка: строка поиска.  -->
@@ -97,6 +103,12 @@
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
+
+                    <Border
+                        Grid.ColumnSpan="3"
+                        Background="{StaticResource GlazeGlassGlossBrush}"
+                        CornerRadius="23"
+                        IsHitTestVisible="False" />
 
                     <FontIcon
                         VerticalAlignment="Center"
@@ -141,20 +153,25 @@
                 BorderThickness="1"
                 CornerRadius="24"
                 PointerPressed="OnStatusPointerPressed">
-                <StackPanel
-                    Orientation="Horizontal"
-                    Spacing="14"
-                    VerticalAlignment="Center">
-                    <FontIcon
-                        FontSize="15"
-                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                        Glyph="{x:Bind ViewModel.NetworkGlyph, Mode=OneWay}"
-                        ToolTipService.ToolTip="{x:Bind ViewModel.NetworkText, Mode=OneWay}" />
-                    <FontIcon
-                        FontSize="15"
-                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                        Glyph="&#xE767;"
-                        ToolTipService.ToolTip="Громкость" />
+                <Grid>
+                    <Border
+                        Background="{StaticResource GlazeGlassGlossBrush}"
+                        CornerRadius="23"
+                        IsHitTestVisible="False" />
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="14"
+                        VerticalAlignment="Center">
+                        <FontIcon
+                            FontSize="15"
+                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                            Glyph="{x:Bind ViewModel.NetworkGlyph, Mode=OneWay}"
+                            ToolTipService.ToolTip="{x:Bind ViewModel.NetworkText, Mode=OneWay}" />
+                        <FontIcon
+                            FontSize="15"
+                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                            Glyph="&#xE767;"
+                            ToolTipService.ToolTip="Громкость" />
                     <StackPanel
                         Orientation="Horizontal"
                         Spacing="4"
@@ -190,6 +207,7 @@
                             Text="{x:Bind ViewModel.ClockDate, Mode=OneWay}" />
                     </StackPanel>
                 </StackPanel>
+                </Grid>
             </Border>
 
             <!--  Панель результатов Glance (B1) под строкой поиска: та же колонка, что и поиск.  -->
@@ -208,6 +226,10 @@
                 CornerRadius="24"
                 Visibility="{x:Bind ViewModel.HasResults, Mode=OneWay}">
                 <Grid>
+                    <Border
+                        Background="{StaticResource GlazeGlassGlossBrush}"
+                        CornerRadius="23"
+                        IsHitTestVisible="False" />
                     <ListView
                         x:Name="ResultsList"
                         MaxHeight="336"
@@ -300,12 +322,17 @@
             BorderThickness="1"
             CornerRadius="32"
             Visibility="{x:Bind ViewModel.QuickSettings.IsOpen, Mode=OneWay}">
-            <StackPanel Spacing="16">
-                <TextBlock
-                    FontSize="19"
-                    FontWeight="SemiBold"
-                    Foreground="{StaticResource GlazeTextPrimaryBrush}"
-                    Text="Центр управления" />
+            <Grid>
+                <Border
+                    Background="{StaticResource GlazeGlassGlossBrush}"
+                    CornerRadius="31"
+                    IsHitTestVisible="False" />
+                <StackPanel Spacing="16">
+                    <TextBlock
+                        FontSize="19"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                        Text="Центр управления" />
 
                 <StackPanel Spacing="8">
                     <TextBlock
@@ -399,7 +426,8 @@
                             CornerRadius="16" />
                     </StackPanel>
                 </StackPanel>
-            </StackPanel>
+                </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </Window>

@@ -9,10 +9,12 @@
     mc:Ignorable="d">
 
     <!--
-        Окно dock (A1). Стекло рисует системный acrylic-backdrop, но окно имеет региональную
-        маску-капсулу (A1.xaml.cs), поэтому видна только сама плавающая панель. Содержимое —
-        лента плиток: «Пуск», закреплённые и запущенные приложения, папка «Загрузки», корзина.
-        Курсор отслеживается на всём окне: магнификация считается по расстоянию до него.
+        Окно dock (A1). Стекло рисует системный acrylic-backdrop, а поверх него — капсула
+        «жидкого стекла»: градиентный rim по краю и светлый блик под лентой плиток. Окно
+        имеет региональную маску со скруглёнными только верхними углами (DockWindow.xaml.cs),
+        поэтому панель прижата к нижнему краю экрана и растворяется в нём. Содержимое —
+        лента плиток: «Пуск», закреплённые и запущенные приложения, папка «Загрузки»,
+        корзина. Курсор отслеживается на всём окне: магнификация считается по расстоянию.
     -->
     <Grid
         x:Name="Root"
@@ -32,93 +34,109 @@
                 <Setter Property="FontWeight" Value="SemiBold" />
             </Style>
         </Grid.Resources>
-        <ItemsControl
-            x:Name="Tiles"
-            Padding="14,24,14,16"
-            VerticalAlignment="Center"
-            ItemsSource="{x:Bind ViewModel.Items}">
-            <ItemsControl.ItemsPanel>
-                <ItemsPanelTemplate>
-                    <StackPanel Orientation="Horizontal" Spacing="5" />
-                </ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemContainerStyle>
-                <Style TargetType="ContentPresenter">
-                    <Setter Property="VerticalAlignment" Value="Center" />
-                </Style>
-            </ItemsControl.ItemContainerStyle>
-            <ItemsControl.ItemTemplate>
-                <DataTemplate x:DataType="p:DockItemViewModel">
-                    <Grid>
-                        <!--  Плитка приложения: только значок, без подложки.  -->
-                        <Border
-                            Width="60"
-                            Height="60"
-                            Background="Transparent"
-                            CornerRadius="18"
-                            RightTapped="OnTileRightTapped"
-                            Tapped="OnTileTapped"
-                            ToolTipService.Placement="Top"
-                            ToolTipService.ToolTip="{x:Bind ToolTip, Mode=OneWay}"
-                            Visibility="{x:Bind TileVisibility}">
+
+        <!--  Капсула «жидкого стекла»: заливка, градиентный rim и блик.  -->
+        <Border
+            x:Name="GlassPlate"
+            Background="{StaticResource GlazeGlassBrush}"
+            BorderBrush="{StaticResource GlazeGlassBorderBrush}"
+            BorderThickness="1"
+            CornerRadius="36,36,0,0">
+            <Grid>
+                <Border
+                    Background="{StaticResource GlazeGlassGlossBrush}"
+                    CornerRadius="35,35,0,0"
+                    IsHitTestVisible="False" />
+
+                <ItemsControl
+                    x:Name="Tiles"
+                    Padding="14,22,14,12"
+                    VerticalAlignment="Center"
+                    ItemsSource="{x:Bind ViewModel.Items}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="5" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemContainerStyle>
+                        <Style TargetType="ContentPresenter">
+                            <Setter Property="VerticalAlignment" Value="Center" />
+                        </Style>
+                    </ItemsControl.ItemContainerStyle>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="p:DockItemViewModel">
                             <Grid>
-                                <!--  Пастельная подложка: буква-заглушка или глиф системной плитки.  -->
+                                <!--  Плитка приложения: только значок, без подложки.  -->
                                 <Border
-                                    Background="{x:Bind FallbackBrush}"
-                                    CornerRadius="18"
-                                    Visibility="{x:Bind HasPlate, Mode=OneWay}">
+                                    Width="52"
+                                    Height="52"
+                                    Background="Transparent"
+                                    CornerRadius="15"
+                                    RightTapped="OnTileRightTapped"
+                                    Tapped="OnTileTapped"
+                                    ToolTipService.Placement="Top"
+                                    ToolTipService.ToolTip="{x:Bind ToolTip, Mode=OneWay}"
+                                    Visibility="{x:Bind TileVisibility}">
                                     <Grid>
-                                        <TextBlock
+                                        <!--  Пастельная подложка: буква-заглушка или глиф системной плитки.  -->
+                                        <Border
+                                            Background="{x:Bind FallbackBrush}"
+                                            CornerRadius="15"
+                                            Visibility="{x:Bind HasPlate, Mode=OneWay}">
+                                            <Grid>
+                                                <TextBlock
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center"
+                                                    FontSize="18"
+                                                    FontWeight="SemiBold"
+                                                    Foreground="White"
+                                                    Text="{x:Bind Initial}"
+                                                    Visibility="{x:Bind ShowLetter, Mode=OneWay}" />
+                                                <FontIcon
+                                                    HorizontalAlignment="Center"
+                                                    VerticalAlignment="Center"
+                                                    FontSize="22"
+                                                    Foreground="White"
+                                                    Glyph="{x:Bind Glyph}"
+                                                    Visibility="{x:Bind HasGlyph, Mode=OneWay}" />
+                                            </Grid>
+                                        </Border>
+
+                                        <!--  Настоящий значок оболочки Windows.  -->
+                                        <Image
+                                            Width="40"
+                                            Height="40"
+                                            Source="{x:Bind Icon, Mode=OneWay}"
+                                            Stretch="Uniform"
+                                            Visibility="{x:Bind HasIcon, Mode=OneWay}" />
+
+                                        <!--  Индикатор запущенного приложения.  -->
+                                        <Border
+                                            Width="14"
+                                            Height="3"
+                                            Margin="0,0,0,4"
                                             HorizontalAlignment="Center"
-                                            VerticalAlignment="Center"
-                                            FontSize="20"
-                                            FontWeight="SemiBold"
-                                            Foreground="White"
-                                            Text="{x:Bind Initial}"
-                                            Visibility="{x:Bind ShowLetter, Mode=OneWay}" />
-                                        <FontIcon
-                                            HorizontalAlignment="Center"
-                                            VerticalAlignment="Center"
-                                            FontSize="26"
-                                            Foreground="White"
-                                            Glyph="{x:Bind Glyph}"
-                                            Visibility="{x:Bind HasGlyph, Mode=OneWay}" />
+                                            VerticalAlignment="Bottom"
+                                            Background="{StaticResource GlazeBrandGradientBrush}"
+                                            CornerRadius="2"
+                                            Visibility="{x:Bind HasIndicator, Mode=OneWay}" />
                                     </Grid>
                                 </Border>
 
-                                <!--  Настоящий значок оболочки Windows.  -->
-                                <Image
-                                    Width="46"
-                                    Height="46"
-                                    Source="{x:Bind Icon, Mode=OneWay}"
-                                    Stretch="Uniform"
-                                    Visibility="{x:Bind HasIcon, Mode=OneWay}" />
-
-                                <!--  Индикатор запущенного приложения.  -->
-                                <Border
-                                    Width="16"
-                                    Height="4"
-                                    Margin="0,0,0,5"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Bottom"
-                                    Background="{StaticResource GlazeBrandGradientBrush}"
-                                    CornerRadius="2"
-                                    Visibility="{x:Bind HasIndicator, Mode=OneWay}" />
+                                <!--  Разделитель секций.  -->
+                                <Rectangle
+                                    Width="2"
+                                    Height="30"
+                                    RadiusX="1"
+                                    RadiusY="1"
+                                    VerticalAlignment="Center"
+                                    Fill="{StaticResource GlazeBorderBrush}"
+                                    Visibility="{x:Bind SeparatorVisibility}" />
                             </Grid>
-                        </Border>
-
-                        <!--  Разделитель секций.  -->
-                        <Rectangle
-                            Width="2"
-                            Height="34"
-                            RadiusX="1"
-                            RadiusY="1"
-                            VerticalAlignment="Center"
-                            Fill="{StaticResource GlazeBorderBrush}"
-                            Visibility="{x:Bind SeparatorVisibility}" />
-                    </Grid>
-                </DataTemplate>
-            </ItemsControl.ItemTemplate>
-        </ItemsControl>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

@@ -21,6 +21,7 @@ public sealed class ThemeApplicator
     private const string BorderKey = "GlazeBorderBrush";
     private const string GlassKey = "GlazeGlassBrush";
     private const string GlassBorderKey = "GlazeGlassBorderBrush";
+    private const string GlassGlossKey = "GlazeGlassGlossBrush";
     private const string TextPrimaryKey = "GlazeTextPrimaryBrush";
     private const string TextSecondaryKey = "GlazeTextSecondaryBrush";
     private const string TextMutedKey = "GlazeTextMutedBrush";
@@ -106,7 +107,16 @@ public sealed class ThemeApplicator
         SetBrush(ElevatedKey, theme.Elevated);
         SetBrush(BorderKey, theme.Border);
         SetBrush(GlassKey, theme.Glass);
-        SetBrush(GlassBorderKey, theme.GlassBorder);
+        SetGradientBrush(
+            GlassBorderKey,
+            theme.GlassRimTop,
+            theme.GlassRimMiddle,
+            theme.GlassRimBottom);
+        SetGradientBrush(
+            GlassGlossKey,
+            theme.GlassGlossTop,
+            theme.GlassGlossMiddle,
+            theme.GlassGlossBottom);
         SetBrush(TextPrimaryKey, theme.TextPrimary);
         SetBrush(TextSecondaryKey, theme.TextSecondary);
         SetBrush(TextMutedKey, theme.TextMuted);
@@ -127,6 +137,25 @@ public sealed class ThemeApplicator
             && resource is SolidColorBrush brush)
         {
             brush.Color = color;
+        }
+    }
+
+    /// <summary>
+    /// Перекрашивает стопы градиентной кисти (rim и блик «жидкого стекла») в порядке,
+    /// заданном в XAML. Кисть обновляется на месте, поэтому открытые pill перерисовываются
+    /// без перезагрузки XAML.
+    /// </summary>
+    private static void SetGradientBrush(string key, params Color[] stops)
+    {
+        if (Microsoft.UI.Xaml.Application.Current is { } app
+            && app.Resources.TryGetValue(key, out var resource)
+            && resource is LinearGradientBrush brush
+            && brush.GradientStops.Count == stops.Length)
+        {
+            for (var index = 0; index < stops.Length; index++)
+            {
+                brush.GradientStops[index].Color = stops[index];
+            }
         }
     }
 }

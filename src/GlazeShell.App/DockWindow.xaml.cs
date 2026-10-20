@@ -26,21 +26,20 @@ namespace GlazeShell.App;
 /// </summary>
 public sealed partial class DockWindow : Window
 {
-    private const int TileSize = 60;
+    private const int TileSize = 52;
     private const int Gap = 5;
     private const int SeparatorWidth = 2;
     private const int PaddingHorizontal = 14;
-    private const int PaddingTop = 24;
-    private const int PaddingBottom = 16;
-    private const int BottomOffset = 18;
+    private const int PaddingTop = 22;
+    private const int PaddingBottom = 12;
 
     /// <summary>Радиус капсулы dock (DESIGN §7.5: радиус 36).</summary>
     private const int PillRadius = 36;
 
     /// <summary>
     /// Максимальный подъём и масштаб плитки под курсором (DESIGN §7.5: 16 px / 1.2).
-    /// Верхний отступ окна (24 px) подобран так, чтобы увеличенная плитка не выходила
-    /// за границы капсулы: 6 px прироста + 16 px подъёма = 22 px.
+    /// Верхний отступ окна (22 px) подобран так, чтобы увеличенная плитка не выходила
+    /// за границы капсулы: 5.2 px прироста + 16 px подъёма = 21.2 px.
     /// </summary>
     private const double HoverLift = 16;
     private const double HoverScale = 1.2;
@@ -139,9 +138,11 @@ public sealed partial class DockWindow : Window
     }
 
     /// <summary>
-    /// Ставит dock по центру основного монитора на 18 px выше края рабочей области. Рабочая
-    /// область не резервируется, поэтому dock не смещает окна. Ширина считается по составу
-    /// плиток: окно не должно быть шире содержимого, иначе стекло вышло бы за «pill».
+    /// Ставит dock по центру основного монитора вплотную к нижнему краю экрана: панель не
+    /// парит над краем, а растворяется в нём — нижние углы прямые, скруглены только верхние
+    /// (см. <see cref="OverlayWindow.ApplyTopRoundedRegion"/>). Рабочая область не
+    /// резервируется, поэтому dock не смещает окна. Ширина считается по составу плиток:
+    /// окно не должно быть шире содержимого, иначе стекло вышло бы за «pill».
     /// </summary>
     private void UpdateDockSize()
     {
@@ -169,17 +170,17 @@ public sealed partial class DockWindow : Window
         var width = (int)Math.Round((content + (PaddingHorizontal * 2)) * scale);
         var height = (int)Math.Round((TileSize + PaddingTop + PaddingBottom) * scale);
         var left = bounds.X + ((bounds.Width - width) / 2);
-        var top = bounds.Y + bounds.Height - height - (int)Math.Round(BottomOffset * scale);
+        var top = bounds.Y + bounds.Height - height;
 
         AppWindow.MoveAndResize(new RectInt32(left, top, width, height));
 
-        // Капсула: окно обрезается скруглённым прямоугольником, поэтому acrylic-backdrop
-        // заполняет только саму плавающую панель, а не прямоугольник вокруг неё.
+        // Капсула: окно обрезается прямоугольником со скруглённым верхом, поэтому
+        // acrylic-backdrop заполняет только саму панель, а не прямоугольник вокруг неё.
         if (OverlayWindow.TryGetClientSize(_hwnd, out var clientWidth, out var clientHeight))
         {
-            OverlayWindow.ApplyRoundedRegions(
+            OverlayWindow.ApplyTopRoundedRegion(
                 _hwnd,
-                new[] { new PixelRect(0, 0, clientWidth, clientHeight) },
+                new PixelRect(0, 0, clientWidth, clientHeight),
                 (int)Math.Round(PillRadius * scale));
         }
     }

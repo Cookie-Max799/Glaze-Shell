@@ -19,7 +19,24 @@
             <SolidColorBrush x:Key="GlazeElevatedBrush" Color="#2A2754" />
             <SolidColorBrush x:Key="GlazeBorderBrush" Color="#3A3670" />
             <SolidColorBrush x:Key="GlazeGlassBrush" Color="#8C221E4A" />
-            <SolidColorBrush x:Key="GlazeGlassBorderBrush" Color="#24FFFFFF" />
+
+            <!--
+                Рим «жидкого стекла»: яркий верхний кант, приглушённая середина и отражение
+                снизу — свет ложится на край капсулы как на мокрое стекло. Значения по умолчанию
+                — тёмная тема: ThemeApplicator перекрашивает стопы при смене темы.
+            -->
+            <LinearGradientBrush x:Key="GlazeGlassBorderBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Offset="0" Color="#F0FFFFFF" />
+                <GradientStop Offset="0.5" Color="#2EFFFFFF" />
+                <GradientStop Offset="1" Color="#6EFFFFFF" />
+            </LinearGradientBrush>
+
+            <!--  Блик жидкого стекла: светлый верхний срез под содержимым pill.  -->
+            <LinearGradientBrush x:Key="GlazeGlassGlossBrush" StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Offset="0" Color="#3DFFFFFF" />
+                <GradientStop Offset="0.45" Color="#12FFFFFF" />
+                <GradientStop Offset="1" Color="#00FFFFFF" />
+            </LinearGradientBrush>
 
             <!--  Бренд-градиент (Sky → Cobalt → Orchid): логотип, активные индикаторы.  -->
             <LinearGradientBrush x:Key="GlazeBrandGradientBrush" StartPoint="0,0" EndPoint="1,1">
