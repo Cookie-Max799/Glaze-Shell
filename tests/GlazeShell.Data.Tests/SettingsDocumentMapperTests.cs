@@ -265,4 +265,84 @@ public sealed class SettingsDocumentMapperTests
     {
         Assert.ThrowsExactly<ArgumentNullException>(() => SettingsDocument.FromSettings(null!));
     }
+
+    [TestMethod]
+    public void MapsExplorerDefaults()
+    {
+        var document = new SettingsDocument();
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out var diagnostics));
+
+        Assert.IsEmpty(diagnostics);
+        Assert.IsNotNull(settings);
+        Assert.IsEmpty(settings.ExplorerFavorites);
+        Assert.AreEqual(ExplorerViewMode.Icons, settings.ExplorerViewMode);
+    }
+
+    [TestMethod]
+    public void MapsExplorerViewModeAndFavorites()
+    {
+        var document = new SettingsDocument
+        {
+            ExplorerViewMode = "list",
+            ExplorerFavorites = [" C:\\Work ", "C:\\Notes\\"]
+        };
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out var diagnostics));
+
+        Assert.IsEmpty(diagnostics);
+        Assert.IsNotNull(settings);
+        Assert.AreEqual(ExplorerViewMode.List, settings.ExplorerViewMode);
+        Assert.HasCount(2, settings.ExplorerFavorites);
+        Assert.AreEqual("C:\\Work", settings.ExplorerFavorites[0]);
+        Assert.AreEqual("C:\\Notes", settings.ExplorerFavorites[1]);
+    }
+
+    [TestMethod]
+    public void RejectsInvalidExplorerViewMode()
+    {
+        var document = new SettingsDocument { ExplorerViewMode = "gallery" };
+
+        Assert.IsFalse(SettingsDocumentMapper.TryMap(document, out _, out var diagnostics));
+        StringAssert.Contains(diagnostics.Single(), "Explorer view mode");
+    }
+
+    [TestMethod]
+    public void RejectsTooManyExplorerFavorites()
+    {
+        var document = new SettingsDocument
+        {
+            ExplorerFavorites = Enumerable.Range(0, UserSettings.MaxExplorerFavorites + 1)
+                .Select(static index => $"C:\\Folders\\{index}")
+                .ToList()
+        };
+
+        Assert.IsFalse(SettingsDocumentMapper.TryMap(document, out _, out var diagnostics));
+        StringAssert.Contains(
+            diagnostics.Single(),
+            UserSettings.MaxExplorerFavorites.ToString(CultureInfo.InvariantCulture));
+    }
+
+    [TestMethod]
+    public void FromSettingsMapsExplorerValues()
+    {
+        var settings = new UserSettings(
+            explorerFavorites: ["C:\\Work"],
+            explorerViewMode: ExplorerViewMode.List);
+
+        var document = SettingsDocument.FromSettings(settings);
+
+        Assert.AreEqual("list", document.ExplorerViewMode);
+        Assert.HasCount(1, document.ExplorerFavorites!);
+        Assert.AreEqual("C:\\Work", document.ExplorerFavorites![0]);
+    }
+
+    [TestMethod]
+    public void FromSettingsOmitsEmptyExplorerFavorites()
+    {
+        var document = SettingsDocument.FromSettings(new UserSettings());
+
+        Assert.IsNull(document.ExplorerFavorites);
+        Assert.AreEqual("icons", document.ExplorerViewMode);
+    }
 }

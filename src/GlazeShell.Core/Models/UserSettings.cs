@@ -8,7 +8,12 @@ public sealed record UserSettings
     /// <summary>Максимальное число закреплённых в dock приложений (функция A1).</summary>
     public const int MaxDockPinnedApps = 32;
 
+    /// <summary>Максимальное число избранных папок Explorer (функция E2).</summary>
+    public const int MaxExplorerFavorites = 32;
+
     private static readonly IReadOnlyList<string> EmptyDockPinnedApps = Array.Empty<string>();
+
+    private static readonly IReadOnlyList<string> EmptyExplorerFavorites = Array.Empty<string>();
 
     public UserSettings(
         bool startWithWindows = false,
@@ -23,7 +28,9 @@ public sealed record UserSettings
         bool topBarEnabled = true,
         bool dockEnabled = true,
         IReadOnlyList<string>? dockPinnedApps = null,
-        bool dockReplacesTaskbar = true)
+        bool dockReplacesTaskbar = true,
+        IReadOnlyList<string>? explorerFavorites = null,
+        ExplorerViewMode explorerViewMode = ExplorerViewMode.Icons)
     {
         Language = ModelValidation.Required(language, nameof(language));
         ActiveThemeId = ModelValidation.Optional(activeThemeId, nameof(activeThemeId));
@@ -34,6 +41,8 @@ public sealed record UserSettings
         DockEnabled = dockEnabled;
         DockPinnedApps = NormalizeDockPinnedApps(dockPinnedApps);
         DockReplacesTaskbar = dockReplacesTaskbar;
+        ExplorerFavorites = NormalizeExplorerFavorites(explorerFavorites);
+        ExplorerViewMode = ValidateExplorerViewMode(explorerViewMode, nameof(explorerViewMode));
         StartWithWindows = startWithWindows;
         MinimizeToTray = minimizeToTray;
         ShowDesktopOnStartup = showDesktopOnStartup;
@@ -91,7 +100,59 @@ public sealed record UserSettings
     /// </summary>
     public bool DockReplacesTaskbar { get; }
 
+    /// <summary>
+    /// Полные пути папок, добавленных пользователем в «Избранное» сайдбара Explorer (E2),
+    /// в порядке отображения. Системные папки из этого списка не хранятся: они показываются
+    /// всегда и приходят из <c>IFileSystemBrowser</c>.
+    /// </summary>
+    public IReadOnlyList<string> ExplorerFavorites { get; }
+
+    /// <summary>
+    /// Вид списка Explorer (E1): иконки или список. Значение общее для всех папок, а не
+    /// отдельное на каждую: память вида по папке — следующий шаг.
+    /// </summary>
+    public ExplorerViewMode ExplorerViewMode { get; }
+
     public static UserSettings CreateDefault() => new();
+
+    private static ExplorerViewMode ValidateExplorerViewMode(ExplorerViewMode mode, string parameterName) =>
+        mode is ExplorerViewMode.Icons or ExplorerViewMode.List
+            ? mode
+            : throw new ArgumentOutOfRangeException(parameterName, mode, "The Explorer view mode is not supported.");
+
+    /// <summary>
+    /// Нормализует избранные папки Explorer: отбрасывает пустые и повторяющиеся пути,
+    /// сохраняя порядок пользователя, и ограничивает число элементов.
+    /// </summary>
+    private static IReadOnlyList<string> NormalizeExplorerFavorites(IReadOnlyList<string>? favorites)
+    {
+        if (favorites is null || favorites.Count == 0)
+        {
+            return EmptyExplorerFavorites;
+        }
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>(Math.Min(favorites.Count, MaxExplorerFavorites));
+
+        foreach (var favorite in favorites)
+        {
+            var normalized = favorite?.Trim().TrimEnd('\\');
+
+            if (string.IsNullOrEmpty(normalized) || !seen.Add(normalized))
+            {
+                continue;
+            }
+
+            result.Add(normalized);
+
+            if (result.Count >= MaxExplorerFavorites)
+            {
+                break;
+            }
+        }
+
+        return result.Count == 0 ? EmptyExplorerFavorites : result;
+    }
 
     private static ThemeMode ValidateThemeMode(ThemeMode mode, string parameterName) =>
         mode is ThemeMode.System or ThemeMode.Light or ThemeMode.Dark

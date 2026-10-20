@@ -1080,7 +1080,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             settings.TopBarEnabled,
             settings.DockEnabled,
             settings.DockPinnedApps,
-            settings.DockReplacesTaskbar));
+            settings.DockReplacesTaskbar,
+            settings.ExplorerFavorites,
+            settings.ExplorerViewMode));
 
         monitor.SetNames(
             BuildDefaultMonitorNames(Monitors.Select(static item => item.Monitor).ToList()).TryGetValue(monitor.Id, out var fallback)
@@ -1144,7 +1146,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             _topBarEnabled,
             _dockEnabled,
             settings.DockPinnedApps,
-            _dockReplacesTaskbar));
+            _dockReplacesTaskbar,
+            settings.ExplorerFavorites,
+            settings.ExplorerViewMode));
     }
 
     private static Func<string?, string?> BuildMonitorNameResolver(Dictionary<string, string> displayNames) =>

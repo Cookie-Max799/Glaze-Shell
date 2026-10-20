@@ -12,8 +12,8 @@ namespace GlazeShell.Windows.Applications;
 public sealed record IconPixels(int Width, int Height, byte[] Bgra);
 
 /// <summary>
-/// Достаёт иконку приложения через официальный shell-интерфейс
-/// <c>IShellItemImageFactory</c> и разворачивает её в управляемый буфер BGRA.
+/// Достаёт иконку элемента оболочки (приложения, файла или папки) через официальный
+/// shell-интерфейс <c>IShellItemImageFactory</c> и разворачивает её в управляемый буфер BGRA.
 /// Провайдер — best-effort: если иконку получить не удалось, возвращается
 /// <c>null</c>, а вызывающий показывает запасную плитку с буквой.
 /// </summary>
@@ -23,7 +23,7 @@ public static class ShellIconProvider
 
     public static IconPixels? TryGetIcon(string? path, int size = 64)
     {
-        if (size <= 0 || string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        if (size <= 0 || string.IsNullOrWhiteSpace(path) || !(File.Exists(path) || Directory.Exists(path)))
         {
             return null;
         }

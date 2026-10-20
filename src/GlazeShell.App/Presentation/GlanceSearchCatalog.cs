@@ -196,6 +196,7 @@ public sealed class GlanceSearchCatalog
     private static readonly GlanceResult[] Commands =
     [
         new(GlanceResultKind.Command, "open-shell", "Открыть Glaze Shell", "Главное окно", "glaze shell окно главное"),
+        new(GlanceResultKind.Command, "open-explorer", "Открыть проводник Glaze Shell", "Explorer", "explorer проводник папки файлы"),
         new(GlanceResultKind.Command, "refresh-apps", "Обновить список приложений", "Поиск", "refresh обновить сканирование"),
         new(GlanceResultKind.Command, "open-downloads", "Открыть папку «Загрузки»", "Проводник", "downloads загрузки"),
         new(GlanceResultKind.Command, "open-recycle-bin", "Открыть корзину", "Проводник", "recycle bin корзина мусор"),

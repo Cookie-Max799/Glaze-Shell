@@ -271,7 +271,7 @@
    "complexity": "L",
    "feasibility": "own-ui",
    "phase": "Phase 1 (MVP)",
-   "status": "todo"
+   "status": "partial"
   },
   {
    "id": "E2",
@@ -281,7 +281,7 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 1 (MVP)",
-   "status": "todo"
+   "status": "partial"
   },
   {
    "id": "E3",

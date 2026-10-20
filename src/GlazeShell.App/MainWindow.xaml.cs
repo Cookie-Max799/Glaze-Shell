@@ -55,8 +55,16 @@ public sealed partial class MainWindow : Window
 
     public MainViewModel ViewModel { get; }
 
+    /// <summary>
+    /// Просьба открыть проводник Glaze Shell: папку можно передать аргументом, <c>null</c>
+    /// означает папку по умолчанию. Окном Explorer владеет приложение, а не главное окно.
+    /// </summary>
+    public event EventHandler<string?>? ExplorerRequested;
+
     private void OnThemeSelectionChanged(object? sender, ThemeSelectionChangedEventArgs e) =>
         _themes.Apply(Root, e.Mode, e.AccentId);
+
+    private void OnExplorerClick(object sender, RoutedEventArgs e) => ExplorerRequested?.Invoke(this, null);
 
     private void OnRefreshClick(object sender, RoutedEventArgs e) =>
         ViewModel.RefreshCommand.Execute(null);

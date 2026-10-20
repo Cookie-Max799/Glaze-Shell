@@ -89,6 +89,7 @@ public sealed partial class TopBarWindow : Window
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         ViewModel.QuickSettings.PropertyChanged += OnQuickSettingsPropertyChanged;
         ViewModel.ActivateRequested += OnActivateRequested;
+        ViewModel.ExplorerRequested += OnExplorerRequested;
         _settingsChanged = events.Subscribe<SettingsChanged>(OnSettingsChanged);
         Activated += OnActivated;
 
@@ -97,12 +98,19 @@ public sealed partial class TopBarWindow : Window
             ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
             ViewModel.QuickSettings.PropertyChanged -= OnQuickSettingsPropertyChanged;
             ViewModel.ActivateRequested -= OnActivateRequested;
+            ViewModel.ExplorerRequested -= OnExplorerRequested;
             ViewModel.Dispose();
             _settingsChanged.Dispose();
         };
     }
 
     public TopBarViewModel ViewModel { get; }
+
+    /// <summary>
+    /// Просьба открыть проводник Glaze Shell: окном владеет приложение, поэтому панель
+    /// только пересылает запрос наружу.
+    /// </summary>
+    public event EventHandler<string?>? ExplorerRequested;
 
     /// <summary>
     /// Показывает панель, временно разрешает активацию окна и ставит фокус в строку поиска.
@@ -388,6 +396,12 @@ public sealed partial class TopBarWindow : Window
             Trace.WriteLine($"GlazeShell.TopBar: activating the main window failed. {exception}");
         }
     }
+
+    /// <summary>
+    /// Команда поиска <c>open-explorer</c> просит открыть проводник Glaze Shell: панель
+    /// окном не владеет, поэтому запрос пересылается приложению.
+    /// </summary>
+    private void OnExplorerRequested(object? sender, string? path) => ExplorerRequested?.Invoke(this, path);
 
     private void OnActivated(object sender, WindowActivatedEventArgs e)
     {

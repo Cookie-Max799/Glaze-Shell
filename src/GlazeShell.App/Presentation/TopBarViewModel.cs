@@ -217,6 +217,13 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     /// </summary>
     public event EventHandler? ActivateRequested;
 
+    /// <summary>
+    /// Просьба открыть проводник Glaze Shell (команда <c>open-explorer</c>); аргумент — папка,
+    /// которую нужно показать, или <c>null</c> для папки по умолчанию. Окном Explorer владеет
+    /// приложение, поэтому панель только сообщает о желании.
+    /// </summary>
+    public event EventHandler<string?>? ExplorerRequested;
+
     /// <summary>Очищает строку поиска вместе с панелью результатов.</summary>
     public void ClearSearch() => SearchText = string.Empty;
 
@@ -346,6 +353,10 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         {
             case "open-shell":
                 ActivateRequested?.Invoke(this, EventArgs.Empty);
+                break;
+
+            case "open-explorer":
+                ExplorerRequested?.Invoke(this, null);
                 break;
 
             case "refresh-apps":

@@ -14,6 +14,7 @@ using GlazeShell.Infrastructure.Logging;
 using GlazeShell.Infrastructure.System;
 using GlazeShell.Windows.Applications;
 using GlazeShell.Windows.DisplayManagement;
+using GlazeShell.Windows.FileSystem;
 using GlazeShell.Windows.Lifecycle;
 using GlazeShell.Windows.Shell;
 using GlazeShell.Windows.SystemEvents;
@@ -40,6 +41,13 @@ public partial class App : Application
     /// <see cref="GlazeShell.Core.Models.UserSettings.DockEnabled"/>.
     /// </summary>
     private DockWindow? _dock;
+
+    /// <summary>
+    /// Проводник Glaze Shell (E1/E2) — обычное окно приложения. Создаётся лениво по
+    /// первому запросу (кнопка главного окна или команда Glance) и переиспользуется,
+    /// чтобы в системе не было двух проводников Glaze.
+    /// </summary>
+    private ExplorerWindow? _explorer;
 
     /// <summary>
     /// Скрытие системной панели задач, пока dock её заменяет (A1). Состояние живёт
@@ -128,13 +136,42 @@ public partial class App : Application
             themeApplicator);
         _window = window;
 
+        // Проводник Glaze Shell (E1/E2): создаётся лениво и переиспользуется — повторное
+        // открытие показывает уже существующее окно и, если передана папка, переходит в неё.
+        void OpenExplorer(string? path)
+        {
+            if (_explorer is null)
+            {
+                _explorer = new ExplorerWindow(
+                    new NativeFileSystemBrowser(),
+                    settingsManager,
+                    eventManager,
+                    themeApplicator,
+                    path);
+
+                _explorer.Closed += (_, _) => _explorer = null;
+                _explorer.Activate();
+                return;
+            }
+
+            _explorer.Activate();
+
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                _ = _explorer.ViewModel.NavigateAsync(path);
+            }
+        }
+
+        // Кнопка «Проводник» в главном окне и команда open-explorer в Glance ведут в одно окно.
+        window.ExplorerRequested += (_, path) => OpenExplorer(path);
+
         // Верхняя панель создаётся до активации главного окна: панель показывается без
         // перехвата фокуса, поэтому фокус остаётся у главного окна.
         void ApplyTopBar(bool enabled)
         {
-            if (enabled)
+            if (enabled && _topBar is null)
             {
-                _topBar ??= new TopBarWindow(
+                _topBar = new TopBarWindow(
                     settingsManager,
                     discovery,
                     launcher,
@@ -142,8 +179,12 @@ public partial class App : Application
                     eventManager,
                     themeApplicator,
                     window);
+
+                // Команда open-explorer приходит сюда из панели: окном Explorer владеет
+                // приложение, поэтому панель только пересылает запрос.
+                _topBar.ExplorerRequested += (_, path) => OpenExplorer(path);
             }
-            else
+            else if (!enabled)
             {
                 _topBar?.Close();
                 _topBar = null;
@@ -284,6 +325,12 @@ public partial class App : Application
         {
             _dock?.Close();
             _dock = null;
+        });
+
+        TryShutdownStep("explorer", () =>
+        {
+            _explorer?.Close();
+            _explorer = null;
         });
 
         TryShutdownStep("layout writer", () =>

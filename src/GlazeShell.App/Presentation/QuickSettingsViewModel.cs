@@ -186,7 +186,9 @@ public sealed class QuickSettingsViewModel : INotifyPropertyChanged
             settings.TopBarEnabled,
             settings.DockEnabled,
             settings.DockPinnedApps,
-            settings.DockReplacesTaskbar));
+            settings.DockReplacesTaskbar,
+            settings.ExplorerFavorites,
+            settings.ExplorerViewMode));
     }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

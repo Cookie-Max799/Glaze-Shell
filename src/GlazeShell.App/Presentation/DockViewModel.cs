@@ -3,7 +3,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices.WindowsRuntime;
 using GlazeShell.Core.Discovery;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
@@ -514,7 +513,9 @@ public sealed class DockViewModel : IDisposable
             settings.TopBarEnabled,
             settings.DockEnabled,
             _pinnedIds,
-            settings.DockReplacesTaskbar));
+            settings.DockReplacesTaskbar,
+            settings.ExplorerFavorites,
+            settings.ExplorerViewMode));
     }
 
     private void QueueRebuild() => _ = _dispatcher.TryEnqueue(Rebuild);
@@ -893,24 +894,10 @@ public sealed class DockViewModel : IDisposable
         }
     }
 
-    private static WriteableBitmap? CreateImageSource(IconPixels pixels)
-    {
-        try
-        {
-            var bitmap = new WriteableBitmap(pixels.Width, pixels.Height);
-
-            using (var stream = bitmap.PixelBuffer.AsStream())
-            {
-                stream.Write(pixels.Bgra, 0, pixels.Bgra.Length);
-            }
-
-            bitmap.Invalidate();
-            return bitmap;
-        }
-        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
-        {
-            Trace.WriteLine($"GlazeShell.Dock: an icon image could not be created. {exception}");
-            return null;
-        }
-    }
+    /// <summary>
+    /// Создаёт источник изображения из пикселей значка. Общий помощник с Explorer (E1):
+    /// <c>WriteableBitmap</c> обязан создаваться на потоке интерфейса, поэтому создание
+    /// вынесено в <see cref="IconBitmap"/>.
+    /// </summary>
+    private static WriteableBitmap? CreateImageSource(IconPixels pixels) => IconBitmap.Create(pixels);
 }
