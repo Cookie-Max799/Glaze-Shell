@@ -199,6 +199,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private readonly IDisposable _windowClosed;
     private readonly IDisposable _foregroundChanged;
     private readonly IDisposable _windowStateChanged;
+    private readonly IDisposable _settingsChanged;
     private readonly EventCoalescer _runningRefresh;
 
     private IReadOnlyList<ApplicationListViewModel> _visible = Array.Empty<ApplicationListViewModel>();
@@ -212,6 +213,11 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _isBusy;
     private bool _isLoaded;
     private bool _windowsRefreshQueued;
+    private ThemeMode _themeMode;
+    private string? _accentId;
+    private bool _topBarEnabled;
+    private bool _dockEnabled;
+    private bool _dockReplacesTaskbar;
 
     public MainViewModel(
         IApplicationManager applications,
@@ -240,6 +246,10 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _processStarted = events.Subscribe<ProcessStarted>(changed => QueueRunningRefresh(changed.ExecutablePath, changed.ProcessName));
         _processExited = events.Subscribe<ProcessExited>(changed => QueueRunningRefresh(changed.ExecutablePath, changed.ProcessName));
 
+        // Тему можно поменять и не из главного окна (popover «Центр управления», D1):
+        // тогда переключатели здесь должны показать новое значение и перекрасить окно.
+        _settingsChanged = events.Subscribe<SettingsChanged>(OnSettingsChanged);
+
         _runningRefresh = new EventCoalescer(
             RunningRefreshDelay,
             RefreshPendingRunningState,
@@ -250,9 +260,22 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         CloseCommand = new AsyncCommand(CloseSelectedAsync, () => Selected is not null);
         RestartCommand = new AsyncCommand(RestartSelectedAsync, () => Selected is not null);
         TerminateCommand = new AsyncCommand(TerminateSelectedAsync, () => Selected is not null);
+
+        var initial = _settings.GetSettings();
+        _themeMode = initial.ThemeMode;
+        _accentId = initial.AccentId;
+        _topBarEnabled = initial.TopBarEnabled;
+        _dockEnabled = initial.DockEnabled;
+        _dockReplacesTaskbar = initial.DockReplacesTaskbar;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>
+    /// Возникает, когда пользователь меняет тему или акцент оформления. Обработчик
+    /// (окно) применяет новое оформление к визуальному дереву.
+    /// </summary>
+    public event EventHandler<ThemeSelectionChangedEventArgs>? ThemeSelectionChanged;
 
     public IDesktopManager Desktop => _desktop;
 
@@ -269,6 +292,103 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     public AsyncCommand RestartCommand { get; }
 
     public AsyncCommand TerminateCommand { get; }
+
+    /// <summary>
+    /// Доступные режимы оформления для переключателя.
+    /// </summary>
+    public IReadOnlyList<ThemeModeOption> ThemeModeOptions { get; } = ThemeOptions.CreateThemeModes();
+
+    /// <summary>
+    /// Доступные акцентные цвета для переключателя.
+    /// </summary>
+    public IReadOnlyList<AccentOption> AccentOptions { get; } = ThemeOptions.CreateAccents();
+
+    public ThemeModeOption SelectedThemeMode
+    {
+        get => ThemeModeOptions.FirstOrDefault(option => option.Mode == _themeMode) ?? ThemeModeOptions[0];
+        set
+        {
+            if (value is not null && value.Mode != _themeMode)
+            {
+                _themeMode = value.Mode;
+                ApplyThemeSelection();
+            }
+        }
+    }
+
+    public AccentOption SelectedAccent
+    {
+        get => AccentOptions.FirstOrDefault(option => string.Equals(option.Id, _accentId, StringComparison.OrdinalIgnoreCase)) ?? AccentOptions[0];
+        set
+        {
+            if (value is not null && !string.Equals(value.Id, _accentId, StringComparison.OrdinalIgnoreCase))
+            {
+                _accentId = value.Id;
+                ApplyThemeSelection();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Показывать ли плавающую верхнюю панель. Переключение сохраняется в настройках;
+    /// окно верхней панели создаётся или закрывается по событию настроек.
+    /// </summary>
+    public bool IsTopBarEnabled
+    {
+        get => _topBarEnabled;
+        set
+        {
+            if (value == _topBarEnabled)
+            {
+                return;
+            }
+
+            _topBarEnabled = value;
+            OnPropertyChanged();
+            SaveSettings();
+        }
+    }
+
+    /// <summary>
+    /// Показывать ли плавающий dock (функция A1). Переключение сохраняется в настройках;
+    /// окно dock создаётся или закрывается по событию настроек.
+    /// </summary>
+    public bool IsDockEnabled
+    {
+        get => _dockEnabled;
+        set
+        {
+            if (value == _dockEnabled)
+            {
+                return;
+            }
+
+            _dockEnabled = value;
+            OnPropertyChanged();
+            SaveSettings();
+        }
+    }
+
+    /// <summary>
+    /// Заменяет ли dock системную панель задач. Переключение сохраняется в настройках;
+    /// окно dock открывается или закрывается независимо, а видимость панели задач
+    /// применяется по событию настроек.
+    /// </summary>
+    public bool IsDockReplacesTaskbar
+    {
+        get => _dockReplacesTaskbar;
+        set
+        {
+            if (value == _dockReplacesTaskbar)
+            {
+                return;
+            }
+
+            _dockReplacesTaskbar = value;
+            OnPropertyChanged();
+            SaveSettings();
+        }
+    }
 
     public string SearchText
     {
@@ -954,7 +1074,15 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             settings.RestoreLastLayout,
             settings.Language,
             settings.ActiveThemeId,
-            names));
+            names,
+            settings.ThemeMode,
+            settings.AccentId,
+            settings.TopBarEnabled,
+            settings.DockEnabled,
+            settings.DockPinnedApps,
+            settings.DockReplacesTaskbar,
+            settings.ExplorerFavorites,
+            settings.ExplorerViewMode));
 
         monitor.SetNames(
             BuildDefaultMonitorNames(Monitors.Select(static item => item.Monitor).ToList()).TryGetValue(monitor.Id, out var fallback)
@@ -967,6 +1095,60 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         // Подписи монитора у окон берутся из карты имён, поэтому список окон пересобирается.
         RefreshWindows();
+    }
+
+    /// <summary>
+    /// Подхватывает тему и акцент, изменённые вне главного окна (popover «Центр управления»),
+    /// и просит окно применить новое оформление.
+    /// </summary>
+    private void OnSettingsChanged(SettingsChanged changed)
+    {
+        _themeMode = changed.Settings.ThemeMode;
+        _accentId = changed.Settings.AccentId;
+
+        OnPropertyChanged(nameof(SelectedThemeMode));
+        OnPropertyChanged(nameof(SelectedAccent));
+
+        ThemeSelectionChanged?.Invoke(this, new ThemeSelectionChangedEventArgs(_themeMode, _accentId));
+    }
+
+    /// <summary>
+    /// Сохраняет выбранную тему и акцент и уведомляет окно, чтобы оно применило оформление.
+    /// </summary>
+    private void ApplyThemeSelection()
+    {
+        SaveSettings();
+
+        OnPropertyChanged(nameof(SelectedThemeMode));
+        OnPropertyChanged(nameof(SelectedAccent));
+        ThemeSelectionChanged?.Invoke(this, new ThemeSelectionChangedEventArgs(_themeMode, _accentId));
+    }
+
+    /// <summary>
+    /// Сохраняет текущий выбор оформления, видимость верхней панели
+    /// и видимость dock, сохраняя остальные
+    /// поля загруженных настроек без изменений.
+    /// </summary>
+    private void SaveSettings()
+    {
+        var settings = _settings.GetSettings();
+
+        _settings.SetSettings(new UserSettings(
+            settings.StartWithWindows,
+            settings.MinimizeToTray,
+            settings.ShowDesktopOnStartup,
+            settings.RestoreLastLayout,
+            settings.Language,
+            settings.ActiveThemeId,
+            settings.MonitorNames,
+            _themeMode,
+            _accentId,
+            _topBarEnabled,
+            _dockEnabled,
+            settings.DockPinnedApps,
+            _dockReplacesTaskbar,
+            settings.ExplorerFavorites,
+            settings.ExplorerViewMode));
     }
 
     private static Func<string?, string?> BuildMonitorNameResolver(Dictionary<string, string> displayNames) =>
@@ -1085,6 +1267,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
         _displayChanged.Dispose();
         _processStarted.Dispose();
         _processExited.Dispose();
+        _settingsChanged.Dispose();
         _runningRefresh.Dispose();
         _runningProbe.Cancel();
         _runningProbe.Dispose();

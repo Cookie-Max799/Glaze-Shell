@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="GlazeShell.App.PreviewWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:p="using:GlazeShell.App.Presentation"
+    mc:Ignorable="d">
+
+    <Grid x:Name="Root" Background="{StaticResource GlazeBackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!--  Заголовок: имя файла, вид/размер/дата и закрытие.  -->
+        <Border
+            Grid.Row="0"
+            Padding="18,14"
+            Background="{StaticResource GlazeSurfaceBrush}"
+            BorderBrush="{StaticResource GlazeBorderBrush}"
+            BorderThickness="0,0,0,1">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel VerticalAlignment="Center" Spacing="2">
+                    <TextBlock
+                        FontSize="16"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                        Text="{x:Bind ViewModel.Title, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis" />
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                        Text="{x:Bind ViewModel.MetaLine, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+
+                <Button
+                    Grid.Column="1"
+                    VerticalAlignment="Center"
+                    Click="OnCloseClick"
+                    ToolTipService.ToolTip="Закрыть (Esc или пробел)">
+                    <FontIcon FontSize="14" Glyph="&#xE711;" />
+                </Button>
+            </Grid>
+        </Border>
+
+        <!--  Содержимое: картинка, текст, сводка папки или глиф с метаданными.  -->
+        <Grid Grid.Row="1" Padding="18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Image
+                MaxHeight="420"
+                MaxWidth="720"
+                Source="{x:Bind ViewModel.Image, Mode=OneWay}"
+                Stretch="Uniform"
+                Visibility="{x:Bind ViewModel.ShowImage, Mode=OneWay}"
+                ImageFailed="OnImageFailed" />
+
+            <ScrollViewer
+                Padding="2"
+                HorizontalScrollMode="Auto"
+                HorizontalScrollBarVisibility="Auto"
+                VerticalScrollBarVisibility="Auto"
+                Visibility="{x:Bind ViewModel.ShowText, Mode=OneWay}">
+                <TextBlock
+                    FontFamily="Consolas"
+                    FontSize="13"
+                    Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                    IsTextSelectionEnabled="True"
+                    Text="{x:Bind ViewModel.Content, Mode=OneWay}"
+                    TextWrapping="NoWrap" />
+            </ScrollViewer>
+
+            <StackPanel
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                Spacing="12"
+                Visibility="{x:Bind ViewModel.ShowGlyph, Mode=OneWay}">
+                <FontIcon
+                    FontSize="64"
+                    Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                    Glyph="{x:Bind ViewModel.Glyph, Mode=OneWay}" />
+                <TextBlock
+                    HorizontalAlignment="Center"
+                    FontSize="13"
+                    Foreground="{StaticResource GlazeTextMutedBrush}"
+                    Text="{x:Bind ViewModel.Content, Mode=OneWay}"
+                    TextAlignment="Center"
+                    TextWrapping="Wrap" />
+            </StackPanel>
+
+            <StackPanel
+                Grid.Row="1"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Bottom"
+                Spacing="4"
+                Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay}">
+                <ProgressRing Width="28" Height="28" IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+                <TextBlock
+                    FontSize="12"
+                    Foreground="{StaticResource GlazeTextMutedBrush}"
+                    Text="Чтение предпросмотра…" />
+            </StackPanel>
+        </Grid>
+
+        <!--  Нижняя строка: примечания, путь и действия.  -->
+        <Border
+            Grid.Row="2"
+            Padding="18,10"
+            Background="{StaticResource GlazeSurfaceBrush}"
+            BorderBrush="{StaticResource GlazeBorderBrush}"
+            BorderThickness="0,1,0,0">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Foreground="{StaticResource GlazeTextMutedBrush}"
+                    Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
+                    TextTrimming="CharacterEllipsis"
+                    ToolTipService.ToolTip="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6">
+                    <Button
+                        Click="OnOpenClick"
+                        ToolTipService.ToolTip="Открыть в приложении по умолчанию">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="13" Glyph="&#xE8E5;" />
+                            <TextBlock FontSize="12" Text="Открыть" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        Click="OnCopyPathClick"
+                        ToolTipService.ToolTip="Скопировать полный путь в буфер обмена">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="13" Glyph="&#xE8C8;" />
+                            <TextBlock FontSize="12" Text="Копировать путь" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

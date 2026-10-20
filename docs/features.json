@@ -21,7 +21,7 @@
    "complexity": "L",
    "feasibility": "documented",
    "phase": "Phase 1 (MVP)",
-   "status": "todo"
+   "status": "partial"
   },
   {
    "id": "A2",
@@ -71,7 +71,7 @@
    "complexity": "M",
    "feasibility": "own-ui",
    "phase": "Phase 1 (MVP)",
-   "status": "todo"
+   "status": "partial"
   },
   {
    "id": "A7",
@@ -121,7 +121,7 @@
    "complexity": "L",
    "feasibility": "documented",
    "phase": "Phase 1 (MVP)",
-   "status": "todo"
+   "status": "partial"
   },
   {
    "id": "B2",
@@ -131,7 +131,7 @@
    "complexity": "M",
    "feasibility": "partial",
    "phase": "Phase 1 (MVP)",
-   "status": "todo"
+   "status": "partial"
   },
   {
    "id": "C1",
@@ -221,7 +221,7 @@
    "complexity": "M",
    "feasibility": "partial",
    "phase": "Phase 1 (MVP)",
-   "status": "todo"
+   "status": "partial"
   },
   {
    "id": "D2",
@@ -271,7 +271,7 @@
    "complexity": "L",
    "feasibility": "own-ui",
    "phase": "Phase 1 (MVP)",
-   "status": "todo"
+   "status": "partial"
   },
   {
    "id": "E2",
@@ -281,7 +281,7 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 1 (MVP)",
-   "status": "todo"
+   "status": "partial"
   },
   {
    "id": "E3",
@@ -451,7 +451,7 @@
    "complexity": "M",
    "feasibility": "documented",
    "phase": "Phase 1 (MVP)",
-   "status": "todo"
+   "status": "partial"
   },
   {
    "id": "H2",

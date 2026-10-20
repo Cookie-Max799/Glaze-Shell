@@ -148,8 +148,13 @@ internal static class User32
 
     internal const long WsThickFrame = 0x0004_0000;
     internal const long WsExToolWindow = 0x0000_0080;
+    internal const long WsExTopmost = 0x0000_0008;
+    internal const long WsExNoActivate = 0x0800_0000;
+
+    internal const nint HwndTopmost = -1;
 
     internal const int SwShow = 5;
+    internal const int SwShowNoActivate = 4;
     internal const int SwMinimize = 6;
     internal const int SwRestore = 9;
     internal const int SwMaximize = 3;
@@ -159,6 +164,15 @@ internal static class User32
     internal const uint WmSettingChange = 0x001A;
     internal const uint WmDeviceChange = 0x0219;
     internal const uint WmDpiChanged = 0x02E0;
+    internal const uint WmHotkey = 0x0312;
+
+    internal const uint ModAlt = 0x0001;
+    internal const uint ModControl = 0x0002;
+    internal const uint ModShift = 0x0004;
+    internal const uint ModWin = 0x0008;
+
+    /// <summary>Не повторять WM_HOTKEY, пока клавиши удерживаются.</summary>
+    internal const uint ModNoRepeat = 0x4000;
 
     internal const uint SpiSetWorkArea = 0x005B;
     internal const uint SpiSetLogicalDpiOverride = 0x009F;
@@ -167,7 +181,9 @@ internal static class User32
 
     internal const uint SwpNoSize = 0x0001;
     internal const uint SwpNoMove = 0x0002;
+    internal const uint SwpNoZOrder = 0x0004;
     internal const uint SwpShowWindow = 0x0040;
+    internal const uint SwpNoActivate = 0x0010;
 
     internal const uint EventSystemForeground = 0x0003;
     internal const uint EventObjectCreate = 0x8000;
@@ -186,6 +202,8 @@ internal static class User32
 
     internal const uint MonitorInfoFPrimary = 0x0000_0001;
 
+    internal const uint MonitorDefaultToNearest = 0x0000_0002;
+
     internal const uint EnumCurrentSettings = unchecked((uint)-1);
 
     internal const uint DmDisplayOrientation = 0x0000_0080;
@@ -198,6 +216,12 @@ internal static class User32
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool EnumWindows(EnumWindowsProc callback, nint parameter);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern nint FindWindow(string? className, string? windowName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern uint RegisterWindowMessage(string message);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -233,7 +257,48 @@ internal static class User32
     internal static extern bool GetWindowRect(nint hwnd, out Rect rect);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetClientRect(nint hwnd, out Rect rect);
+
+    /// <summary>Позиция курсора в физических пикселях экрана.</summary>
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetCursorPos(out Point point);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern long GetWindowLongPtr(nint hwnd, long index);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", CharSet = CharSet.Unicode)]
+    internal static extern nint SetWindowLongPtr(nint hwnd, long index, nint value);
+
+    /// <summary>
+    /// Задаёт региональную маску окна: за её пределами система не рисует содержимое.
+    /// При успехе владельцем области становится система, поэтому повторно удалять её нельзя.
+    /// Возвращает 0 при ошибке.
+    /// </summary>
+    [DllImport("user32.dll", ExactSpelling = true)]
+    internal static extern int SetWindowRgn(nint hwnd, nint region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
+
+    /// <summary>
+    /// Регистрирует системную горячую клавишу для окна: WM_HOTKEY приходит в его процедуру,
+    /// даже когда приложение не в фокусе. Возвращает <see langword="false"/>, если комбинацию
+    /// уже занял другой процесс.
+    /// </summary>
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool RegisterHotKey(nint hwnd, int id, uint modifiers, uint virtualKey);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool UnregisterHotKey(nint hwnd, int id);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DestroyWindow(nint hwnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool ShowWindow(nint hwnd, int command);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern nint GetWindow(nint hwnd, int command);

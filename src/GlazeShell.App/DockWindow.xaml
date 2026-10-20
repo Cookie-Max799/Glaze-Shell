@@ -63,7 +63,6 @@
                             Width="40"
                             Height="40"
                             Background="Transparent"
-                            BorderThickness="0"
                             CornerRadius="12"
                             RightTapped="OnTileRightTapped"
                             Tapped="OnTileTapped"
@@ -97,13 +96,10 @@
 
                                 <!--  Настоящий значок оболочки Windows.  -->
                                 <Image
-                                    Width="32"
-                                    Height="32"
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
+                                    Width="30"
+                                    Height="30"
                                     Source="{x:Bind Icon, Mode=OneWay}"
                                     Stretch="Uniform"
-                                    UseLayoutRounding="True"
                                     Visibility="{x:Bind HasIcon, Mode=OneWay}" />
 
                                 <!--  Индикатор запущенного приложения.  -->

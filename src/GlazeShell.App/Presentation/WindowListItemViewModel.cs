@@ -9,6 +9,9 @@ namespace GlazeShell.App.Presentation;
 
 public sealed class WindowListItemViewModel : INotifyPropertyChanged
 {
+    private static readonly SolidColorBrush ActiveFallback = new(ColorHelper.FromArgb(0xFF, 0x3F, 0xCF, 0x9B));
+    private static readonly SolidColorBrush InactiveFallback = new(ColorHelper.FromArgb(0xFF, 0xA5, 0xA2, 0xC8));
+
     private readonly IWindowManager _windows;
     private readonly Func<string?, string?>? _monitorName;
     private WindowInfo _window;
@@ -63,8 +66,8 @@ public sealed class WindowListItemViewModel : INotifyPropertyChanged
     };
 
     public SolidColorBrush ActiveBrush => IsActive
-        ? new SolidColorBrush(ColorHelper.FromArgb(0xFF, 0x4A, 0xDE, 0x80))
-        : new SolidColorBrush(ColorHelper.FromArgb(0xFF, 0x5A, 0x5A, 0x63));
+        ? Resource("GlazeStatusSuccessBrush", ActiveFallback)
+        : Resource("GlazeTextMutedBrush", InactiveFallback);
 
     public AsyncCommand FocusCommand { get; }
 
@@ -123,6 +126,13 @@ public sealed class WindowListItemViewModel : INotifyPropertyChanged
         _ = _windows.CloseWindow(Id);
         return Task.CompletedTask;
     }
+
+    private static SolidColorBrush Resource(string key, SolidColorBrush fallback) =>
+        Microsoft.UI.Xaml.Application.Current is { } app
+            && app.Resources.TryGetValue(key, out var value)
+            && value is SolidColorBrush brush
+            ? brush
+            : fallback;
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));

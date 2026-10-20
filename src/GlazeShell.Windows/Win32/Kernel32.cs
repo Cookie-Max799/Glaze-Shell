@@ -2,6 +2,17 @@ using System.Runtime.InteropServices;
 
 namespace GlazeShell.Windows.Win32;
 
+[StructLayout(LayoutKind.Sequential)]
+internal struct SystemPowerStatus
+{
+    public byte AcLineStatus;
+    public byte BatteryFlag;
+    public byte BatteryLifePercent;
+    public byte SystemStatusFlag;
+    public uint BatteryLifeTime;
+    public uint BatteryFullLifeTime;
+}
+
 internal static class Kernel32
 {
     [DllImport("kernel32.dll", ExactSpelling = true)]
@@ -9,6 +20,10 @@ internal static class Kernel32
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     internal static extern nint GetModuleHandle(string? moduleName);
+
+    [DllImport("kernel32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool GetSystemPowerStatus(out SystemPowerStatus status);
 
     [DllImport("kernel32.dll", ExactSpelling = true)]
     private static extern int MultiByteToWideChar(
