@@ -147,6 +147,7 @@ public partial class App : Application
                     settingsManager,
                     eventManager,
                     themeApplicator,
+                    new NativeFilePreviewReader(),
                     path);
 
                 _explorer.Closed += (_, _) => _explorer = null;

@@ -114,6 +114,8 @@ Glance: `GlanceResult`, `GlanceResultKind` и `GlanceRanker` (`Glance/`) — fra
 
 Explorer: `FileSystemEntry`, `FileSystemEntryKind`, `DriveEntry`/`DriveKind`, `SystemFolderLocation`, `FileSystemSort`/`FileSystemSorter` (`Files/`) и `Models/ExplorerViewMode` — framework-free модель проводника (E1/E2). Чтение диска описывается контрактом `IFileSystemBrowser` (перечисление папки, диски, системные папки, проверка каталога), а сортировка — чистой функцией «список + колонка + направление → список»: папки всегда идут первой группой, направление меняет порядок внутри каждой группы, порядок одинаковых ключей стабильный.
 
+Quick Preview: `FilePreview`, `FilePreviewKind` (`Preview/`) и контракт `IFilePreviewReader` (B2) — модель предпросмотра без UI-типов: вид содержимого определяется чистой функцией `FilePreview.Classify` по расширению и признаку каталога, а текст читается реализацией с ограничением размера и распознаванием кодировки.
+
 Интерфейсы: `IApplicationManager`, `IApplicationLauncher`, `IApplicationDiscoverySource`, `IProcessInspector`, `IWindowManager`, `IDesktopManager`, `ISettingsManager`, `IUserDataStore`, `IThemeManager`, `IEventManager`, `IMonitorManager`, `IFileSystemBrowser`.
 
 События: `WindowOpened`, `WindowClosed`, `ForegroundWindowChanged`, `WindowStateChanged`, `ProcessStarted`, `ProcessExited`, `DisplayChanged`, `DesktopChanged`, `SettingsChanged`, `ApplicationChanged`.
@@ -177,6 +179,10 @@ Persistence contracts: `PersistenceStatus` (`Created`/`Loaded`/`Migrated`/`Recov
 
 - `FileSystem/NativeFileSystemBrowser.cs` — реализация `IFileSystemBrowser` на `System.IO`: перечисление каталога с пропуском скрытых/системных и недоступных элементов (`EnumerationOptions`), перечисление дисков с ёмкостью и долей заполнения (`DriveInfo`, `DriveType` → `DriveKind`) и лениво кэшируемый список системных папок (`Environment.SpecialFolder` + `UserProfile`); каждый публичный метод — best-effort: исключения чтения не выпускаются наружу, а сбой превращается в пустой список;
 - `Applications/ShellIconProvider` расширен поддержкой каталогов: для папок и дисков иконка извлекается тем же `IShellItemImageFactory::GetImage`, что и для файлов.
+
+На Phase 1 (B2) добавляет:
+
+- `FileSystem/NativeFilePreviewReader.cs` — реализация `IFilePreviewReader` для Quick Preview: текст читается в `FileStream` с `FileShare.ReadWrite|Delete` (предпросмотр не блокирует файл), до 256 КБ и 120 000 символов с пометкой об обрезке; кодировка определяется по BOM (UTF-8, UTF-16 LE/BE), файл с нулевыми байтами без BOM считается двоичным и содержимое не отдаётся; сводка папки считает элементы с ограничением 10 000 и пропуском скрытых/системных; недоступный путь возвращает `null`.
 
 ### GlazeShell.Data
 
@@ -425,6 +431,16 @@ MVP закрывал инженерный фундамент (Stage 0–13); Pha
 - Навигация — стеки «назад»/«вперёд» плюс «выше по иерархии»; `Enter` открывает выбранную папку, файл — системным приложением по умолчанию (`ShellTargets.Open`). Переключение вида и добавление/удаление избранного сохраняются через `ISettingsManager`: `UserSettings.ExplorerViewMode` (`icons`/`list`) и `UserSettings.ExplorerFavorites` (до 32 полных путей, нормализация, дедупликация без учёта регистра); новые поля добавлены в конец конструктора, поэтому остальные места пересборки настроек не изменились по смыслу.
 - Окно создаётся лениво в `App` по кнопке «Проводник» главного окна или команде Glance `open-explorer` (пересылается через `ExplorerRequested` верхней панели) и переиспользуется: повторный запрос активирует окно и, если передана папку, переходит в неё. Это обычное overlapped-окно (не overlay): ему нужны фокус и запись в панели задач, поэтому regional mask для него не применяется. На shutdown окно закрывается наравне с dock и верхней панелью.
 - Ограничения базового слайса: колонки Миллера и галерея, миниатюры с дисковым кэшем, виртуализация каталогов на 100k+ элементов, память вида по конкретной папке, вкладки и строка пути (E3), теги (E4), Get Info (E5), перетаскивание папок в сайдбар и извлечение/безопасное удаление съёмных дисков не реализованы.
+
+## Продуктовый UI Phase 1 — B2 (Quick Preview)
+
+Седьмая функция Phase 1 — B2 «Quick Preview»: предпросмотр выбранного файла по клавише пробел (аналог Quick Look). Реализован базовый слайс (картинки, текст/код, сводка папки, метаданные для остальных); полная спецификация (PDF/Office через `IPreviewHandler`, зум, «Открыть с помощью», движение по выборке стрелками, предпросмотр в стандартном File Explorer) — в [FEATURES.md](FEATURES.md).
+
+- Ядро — `Core/Preview/FilePreview` (запись: путь, имя, вид, размер, дата, текст, флаг обрезки, число элементов папки) и `FilePreviewKind`; вид файла определяет чистая функция `FilePreview.Classify` по расширению без обращения к диску. Чтение описано контрактом `IFilePreviewReader` (`Core/Interfaces`), реализация — `Windows/FileSystem/NativeFilePreviewReader` (см. раздел Windows API, «Phase 1 (B2)»).
+- UI — `Presentation/PreviewViewModel` + `PreviewWindow.xaml`: карточка 820×620 с заголовком (имя, вид/размер/дата), областью содержимого и нижней строкой (полный путь, «Открыть», «Копировать путь»). Содержимое выбирается по виду предпросмотра: картинка декодируется WinUI (`BitmapImage` по локальному URI, файл крупнее 512 МБ не рисуется, `ImageFailed` деградирует до глифа), текст показывается моноширинным выделяемым блоком в прокрутке, папка — сводкой, всё остальное — глифом с метаданными. Пока предпросмотр читается в фоне, показывается `ProgressRing`.
+- Открывается из проводника: `Пробел` на выбранном элементе (`ExplorerWindow.OnItemsKeyDown`) или кнопка «Предпросмотр» в тулбаре. Прежнее окно предпросмотра закрывается — на проводник приходится одна карточка, и она закрывается вместе с проводником (`ExplorerWindow.OnClosed`). Закрытие — `Esc`, пробел или кнопка; окно обычное (overlapped), ему нужен фокус для клавиатуры.
+- Безопасность: содержимое файла не выполняется — текст только читается (с общим доступом, файл не блокируется), картинку декодирует WinUI, а архивы, аудио и видео показываются метаданными с кнопкой «Открыть» в системном приложении.
+- Ограничения базового слайса: нет PDF/Office-предпросмотра (`IPreviewHandler`), проигрывания аудио/видео, зума, «Открыть с помощью» (`SHOpenWithDialog`), навигации по выборке стрелками, предпросмотра в стандартном File Explorer (`IShellWindows`/`IFolderView2`) и `Tab`-предпросмотра из Glance; текст без BOM в UTF-16 распознаётся как двоичный.
 
 ## Windows API
 

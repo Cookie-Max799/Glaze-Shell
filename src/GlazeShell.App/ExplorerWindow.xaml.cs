@@ -26,12 +26,17 @@ public sealed partial class ExplorerWindow : Window
 
     private readonly ThemeApplicator _themes;
     private readonly IDisposable _settingsChanged;
+    private readonly IFilePreviewReader _previewReader;
+
+    /// <summary>Открытая карточка Quick Preview (B2); закрывается вместе с проводником.</summary>
+    private PreviewWindow? _preview;
 
     public ExplorerWindow(
         IFileSystemBrowser browser,
         ISettingsManager settings,
         IEventManager events,
         ThemeApplicator themes,
+        IFilePreviewReader previewReader,
         string? startPath)
     {
         ArgumentNullException.ThrowIfNull(browser);
@@ -39,6 +44,7 @@ public sealed partial class ExplorerWindow : Window
         ArgumentNullException.ThrowIfNull(events);
 
         _themes = themes ?? throw new ArgumentNullException(nameof(themes));
+        _previewReader = previewReader ?? throw new ArgumentNullException(nameof(previewReader));
 
         ViewModel = new ExplorerViewModel(browser, settings, DispatcherQueue);
 
@@ -86,6 +92,10 @@ public sealed partial class ExplorerWindow : Window
         Activated -= OnActivated;
         Closed -= OnClosed;
         _settingsChanged.Dispose();
+
+        // Карточка предпросмотра не должна пережить окно, из которого открыта.
+        _preview?.Close();
+        _preview = null;
     }
 
     private void OnBackClick(object sender, RoutedEventArgs e) => _ = ViewModel.GoBackAsync();
@@ -127,9 +137,21 @@ public sealed partial class ExplorerWindow : Window
 
     private void OnItemsKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key != VirtualKey.Enter ||
-            sender is not ListViewBase list ||
-            list.SelectedItem is not ExplorerItemViewModel item)
+        if (sender is not ListViewBase list || list.SelectedItem is not ExplorerItemViewModel item)
+        {
+            return;
+        }
+
+        // Пробел — Quick Preview (B2), Enter — открыть элемент; обе клавиши работают
+        // и в сетке иконок, и в списке.
+        if (e.Key == VirtualKey.Space)
+        {
+            e.Handled = true;
+            ShowPreview(item);
+            return;
+        }
+
+        if (e.Key != VirtualKey.Enter)
         {
             return;
         }
@@ -137,5 +159,28 @@ public sealed partial class ExplorerWindow : Window
         e.Handled = true;
 
         _ = ViewModel.OpenItemAsync(item);
+    }
+
+    private void OnPreviewClick(object sender, RoutedEventArgs e)
+    {
+        var item = IconView.SelectedItem as ExplorerItemViewModel ?? ItemsList.SelectedItem as ExplorerItemViewModel;
+
+        if (item is not null)
+        {
+            ShowPreview(item);
+        }
+    }
+
+    /// <summary>
+    /// Показывает карточку предпросмотра для выбранного элемента. Прежнее окно закрывается:
+    /// в системе должна быть только одна карточка на проводник.
+    /// </summary>
+    private void ShowPreview(ExplorerItemViewModel item)
+    {
+        _preview?.Close();
+
+        _preview = new PreviewWindow(_previewReader, item.FullPath, _themes);
+        _preview.Closed += (_, _) => _preview = null;
+        _preview.Activate();
     }
 }

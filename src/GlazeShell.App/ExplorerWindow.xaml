@@ -57,6 +57,11 @@
                     <Button Click="OnAddFavoriteClick" ToolTipService.ToolTip="Добавить текущую папку в избранное">
                         <FontIcon FontSize="15" Glyph="&#xE840;" />
                     </Button>
+                    <Button
+                        Click="OnPreviewClick"
+                        ToolTipService.ToolTip="Предпросмотр выбранного элемента (пробел)">
+                        <FontIcon FontSize="15" Glyph="&#xE8FF;" />
+                    </Button>
                 </StackPanel>
 
                 <StackPanel
