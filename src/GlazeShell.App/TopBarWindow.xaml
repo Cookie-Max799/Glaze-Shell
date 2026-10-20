@@ -34,8 +34,6 @@
                 Grid.Column="0"
                 Padding="12,0"
                 Background="{StaticResource GlazeGlassBrush}"
-                BorderBrush="{StaticResource GlazeGlassBorderBrush}"
-                BorderThickness="1"
                 CornerRadius="24">
                 <StackPanel
                     Orientation="Horizontal"
@@ -87,8 +85,6 @@
                 Padding="14,0"
                 HorizontalAlignment="Center"
                 Background="{StaticResource GlazeGlassBrush}"
-                BorderBrush="{StaticResource GlazeGlassBorderBrush}"
-                BorderThickness="1"
                 CornerRadius="24"
                 PointerPressed="OnSearchPointerPressed">
                 <Grid ColumnSpacing="10">
@@ -121,8 +117,7 @@
                         Padding="6,2"
                         VerticalAlignment="Center"
                         Background="{StaticResource GlazeElevatedBrush}"
-                        CornerRadius="6">
-                        <TextBlock
+                        CornerRadius="6">                        <TextBlock
                             FontSize="11"
                             Foreground="{StaticResource GlazeTextMutedBrush}"
                             Text="Ctrl K" />
@@ -137,8 +132,6 @@
                 Grid.Column="2"
                 Padding="16,0"
                 Background="{StaticResource GlazeGlassBrush}"
-                BorderBrush="{StaticResource GlazeGlassBorderBrush}"
-                BorderThickness="1"
                 CornerRadius="24"
                 PointerPressed="OnStatusPointerPressed">
                 <StackPanel
@@ -203,8 +196,6 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
                 Background="{StaticResource GlazeGlassBrush}"
-                BorderBrush="{StaticResource GlazeGlassBorderBrush}"
-                BorderThickness="1"
                 CornerRadius="24"
                 Visibility="{x:Bind ViewModel.HasResults, Mode=OneWay}">
                 <Grid>
@@ -296,8 +287,6 @@
             HorizontalAlignment="Right"
             VerticalAlignment="Top"
             Background="{StaticResource GlazeGlassBrush}"
-            BorderBrush="{StaticResource GlazeGlassBorderBrush}"
-            BorderThickness="1"
             CornerRadius="32"
             Visibility="{x:Bind ViewModel.QuickSettings.IsOpen, Mode=OneWay}">
             <StackPanel Spacing="16">

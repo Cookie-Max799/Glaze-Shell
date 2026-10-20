@@ -25,8 +25,7 @@
             <Style TargetType="ToolTip">
                 <Setter Property="Background" Value="{StaticResource GlazeElevatedBrush}" />
                 <Setter Property="Foreground" Value="{StaticResource GlazeTextPrimaryBrush}" />
-                <Setter Property="BorderBrush" Value="{StaticResource GlazeGlassBorderBrush}" />
-                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="CornerRadius" Value="8" />
                 <Setter Property="Padding" Value="10,5" />
                 <Setter Property="FontSize" Value="13" />
@@ -36,7 +35,7 @@
 
         <ItemsControl
             x:Name="Tiles"
-            Padding="14,22,14,12"
+            Padding="12,20,12,10"
             VerticalAlignment="Center"
             ItemsSource="{x:Bind ViewModel.Items}">
             <ItemsControl.ItemsPanel>
@@ -54,10 +53,10 @@
                     <Grid>
                         <!--  Плитка приложения: только значок, без подложки.  -->
                         <Border
-                            Width="52"
-                            Height="52"
+                            Width="48"
+                            Height="48"
                             Background="Transparent"
-                            CornerRadius="15"
+                            CornerRadius="14"
                             RightTapped="OnTileRightTapped"
                             Tapped="OnTileTapped"
                             ToolTipService.Placement="Top"
@@ -67,13 +66,13 @@
                                 <!--  Пастельная подложка: буква-заглушка или глиф системной плитки.  -->
                                 <Border
                                     Background="{x:Bind FallbackBrush}"
-                                    CornerRadius="15"
+                                    CornerRadius="14"
                                     Visibility="{x:Bind HasPlate, Mode=OneWay}">
                                     <Grid>
                                         <TextBlock
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
-                                            FontSize="18"
+                                            FontSize="17"
                                             FontWeight="SemiBold"
                                             Foreground="White"
                                             Text="{x:Bind Initial}"
@@ -81,7 +80,7 @@
                                         <FontIcon
                                             HorizontalAlignment="Center"
                                             VerticalAlignment="Center"
-                                            FontSize="22"
+                                            FontSize="20"
                                             Foreground="White"
                                             Glyph="{x:Bind Glyph}"
                                             Visibility="{x:Bind HasGlyph, Mode=OneWay}" />
@@ -90,17 +89,17 @@
 
                                 <!--  Настоящий значок оболочки Windows.  -->
                                 <Image
-                                    Width="40"
-                                    Height="40"
+                                    Width="36"
+                                    Height="36"
                                     Source="{x:Bind Icon, Mode=OneWay}"
                                     Stretch="Uniform"
                                     Visibility="{x:Bind HasIcon, Mode=OneWay}" />
 
                                 <!--  Индикатор запущенного приложения.  -->
                                 <Border
-                                    Width="14"
+                                    Width="13"
                                     Height="3"
-                                    Margin="0,0,0,4"
+                                    Margin="0,0,0,3"
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Bottom"
                                     Background="{StaticResource GlazeBrandGradientBrush}"
@@ -109,14 +108,14 @@
                             </Grid>
                         </Border>
 
-                        <!--  Разделитель секций.  -->
+                        <!--  Разделитель секций: без контура, только мягкая заливка.  -->
                         <Rectangle
                             Width="2"
-                            Height="30"
+                            Height="28"
                             RadiusX="1"
                             RadiusY="1"
                             VerticalAlignment="Center"
-                            Fill="{StaticResource GlazeBorderBrush}"
+                            Fill="{StaticResource GlazeElevatedBrush}"
                             Visibility="{x:Bind SeparatorVisibility}" />
                     </Grid>
                 </DataTemplate>

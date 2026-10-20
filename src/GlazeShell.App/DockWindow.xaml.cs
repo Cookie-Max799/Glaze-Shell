@@ -26,22 +26,22 @@ namespace GlazeShell.App;
 /// </summary>
 public sealed partial class DockWindow : Window
 {
-    private const int TileSize = 52;
+    private const int TileSize = 48;
     private const int Gap = 5;
     private const int SeparatorWidth = 2;
-    private const int PaddingHorizontal = 14;
-    private const int PaddingTop = 22;
-    private const int PaddingBottom = 12;
+    private const int PaddingHorizontal = 12;
+    private const int PaddingTop = 20;
+    private const int PaddingBottom = 10;
 
     /// <summary>Радиус капсулы dock (DESIGN §7.5: радиус 36).</summary>
     private const int PillRadius = 36;
 
     /// <summary>
     /// Максимальный подъём и масштаб плитки под курсором (DESIGN §7.5: 16 px / 1.2).
-    /// Верхний отступ окна (22 px) подобран так, чтобы увеличенная плитка не выходила
-    /// за границы капсулы: 5.2 px прироста + 16 px подъёма = 21.2 px.
+    /// Верхний отступ окна (20 px) подобран так, чтобы увеличенная плитка не выходила
+    /// за границы капсулы: 4.8 px прироста + 15 px подъёма = 19.8 px.
     /// </summary>
-    private const double HoverLift = 16;
+    private const double HoverLift = 15;
     private const double HoverScale = 1.2;
 
     /// <summary>
@@ -129,7 +129,6 @@ public sealed partial class DockWindow : Window
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         OverlayWindow.MakeTopMostToolWindow(_hwnd);
         OverlayWindow.SetNonActivating(_hwnd, true);
-        OverlayWindow.UseRoundedCorners(_hwnd);
 
         UpdateDockSize();
         OverlayWindow.ShowWithoutActivation(_hwnd);
@@ -476,9 +475,10 @@ public sealed partial class DockWindow : Window
     }
 
     /// <summary>
-    /// Акцентная рамка вокруг плитки под курсором. Ореол по дизайну требует размытия тени,
-    /// которого у обычных элементов нет: рамка акцента даёт тот же акцент, но без создания
-    /// отдельного визуального слоя.
+    /// Акцент вокруг плитки под курсором. Ореол по дизайну требует размытия тени, которого у
+    /// обычных элементов нет: плитка под курсором получает акцентную рамку. Вне наведения
+    /// рамки нет вовсе — контур остаётся только у региона окна, поэтому стекло не обрастает
+    /// серыми ободками, а «стеклянность» даёт одно преломление Acrylic-фона.
     /// </summary>
     private static void SetGlow(Border? tile, bool active)
     {
@@ -487,12 +487,12 @@ public sealed partial class DockWindow : Window
             return;
         }
 
-        tile.BorderBrush = ResourceBrush(active ? "GlazeAccentBrush" : "GlazeBorderBrush");
-        tile.BorderThickness = new Thickness(active ? 2 : 1);
+        tile.BorderBrush = active ? ResourceBrush("GlazeAccentBrush") : null;
+        tile.BorderThickness = new Thickness(active ? 2 : 0);
     }
 
-    private static Brush ResourceBrush(string key) =>
+    private static Brush? ResourceBrush(string key) =>
         Application.Current.Resources.TryGetValue(key, out var resource) && resource is Brush brush
             ? brush
-            : new SolidColorBrush(Microsoft.UI.Colors.Transparent);
+            : null;
 }

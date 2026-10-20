@@ -20,7 +20,6 @@ public sealed class ThemeApplicator
     private const string ElevatedKey = "GlazeElevatedBrush";
     private const string BorderKey = "GlazeBorderBrush";
     private const string GlassKey = "GlazeGlassBrush";
-    private const string GlassBorderKey = "GlazeGlassBorderBrush";
     private const string TextPrimaryKey = "GlazeTextPrimaryBrush";
     private const string TextSecondaryKey = "GlazeTextSecondaryBrush";
     private const string TextMutedKey = "GlazeTextMutedBrush";
@@ -106,7 +105,6 @@ public sealed class ThemeApplicator
         SetBrush(ElevatedKey, theme.Elevated);
         SetBrush(BorderKey, theme.Border);
         SetBrush(GlassKey, theme.Glass);
-        SetBrush(GlassBorderKey, theme.GlassBorder);
         SetBrush(TextPrimaryKey, theme.TextPrimary);
         SetBrush(TextSecondaryKey, theme.TextSecondary);
         SetBrush(TextMutedKey, theme.TextMuted);
