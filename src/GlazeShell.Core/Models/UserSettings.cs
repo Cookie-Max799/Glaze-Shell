@@ -30,7 +30,9 @@ public sealed record UserSettings
         IReadOnlyList<string>? dockPinnedApps = null,
         bool dockReplacesTaskbar = true,
         IReadOnlyList<string>? explorerFavorites = null,
-        ExplorerViewMode explorerViewMode = ExplorerViewMode.Icons)
+        ExplorerViewMode explorerViewMode = ExplorerViewMode.Icons,
+        bool reduceMotion = false,
+        bool highContrast = false)
     {
         Language = ModelValidation.Required(language, nameof(language));
         ActiveThemeId = ModelValidation.Optional(activeThemeId, nameof(activeThemeId));
@@ -43,6 +45,8 @@ public sealed record UserSettings
         DockReplacesTaskbar = dockReplacesTaskbar;
         ExplorerFavorites = NormalizeExplorerFavorites(explorerFavorites);
         ExplorerViewMode = ValidateExplorerViewMode(explorerViewMode, nameof(explorerViewMode));
+        ReduceMotion = reduceMotion;
+        HighContrast = highContrast;
         StartWithWindows = startWithWindows;
         MinimizeToTray = minimizeToTray;
         ShowDesktopOnStartup = showDesktopOnStartup;
@@ -112,6 +116,19 @@ public sealed record UserSettings
     /// отдельное на каждую: память вида по папке — следующий шаг.
     /// </summary>
     public ExplorerViewMode ExplorerViewMode { get; }
+
+    /// <summary>
+    /// Уменьшение движения (доступность, I5): анимации магнификации dock и переходов
+    /// сокращаются или отключаются, если пользователь просит меньше движения.
+    /// </summary>
+    public bool ReduceMotion { get; }
+
+    /// <summary>
+    /// Высокая контрастность (доступность, I5): стекло отключается, приглушённые цвета
+    /// заменяются контрастными. Системная высокая контрастность Windows действует всегда,
+    /// независимо от этого переключателя — он лишь включает её принудительно.
+    /// </summary>
+    public bool HighContrast { get; }
 
     public static UserSettings CreateDefault() => new();
 

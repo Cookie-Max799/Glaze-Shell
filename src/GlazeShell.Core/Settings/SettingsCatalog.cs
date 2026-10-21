@@ -28,6 +28,9 @@ public static class SettingsCatalog
     /// <summary>Идентификатор страницы «Проводник».</summary>
     public const string ExplorerPageId = "explorer";
 
+    /// <summary>Идентификатор страницы «Доступность».</summary>
+    public const string AccessibilityPageId = "accessibility";
+
     /// <summary>Идентификатор страницы «О программе».</summary>
     public const string AboutPageId = "about";
 
@@ -40,6 +43,7 @@ public static class SettingsCatalog
         new(TopBarPageId, "Верхняя панель", "\uE7C4", "Интерфейс"),
         new(GlancePageId, "Glance", "\uE721", "Интерфейс"),
         new(ExplorerPageId, "Проводник", "\uE8B7", "Интерфейс"),
+        new(AccessibilityPageId, "Доступность", "\uE776", "Система"),
         new("windows", "Windows", "\uE782", "Система"),
         new("notifications", "Уведомления", "\uEA8F", "Система"),
         new("shortcuts", "Горячие клавиши", "\uE765", "Система"),
@@ -200,6 +204,29 @@ public static class SettingsCatalog
                 new(ExplorerViewMode.Icons.ToString(), "Иконки"),
                 new(ExplorerViewMode.List.ToString(), "Список"),
             ]),
+
+        // Доступность (I5).
+        new(
+            "reduceMotion",
+            AccessibilityPageId,
+            "Уменьшить движение",
+            "Сокращать анимации: магнификация dock и переходы становятся мгновенными.",
+            ["анимации", "движение", "motion", "accessibility", "доступность", "меньше движения"],
+            SettingKind.Toggle,
+            settings => settings.ReduceMotion,
+            (settings, value) => UserSettingsEditor.With(settings, reduceMotion: AsBool(value)),
+            []),
+
+        new(
+            "highContrast",
+            AccessibilityPageId,
+            "Высокая контрастность",
+            "Отключить стекло и приглушённые цвета, оставить контрастные. Тема Windows действует всегда.",
+            ["контраст", "contrast", "accessibility", "доступность", "читаемость"],
+            SettingKind.Toggle,
+            settings => settings.HighContrast,
+            (settings, value) => UserSettingsEditor.With(settings, highContrast: AsBool(value)),
+            []),
     ];
 
     private static List<SettingChoice> BuildAccentChoices()

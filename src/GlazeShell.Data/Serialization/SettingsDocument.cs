@@ -43,6 +43,12 @@ public sealed class SettingsDocument
     /// <summary>Вид списка Explorer (E1): <c>icons</c> или <c>list</c>.</summary>
     public string? ExplorerViewMode { get; set; }
 
+    /// <summary>Уменьшение движения (доступность, I5): сокращённые или отключённые анимации.</summary>
+    public bool ReduceMotion { get; set; }
+
+    /// <summary>Высокая контрастность (доступность, I5): принудительный контрастный режим.</summary>
+    public bool HighContrast { get; set; }
+
     public Dictionary<string, string>? MonitorNames { get; set; }
 
     public static SettingsDocument FromSettings(UserSettings settings)
@@ -70,6 +76,8 @@ public sealed class SettingsDocument
                 ? null
                 : new List<string>(settings.ExplorerFavorites),
             ExplorerViewMode = settings.ExplorerViewMode.ToId(),
+            ReduceMotion = settings.ReduceMotion,
+            HighContrast = settings.HighContrast,
             MonitorNames = settings.MonitorNames.Count == 0
                 ? null
                 : new Dictionary<string, string>(settings.MonitorNames, StringComparer.OrdinalIgnoreCase)
@@ -147,7 +155,9 @@ public static class SettingsDocumentMapper
             dockPinnedApps,
             document.DockReplacesTaskbar,
             explorerFavorites,
-            explorerViewMode);
+            explorerViewMode,
+            document.ReduceMotion,
+            document.HighContrast);
         diagnostics = Array.Empty<string>();
         return true;
     }

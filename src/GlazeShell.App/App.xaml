@@ -45,6 +45,15 @@
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#33A99BFF" />
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#33A99BFF" />
 
+            <!--
+                Фокус-ринг (доступность, I5). Встроенный фокус-визуал WinUI рисует заливку
+                первым цветом и обводку вторым, поэтому прозрачная заливка и акцентная обводка
+                дают требуемый DESIGN §7 ринг — 2 px акцентом с отступом. ThemeApplicator
+                перекрашивает оба цвета при смене темы и в режиме высокой контрастности.
+            -->
+            <SolidColorBrush x:Key="FocusVisualPrimaryBrush" Color="#00A99BFF" />
+            <SolidColorBrush x:Key="FocusVisualSecondaryBrush" Color="#A99BFF" />
+
             <Style x:Key="ApplicationCardStyle" TargetType="ListViewItem">
             <Setter Property="Background" Value="{StaticResource GlazeSurfaceBrush}" />
             <Setter Property="CornerRadius" Value="12" />

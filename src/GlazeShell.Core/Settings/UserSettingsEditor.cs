@@ -22,6 +22,8 @@ public static class UserSettingsEditor
         ThemeMode? themeMode = null,
         string? accentId = null,
         bool clearAccent = false,
+        bool? reduceMotion = null,
+        bool? highContrast = null,
         bool? topBarEnabled = null,
         bool? dockEnabled = null,
         bool? dockReplacesTaskbar = null,
@@ -44,6 +46,8 @@ public static class UserSettingsEditor
             dockPinnedApps: source.DockPinnedApps,
             dockReplacesTaskbar: dockReplacesTaskbar ?? source.DockReplacesTaskbar,
             explorerFavorites: source.ExplorerFavorites,
-            explorerViewMode: explorerViewMode ?? source.ExplorerViewMode);
+            explorerViewMode: explorerViewMode ?? source.ExplorerViewMode,
+            reduceMotion: reduceMotion ?? source.ReduceMotion,
+            highContrast: highContrast ?? source.HighContrast);
     }
 }

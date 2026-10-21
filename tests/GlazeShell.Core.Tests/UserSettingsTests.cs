@@ -1,4 +1,5 @@
 using GlazeShell.Core.Models;
+using GlazeShell.Core.Settings;
 
 namespace GlazeShell.Core.Tests;
 
@@ -198,5 +199,48 @@ public sealed class UserSettingsTests
     {
         Assert.ThrowsExactly<ArgumentOutOfRangeException>(() =>
             new UserSettings(explorerViewMode: (ExplorerViewMode)42));
+    }
+
+    [TestMethod]
+    public void AccessibilityIsOffByDefault()
+    {
+        var settings = UserSettings.CreateDefault();
+
+        Assert.IsFalse(settings.ReduceMotion);
+        Assert.IsFalse(settings.HighContrast);
+    }
+
+    [TestMethod]
+    public void AccessibilityPreferencesAreKept()
+    {
+        var settings = new UserSettings(reduceMotion: true, highContrast: true);
+
+        Assert.IsTrue(settings.ReduceMotion);
+        Assert.IsTrue(settings.HighContrast);
+    }
+
+    [TestMethod]
+    public void EditorKeepsOtherSettingsWhenAccessibilityChanges()
+    {
+        var source = new UserSettings(themeMode: ThemeMode.Dark, dockEnabled: false);
+
+        var updated = UserSettingsEditor.With(source, reduceMotion: true);
+        var contrasted = UserSettingsEditor.With(updated, highContrast: true);
+
+        Assert.IsTrue(contrasted.ReduceMotion);
+        Assert.IsTrue(contrasted.HighContrast);
+        Assert.AreEqual(ThemeMode.Dark, contrasted.ThemeMode);
+        Assert.IsFalse(contrasted.DockEnabled);
+    }
+
+    [TestMethod]
+    public void EditorKeepsAccessibilityWhenOtherSettingsChange()
+    {
+        var source = new UserSettings(reduceMotion: true, highContrast: true);
+
+        var updated = UserSettingsEditor.With(source, themeMode: ThemeMode.Light);
+
+        Assert.IsTrue(updated.ReduceMotion);
+        Assert.IsTrue(updated.HighContrast);
     }
 }

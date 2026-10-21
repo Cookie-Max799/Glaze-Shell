@@ -14,6 +14,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 using Windows.Foundation;
 using Windows.Graphics;
+using Windows.System;
 
 namespace GlazeShell.App;
 
@@ -104,7 +105,7 @@ public sealed partial class DockWindow : Window
         ViewModel.ActivateRequested += OnActivateRequested;
         ViewModel.Items.CollectionChanged += OnItemsChanged;
         Tiles.SizeChanged += OnTilesSizeChanged;
-        _settingsChanged = events.Subscribe<SettingsChanged>(_ => _themes.ApplyFromSettings(Root));
+        _settingsChanged = events.Subscribe<SettingsChanged>(OnSettingsChanged);
 
         _cursorWatch.Tick += OnCursorWatchTick;
 
@@ -135,7 +136,7 @@ public sealed partial class DockWindow : Window
             presenter.IsAlwaysOnTop = true;
         }
 
-        SystemBackdrop = new DesktopAcrylicBackdrop();
+        ApplyBackdrop();
 
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         OverlayWindow.MakeTopMostToolWindow(_hwnd);
@@ -231,6 +232,30 @@ public sealed partial class DockWindow : Window
             Trace.WriteLine($"GlazeShell.Dock: activating the main window failed. {exception}");
         }
     }
+
+    /// <summary>
+    /// Реакция на изменение настроек: переприменяет тему и обновляет фон окна. Если включено
+    /// «уменьшить движение», текущая магнификация сразу сбрасывается, чтобы dock мгновенно
+    /// принял спокойный вид.
+    /// </summary>
+    private void OnSettingsChanged(SettingsChanged _)
+    {
+        _themes.ApplyFromSettings(Root);
+        ApplyBackdrop();
+
+        if (_themes.ReduceMotion)
+        {
+            ResetTiles();
+        }
+    }
+
+    /// <summary>
+    /// Включает или отключает стеклянный фон окна. В режиме высокой контрастности стекло
+    /// убирается: полупрозрачный фон поверх произвольного рабочего стола нечитаем, а
+    /// непрозрачный цвет берётся из системной палитры.
+    /// </summary>
+    private void ApplyBackdrop() =>
+        SystemBackdrop = _themes.HighContrast ? null : new DesktopAcrylicBackdrop();
 
     /// <summary>
     /// Таймер читает глобальную позицию курсора и, если он над dock, ведёт магнификацию.
@@ -377,6 +402,57 @@ public sealed partial class DockWindow : Window
     }
 
     /// <summary>
+    /// Клавиатурный путь к плитке (I5): Enter или пробел активируют приложение так же, как
+    /// клик мышью. Контекстное меню открывается Shift+F10 или клавишей меню — стандартным
+    /// путём WinUI, поэтому отдельная обработка не нужна.
+    /// </summary>
+    private async void OnTileKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (sender is not Border { DataContext: DockItemViewModel item })
+        {
+            return;
+        }
+
+        if (e.Key is not (VirtualKey.Enter or VirtualKey.Space))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        ResetTiles();
+        await ViewModel.ActivateItemAsync(item);
+    }
+
+    /// <summary>
+    /// Кольцо фокуса плитки (доступность, I5). Плитка — обычная рамка, у которой нет
+    /// встроенного фокус-визуала WinUI, поэтому кольцо включается вручную по событиям фокуса.
+    /// </summary>
+    private void OnTileGotFocus(object sender, RoutedEventArgs e) => SetFocusRing(sender as Border, visible: true);
+
+    private void OnTileLostFocus(object sender, RoutedEventArgs e) => SetFocusRing(sender as Border, visible: false);
+
+    /// <summary>
+    /// Показывает или прячет кольцо фокуса плитки. Кольцо лежит последним потомком
+    /// содержимого плитки и опознаётся по имени, заданному в разметке.
+    /// </summary>
+    private static void SetFocusRing(Border? tile, bool visible)
+    {
+        if (tile?.Child is not Grid content)
+        {
+            return;
+        }
+
+        foreach (var child in content.Children)
+        {
+            if (child is Border { Name: "FocusRing" } ring)
+            {
+                ring.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+                return;
+            }
+        }
+    }
+
+    /// <summary>
     /// Плитка приложения по контекстному меню закрепляется или открепляется. Меню требует
     /// активации, поэтому окно временно разрешает перехват фокуса и снова запрещает его
     /// после закрытия меню.
@@ -496,16 +572,26 @@ public sealed partial class DockWindow : Window
     /// раскладка перезаписывает его на каждом проходе, и подъём пропадает. Оба свойства
     /// анимируются одной длительностью, поэтому плитка реагирует плавно и предсказуемо.
     /// </summary>
-    private static void Animate(Border? tile, double lift, double scale)
+    private void Animate(Border? tile, double lift, double scale)
     {
         if (tile is null)
         {
             return;
         }
 
+        var (scaleTransform, translateTransform) = EnsureTransforms(tile);
+
+        // Доступность (I5): при «уменьшить движение» плитка перескакивает к целевому виду
+        // мгновенно, без Storyboard и плавных переходов.
+        if (_themes.ReduceMotion)
+        {
+            scaleTransform.ScaleX = scale;
+            translateTransform.Y = -lift;
+            return;
+        }
+
         var duration = HoverDuration;
         var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-        var (scaleTransform, translateTransform) = EnsureTransforms(tile);
 
         var scaleAnimation = new DoubleAnimation
         {

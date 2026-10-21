@@ -28,6 +28,13 @@
                 <Setter Property="FontSize" Value="13" />
                 <Setter Property="FontWeight" Value="SemiBold" />
             </Style>
+
+            <!--
+                Фокус-ринг плитки (доступность, I5). Плитка — обычная рамка, а встроенный
+                фокус-визуал WinUI получают только элементы управления, поэтому кольцо
+                нарисовано вручную: 2 px акцентом, как требует DESIGN §7. Цвет берётся из
+                общей кисти фокуса, поэтому в режиме высокой контрастности он системный.
+            -->
         </Grid.Resources>
 
         <!--
@@ -62,8 +69,14 @@
                         <Border
                             Width="40"
                             Height="40"
+                            AutomationProperties.Name="{x:Bind ToolTip, Mode=OneWay}"
+                            AutomationProperties.AutomationId="{x:Bind Key}"
                             Background="Transparent"
                             CornerRadius="12"
+                            GotFocus="OnTileGotFocus"
+                            IsTabStop="True"
+                            KeyDown="OnTileKeyDown"
+                            LostFocus="OnTileLostFocus"
                             RightTapped="OnTileRightTapped"
                             Tapped="OnTileTapped"
                             ToolTipService.Placement="Top"
@@ -112,6 +125,20 @@
                                     Background="{StaticResource GlazeBrandGradientBrush}"
                                     CornerRadius="2"
                                     Visibility="{x:Bind HasIndicator, Mode=OneWay}" />
+
+                                <!--
+                                    Кольцо фокуса (доступность, I5). Обычная рамка не получает
+                                    встроенный фокус-визуал WinUI, поэтому кольцо рисуется
+                                    вручную по событиям фокуса (DockWindow.xaml.cs).
+                                -->
+                                <Border
+                                    x:Name="FocusRing"
+                                    Margin="-2"
+                                    BorderBrush="{StaticResource FocusVisualSecondaryBrush}"
+                                    BorderThickness="2"
+                                    CornerRadius="14"
+                                    IsHitTestVisible="False"
+                                    Visibility="Collapsed" />
                             </Grid>
                         </Border>
 

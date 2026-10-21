@@ -33,6 +33,7 @@
                 Grid.Row="0"
                 Grid.Column="0"
                 Padding="12,0"
+                AutomationProperties.Name="Активное приложение"
                 Background="{StaticResource GlazeGlassBrush}"
                 CornerRadius="24">
                 <StackPanel
@@ -105,6 +106,7 @@
                         Grid.Column="1"
                         Padding="0"
                         VerticalContentAlignment="Center"
+                        AutomationProperties.Name="Поиск Glance"
                         Background="Transparent"
                         BorderThickness="0"
                         FontSize="13"
@@ -131,8 +133,11 @@
                 Grid.Row="0"
                 Grid.Column="2"
                 Padding="16,0"
+                AutomationProperties.Name="Центр управления"
                 Background="{StaticResource GlazeGlassBrush}"
                 CornerRadius="24"
+                IsTabStop="True"
+                KeyDown="OnStatusKeyDown"
                 PointerPressed="OnStatusPointerPressed">
                 <StackPanel
                     Orientation="Horizontal"
@@ -140,17 +145,20 @@
                     VerticalAlignment="Center">
                     <FontIcon
                         FontSize="15"
+                        AutomationProperties.Name="{x:Bind ViewModel.NetworkText, Mode=OneWay}"
                         Foreground="{StaticResource GlazeTextSecondaryBrush}"
                         Glyph="{x:Bind ViewModel.NetworkGlyph, Mode=OneWay}"
                         ToolTipService.ToolTip="{x:Bind ViewModel.NetworkText, Mode=OneWay}" />
                     <FontIcon
                         FontSize="15"
+                        AutomationProperties.Name="Громкость"
                         Foreground="{StaticResource GlazeTextSecondaryBrush}"
                         Glyph="&#xE767;"
                         ToolTipService.ToolTip="Громкость" />
                     <StackPanel
                         Orientation="Horizontal"
                         Spacing="4"
+                        AutomationProperties.Name="Питание"
                         ToolTipService.ToolTip="Питание">
                         <FontIcon
                             VerticalAlignment="Center"
@@ -169,7 +177,9 @@
                         Height="22"
                         Fill="{StaticResource GlazeBorderBrush}" />
 
-                    <StackPanel VerticalAlignment="Center">
+                    <StackPanel
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Дата и время">
                         <TextBlock
                             HorizontalAlignment="Right"
                             FontSize="14"
@@ -218,7 +228,9 @@
                         </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="presentation:GlanceResultViewModel">
-                                <Grid ColumnSpacing="12">
+                                <Grid
+                                    ColumnSpacing="12"
+                                    AutomationProperties.Name="{x:Bind Title}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
@@ -313,6 +325,7 @@
                             Width="40"
                             Height="40"
                             Padding="0"
+                            AutomationProperties.Name="Выключить звук"
                             Background="{StaticResource GlazeElevatedBrush}"
                             BorderThickness="0"
                             Click="OnToggleMute"
@@ -328,6 +341,7 @@
                         <Slider
                             Grid.Column="1"
                             VerticalAlignment="Center"
+                            AutomationProperties.Name="Громкость"
                             IsEnabled="{x:Bind ViewModel.QuickSettings.IsVolumeAvailable, Mode=OneWay}"
                             Maximum="100"
                             Minimum="0"
@@ -357,6 +371,7 @@
                         Text="ОФОРМЛЕНИЕ" />
                     <ComboBox
                         HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="Тема оформления Glaze Shell"
                         ItemsSource="{x:Bind ViewModel.QuickSettings.ThemeModeOptions}"
                         SelectedItem="{x:Bind ViewModel.QuickSettings.SelectedThemeMode, Mode=TwoWay}"
                         ToolTipService.ToolTip="Тема оформления Glaze Shell">

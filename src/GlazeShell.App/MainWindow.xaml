@@ -95,6 +95,7 @@
 
                     <AutoSuggestBox
                         x:Name="SearchBox"
+                        AutomationProperties.Name="Поиск приложений"
                         PlaceholderText="Поиск по названию, пути или AUMID"
                         QueryIcon="Find"
                         Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
@@ -124,7 +125,7 @@
                         SelectionMode="Single">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="p:ApplicationListViewModel">
-                                <Grid>
+                                <Grid AutomationProperties.Name="{x:Bind Name, Mode=OneWay}">
                                     <Grid Padding="20,16" ColumnSpacing="14">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
@@ -174,6 +175,7 @@
                                                         Grid.Column="1"
                                                         MinWidth="0"
                                                         Padding="6,2"
+                                                        AutomationProperties.Name="Копировать путь в буфер обмена"
                                                         Click="OnCopyPathClick"
                                                         ToolTipService.ToolTip="Копировать путь в буфер обмена"
                                                         Visibility="{x:Bind HasPath, Mode=OneWay}">

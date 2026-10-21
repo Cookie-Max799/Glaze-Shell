@@ -29,6 +29,17 @@ internal struct Message
     public Point Point;
 }
 
+/// <summary>
+/// Параметры темы высокой контрастности, возвращаемые <c>SPI_GETHIGHCONTRAST</c>.
+/// </summary>
+[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+internal struct HighContrast
+{
+    public uint Size;
+    public uint Flags;
+    public nint DefaultScheme;
+}
+
 [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
 internal struct MonitorInfoEx
 {
@@ -176,6 +187,23 @@ internal static class User32
 
     internal const uint SpiSetWorkArea = 0x005B;
     internal const uint SpiSetLogicalDpiOverride = 0x009F;
+
+    /// <summary>Чтение состояния анимаций клиентской области.</summary>
+    internal const uint SpiGetClientAreaAnimation = 0x1042;
+
+    /// <summary>Чтение параметров темы высокой контрастности.</summary>
+    internal const uint SpiGetHighContrast = 0x0042;
+
+    /// <summary>Признак включённой темы высокой контрастности.</summary>
+    internal const uint HcfHighContrastOn = 0x0000_0001;
+
+    internal const int ColorHighlight = 0;
+    internal const int ColorHighlightText = 1;
+    internal const int ColorWindow = 5;
+    internal const int ColorWindowText = 8;
+    internal const int ColorButtonFace = 15;
+    internal const int ColorGrayText = 17;
+    internal const int ColorButtonText = 18;
 
     internal const uint DevNodesChanged = 0x0007;
 
@@ -389,4 +417,21 @@ internal static class User32
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern nint DefWindowProc(nint hwnd, uint message, nint wParam, nint lParam);
+
+    /// <summary>
+    /// Читает параметры темы высокой контрастности. Параметры только читаются, поэтому
+    /// перезапись не нужна.
+    /// </summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SystemParametersInfoW(uint action, uint param, ref HighContrast value, uint winIni);
+
+    /// <summary>Читает состояние анимаций клиентской области (системная настройка анимаций).</summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SystemParametersInfoW(uint action, uint param, ref uint value, uint winIni);
+
+    /// <summary>Возвращает текущий системный цвет по индексу (например, <c>COLOR_WINDOW</c>).</summary>
+    [DllImport("user32.dll", ExactSpelling = true)]
+    internal static extern uint GetSysColor(int index);
 }

@@ -1,6 +1,7 @@
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
 using GlazeShell.Core.Services;
+using GlazeShell.Windows.SystemAccessibility;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
@@ -13,6 +14,10 @@ namespace GlazeShell.App.Theming;
 /// токенов-кистей в ресурсах приложения. Собственные кисти меняются на месте, поэтому
 /// уже открытые элементы перекрашиваются без перезагрузки XAML.
 /// </summary>
+/// <remarks>
+/// Здесь же живёт поддержка доступности (функция I5): в режиме высокой контрастности
+/// приглушённые цвета и стекло заменяются системными, а фокус-ринг становится контрастным.
+/// </remarks>
 public sealed class ThemeApplicator
 {
     private const string BackgroundKey = "GlazeBackgroundBrush";
@@ -30,8 +35,18 @@ public sealed class ThemeApplicator
     private const string ListViewItemSelectedKey = "ListViewItemBackgroundSelected";
     private const string ListViewItemSelectedPointerOverKey = "ListViewItemBackgroundSelectedPointerOver";
     private const string ListViewItemSelectedPressedKey = "ListViewItemBackgroundSelectedPressed";
+    private const string FocusPrimaryKey = "FocusVisualPrimaryBrush";
+    private const string FocusSecondaryKey = "FocusVisualSecondaryBrush";
+    private const string BrandGradientKey = "GlazeBrandGradientBrush";
 
     private const byte SelectionAlpha = 0x33;
+
+    /// <summary>
+    /// Прозрачность выделения в контрастном режиме. Выделение остаётся заметным, но текст
+    /// поверх него читается: непрозрачный системный <c>Highlight</c> с обычным текстом
+    /// нечитаем на светлых схемах.
+    /// </summary>
+    private const byte ContrastSelectionAlpha = 0x59;
 
     private readonly ISettingsManager _settings;
 
@@ -48,30 +63,83 @@ public sealed class ThemeApplicator
     /// </summary>
     public string? AccentId { get; private set; }
 
+    /// <summary>
+    /// Действует ли режим высокой контрастности: стекло отключено, цвета системные.
+    /// </summary>
+    public bool HighContrast { get; private set; }
+
+    /// <summary>
+    /// Требуется ли сократить или отключить анимации (доступность, I5).
+    /// </summary>
+    public bool ReduceMotion { get; private set; }
+
     public void ApplyFromSettings(FrameworkElement root)
     {
         var settings = _settings.GetSettings();
-        Apply(root, settings.ThemeMode, settings.AccentId);
+        var system = SystemAccessibilityProvider.GetInfo();
+        var accessibility = AccessibilityResolver.Resolve(
+            settings,
+            system.HighContrast,
+            system.AnimationsEnabled);
+
+        Apply(root, settings.ThemeMode, settings.AccentId, accessibility, system.Palette);
     }
 
     public void Apply(FrameworkElement root, ThemeMode mode, string? accentId)
     {
         ArgumentNullException.ThrowIfNull(root);
 
+        var system = SystemAccessibilityProvider.GetInfo();
+        var accessibility = AccessibilityResolver.Resolve(
+            _settings.GetSettings(),
+            system.HighContrast,
+            system.AnimationsEnabled);
+
+        Apply(root, mode, accentId, accessibility, system.Palette);
+    }
+
+    /// <summary>
+    /// Красит токены по теме и по правилам доступности. В контрастном режиме системная палитра
+    /// пользователя заменяет приглушённые оттенки, а фон стекла становится непрозрачным.
+    /// </summary>
+    private void Apply(
+        FrameworkElement root,
+        ThemeMode mode,
+        string? accentId,
+        AccessibilityState accessibility,
+        SystemAccessibilityPalette palette)
+    {
         var light = ThemeModeResolver.Resolve(mode, SystemUsesLightTheme()) == ThemeMode.Light;
         var theme = light ? GlazePalette.Light : GlazePalette.Dark;
         var accent = ResolveAccent(accentId, theme);
 
-        root.RequestedTheme = light ? ElementTheme.Light : ElementTheme.Dark;
-        ApplyBrushes(theme, accent);
+        // В контрастном режиме решение о светлой или тёмной теме принимает система:
+        // собственная тема высокой контрастности Windows уже содержит свои цвета.
+        root.RequestedTheme = accessibility.HighContrast
+            ? ElementTheme.Default
+            : (light ? ElementTheme.Light : ElementTheme.Dark);
+
+        if (accessibility.HighContrast)
+        {
+            ApplyHighContrast(palette);
+        }
+        else
+        {
+            ApplyBrushes(theme, accent);
+        }
+
+        ApplyFocusVisual(accessibility.HighContrast ? ToColor(palette.Highlight) : accent);
+        ApplyBrandGradient(accessibility.HighContrast ? ToColor(palette.Highlight) : null);
 
         Mode = mode;
         AccentId = accentId;
+        HighContrast = accessibility.HighContrast;
+        ReduceMotion = accessibility.ReduceMotion;
     }
 
     /// <summary>
     /// Читает системную настройку «светлая/тёмная тема приложений». Если значение
-    /// отсутствует или недоступно, считает тему светлой (как в Windows по умолчанию).
+    /// отсутствует или недоступно, считается тема светлая (как в Windows по умолчанию).
     /// </summary>
     public static bool SystemUsesLightTheme()
     {
@@ -117,6 +185,73 @@ public sealed class ThemeApplicator
         SetBrush(ListViewItemSelectedPointerOverKey, selection);
         SetBrush(ListViewItemSelectedPressedKey, selection);
     }
+
+    /// <summary>
+    /// Перекрашивает токены в системные цвета темы высокой контрастности. Стекло становится
+    /// непрозрачным фоном, приглушённый текст — системным «серым», а акцент — системным
+    /// выделением.
+    /// </summary>
+    private static void ApplyHighContrast(SystemAccessibilityPalette palette)
+    {
+        var background = ToColor(palette.Background);
+        var foreground = ToColor(palette.Foreground);
+        var highlight = ToColor(palette.Highlight);
+        var surface = ToColor(palette.Surface);
+        var surfaceText = ToColor(palette.SurfaceText);
+        var muted = ToColor(palette.Muted);
+        var selection = GlazePalette.WithAlpha(highlight, ContrastSelectionAlpha);
+
+        SetBrush(BackgroundKey, background);
+        SetBrush(SurfaceKey, surface);
+        SetBrush(ElevatedKey, surface);
+        SetBrush(BorderKey, foreground);
+        SetBrush(GlassKey, background);
+        SetBrush(TextPrimaryKey, foreground);
+        SetBrush(TextSecondaryKey, surfaceText);
+        SetBrush(TextMutedKey, muted);
+        SetBrush(AccentKey, highlight);
+        SetBrush(SelectionKey, selection);
+
+        SetBrush(ListViewItemPointerOverKey, surface);
+        SetBrush(ListViewItemPressedKey, surface);
+        SetBrush(ListViewItemSelectedKey, selection);
+        SetBrush(ListViewItemSelectedPointerOverKey, selection);
+        SetBrush(ListViewItemSelectedPressedKey, selection);
+    }
+
+    /// <summary>
+    /// Настраивает встроенный фокус-ринг WinUI: прозрачная заливка и акцентная обводка.
+    /// Это и есть требуемый DESIGN §7 ринг — 2 px акцентом с отступом.
+    /// </summary>
+    private static void ApplyFocusVisual(Color accent)
+    {
+        SetBrush(FocusPrimaryKey, Color.FromArgb(0, 0, 0, 0));
+        SetBrush(FocusSecondaryKey, accent);
+    }
+
+    /// <summary>
+    /// В контрастном режиме брендовый градиент заменяется сплошным системным выделением:
+    /// плавные переходы между оттенками читаются плохо.
+    /// </summary>
+    private static void ApplyBrandGradient(Color? solid)
+    {
+        if (solid is not { } color)
+        {
+            return;
+        }
+
+        if (Microsoft.UI.Xaml.Application.Current is { } app
+            && app.Resources.TryGetValue(BrandGradientKey, out var resource)
+            && resource is LinearGradientBrush gradient)
+        {
+            foreach (var stop in gradient.GradientStops)
+            {
+                stop.Color = color;
+            }
+        }
+    }
+
+    private static Color ToColor(SystemColor color) => Color.FromArgb(color.A, color.R, color.G, color.B);
 
     private static void SetBrush(string key, Color color)
     {

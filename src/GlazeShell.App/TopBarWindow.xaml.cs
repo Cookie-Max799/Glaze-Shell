@@ -151,7 +151,7 @@ public sealed partial class TopBarWindow : Window
             presenter.IsAlwaysOnTop = true;
         }
 
-        SystemBackdrop = new DesktopAcrylicBackdrop();
+        ApplyBackdrop();
 
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         OverlayWindow.MakeTopMostToolWindow(_hwnd);
@@ -304,6 +304,23 @@ public sealed partial class TopBarWindow : Window
         ViewModel.ToggleQuickSettings();
     }
 
+    /// <summary>
+    /// Клавиатурная активация правого pill (доступность, I5): то же действие, что и по клику.
+    /// Pill — обычная рамка, поэтому Enter и пробел обрабатываются вручную.
+    /// </summary>
+    private void OnStatusKeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        if (e.Key is not (VirtualKey.Enter or VirtualKey.Space))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        OverlayWindow.SetNonActivating(_hwnd, false);
+        Activate();
+        ViewModel.ToggleQuickSettings();
+    }
+
     private void OnToggleMute(object sender, RoutedEventArgs e) => ViewModel.QuickSettings.ToggleMute();
 
     private void OnOpenNetworkSettings(object sender, RoutedEventArgs e) => ShellTargets.Open("ms-settings:network");
@@ -418,5 +435,17 @@ public sealed partial class TopBarWindow : Window
         ViewModel.ClearSearch();
     }
 
-    private void OnSettingsChanged(SettingsChanged changed) => _themes.ApplyFromSettings(Root);
+    /// <summary>
+    /// Переприменяет тему и обновляет фон окна. В режиме высокой контрастности стекло
+    /// отключается: полупрозрачные pill поверх рабочего стола нечитаемы, а непрозрачный фон
+    /// берётся из системной палитры.
+    /// </summary>
+    private void OnSettingsChanged(SettingsChanged changed)
+    {
+        _themes.ApplyFromSettings(Root);
+        ApplyBackdrop();
+    }
+
+    private void ApplyBackdrop() =>
+        SystemBackdrop = _themes.HighContrast ? null : new DesktopAcrylicBackdrop();
 }

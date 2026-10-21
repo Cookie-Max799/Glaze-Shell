@@ -124,4 +124,71 @@ public sealed class SettingsCatalogTests
             Assert.IsNotNull(written, $"Setting '{definition.Id}' must write a settings copy.");
         }
     }
+
+    [TestMethod]
+    public void AccessibilityPageExistsInTheSidebar()
+    {
+        var page = SettingsCatalog.Pages.Single(item => item.Id == SettingsCatalog.AccessibilityPageId);
+
+        Assert.AreEqual("Доступность", page.Title);
+        Assert.AreEqual("Система", page.Section);
+    }
+
+    [TestMethod]
+    public void AccessibilityPageExposesBothToggles()
+    {
+        var settings = SettingsCatalog.ForPage(SettingsCatalog.AccessibilityPageId);
+
+        var reduceMotion = settings.Single(definition => definition.Id == "reduceMotion");
+        var highContrast = settings.Single(definition => definition.Id == "highContrast");
+
+        Assert.AreEqual(SettingKind.Toggle, reduceMotion.Kind);
+        Assert.AreEqual(SettingKind.Toggle, highContrast.Kind);
+    }
+
+    [TestMethod]
+    public void AccessibilityTogglesWriteIntoSettings()
+    {
+        var definition = SettingsCatalog.All.Single(item => item.Id == "reduceMotion");
+
+        var written = definition.Write(UserSettings.CreateDefault(), true);
+
+        Assert.IsTrue(written.ReduceMotion);
+        Assert.IsTrue((bool)definition.Read(written)!);
+    }
+
+    [TestMethod]
+    public void HighContrastToggleWritesIntoSettings()
+    {
+        var definition = SettingsCatalog.All.Single(item => item.Id == "highContrast");
+
+        var written = definition.Write(UserSettings.CreateDefault(), true);
+
+        Assert.IsTrue(written.HighContrast);
+        Assert.IsTrue((bool)definition.Read(written)!);
+    }
+
+    [TestMethod]
+    public void ResetRestoresAccessibilityDefaults()
+    {
+        var changed = UserSettingsEditor.With(
+            UserSettings.CreateDefault(),
+            reduceMotion: true,
+            highContrast: true);
+
+        var reset = SettingsCatalog.Reset(changed, SettingsCatalog.AccessibilityPageId);
+
+        Assert.IsFalse(reset.ReduceMotion);
+        Assert.IsFalse(reset.HighContrast);
+    }
+
+    [TestMethod]
+    public void AccessibilitySettingsAreFoundBySearch()
+    {
+        var byTitle = SettingsCatalog.Search("контраст");
+        var byKeyword = SettingsCatalog.Search("motion");
+
+        Assert.IsTrue(byTitle.Any(definition => definition.Id == "highContrast"));
+        Assert.IsTrue(byKeyword.Any(definition => definition.Id == "reduceMotion"));
+    }
 }

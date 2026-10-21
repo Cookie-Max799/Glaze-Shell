@@ -345,4 +345,51 @@ public sealed class SettingsDocumentMapperTests
         Assert.IsNull(document.ExplorerFavorites);
         Assert.AreEqual("icons", document.ExplorerViewMode);
     }
+
+    [TestMethod]
+    public void MapsAccessibilityPreferences()
+    {
+        var document = new SettingsDocument { ReduceMotion = true, HighContrast = true };
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+
+        Assert.IsTrue(settings!.ReduceMotion);
+        Assert.IsTrue(settings.HighContrast);
+    }
+
+    [TestMethod]
+    public void AccessibilityPreferencesAreOffByDefault()
+    {
+        var document = new SettingsDocument();
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+
+        Assert.IsFalse(settings!.ReduceMotion);
+        Assert.IsFalse(settings.HighContrast);
+    }
+
+    [TestMethod]
+    public void FromSettingsWritesAccessibilityPreferences()
+    {
+        var settings = new UserSettings(reduceMotion: true, highContrast: true);
+
+        var document = SettingsDocument.FromSettings(settings);
+
+        Assert.IsTrue(document.ReduceMotion);
+        Assert.IsTrue(document.HighContrast);
+    }
+
+    [TestMethod]
+    public void AccessibilityPreferencesSurviveTheRoundTrip()
+    {
+        var settings = new UserSettings(reduceMotion: true, highContrast: true);
+
+        var document = SettingsDocument.FromSettings(settings);
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var restored, out var diagnostics));
+
+        Assert.IsEmpty(diagnostics);
+        Assert.IsTrue(restored!.ReduceMotion);
+        Assert.IsTrue(restored.HighContrast);
+    }
 }
