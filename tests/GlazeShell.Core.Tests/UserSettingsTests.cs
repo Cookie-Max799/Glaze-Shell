@@ -1,4 +1,5 @@
 using GlazeShell.Core.Models;
+using GlazeShell.Core.Recovery;
 using GlazeShell.Core.Settings;
 
 namespace GlazeShell.Core.Tests;
@@ -242,5 +243,49 @@ public sealed class UserSettingsTests
 
         Assert.IsTrue(updated.ReduceMotion);
         Assert.IsTrue(updated.HighContrast);
+    }
+
+    [TestMethod]
+    public void RecoveryHotkeyIsEnabledByDefault()
+    {
+        var settings = UserSettings.CreateDefault();
+
+        Assert.IsTrue(settings.RecoveryHotkeyEnabled);
+        Assert.AreEqual(RecoveryHotkey.Default.Id, settings.RecoveryHotkeyId);
+    }
+
+    [TestMethod]
+    public void SafeModeIsOffByDefault()
+    {
+        Assert.IsFalse(UserSettings.CreateDefault().SafeModeEnabled);
+    }
+
+    [TestMethod]
+    public void UnknownRecoveryHotkeyFallsBackToTheDefault()
+    {
+        var settings = new UserSettings(recoveryHotkeyId: "Ctrl+K");
+
+        Assert.AreEqual(RecoveryHotkey.Default.Id, settings.RecoveryHotkeyId);
+    }
+
+    [TestMethod]
+    public void RecoveryHotkeyIsKept()
+    {
+        var settings = new UserSettings(recoveryHotkeyId: "Ctrl+Alt+Shift+F11");
+
+        Assert.AreEqual("Ctrl+Alt+Shift+F11", settings.RecoveryHotkeyId);
+    }
+
+    [TestMethod]
+    public void EditorKeepsOtherSettingsWhenRecoveryChanges()
+    {
+        var source = new UserSettings(themeMode: ThemeMode.Dark, dockEnabled: false);
+
+        var updated = UserSettingsEditor.With(source, recoveryHotkeyEnabled: false, safeModeEnabled: true);
+
+        Assert.IsFalse(updated.RecoveryHotkeyEnabled);
+        Assert.IsTrue(updated.SafeModeEnabled);
+        Assert.AreEqual(ThemeMode.Dark, updated.ThemeMode);
+        Assert.IsFalse(updated.DockEnabled);
     }
 }

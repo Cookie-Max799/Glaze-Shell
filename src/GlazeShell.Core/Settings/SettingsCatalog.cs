@@ -1,4 +1,5 @@
 using GlazeShell.Core.Models;
+using GlazeShell.Core.Recovery;
 
 namespace GlazeShell.Core.Settings;
 
@@ -31,6 +32,9 @@ public static class SettingsCatalog
     /// <summary>Идентификатор страницы «Доступность».</summary>
     public const string AccessibilityPageId = "accessibility";
 
+    /// <summary>Идентификатор страницы «Восстановление».</summary>
+    public const string RecoveryPageId = "recovery";
+
     /// <summary>Идентификатор страницы «О программе».</summary>
     public const string AboutPageId = "about";
 
@@ -44,6 +48,7 @@ public static class SettingsCatalog
         new(GlancePageId, "Glance", "\uE721", "Интерфейс"),
         new(ExplorerPageId, "Проводник", "\uE8B7", "Интерфейс"),
         new(AccessibilityPageId, "Доступность", "\uE776", "Система"),
+        new(RecoveryPageId, "Восстановление", "\uE90F", "Система"),
         new("windows", "Windows", "\uE782", "Система"),
         new("notifications", "Уведомления", "\uEA8F", "Система"),
         new("shortcuts", "Горячие клавиши", "\uE765", "Система"),
@@ -227,6 +232,40 @@ public static class SettingsCatalog
             settings => settings.HighContrast,
             (settings, value) => UserSettingsEditor.With(settings, highContrast: AsBool(value)),
             []),
+
+        // Восстановление (I2).
+        new(
+            "recoveryHotkeyEnabled",
+            RecoveryPageId,
+            "Клавиша восстановления",
+            "Редкое сочетание клавиш возвращает панель задач и значки рабочего стола, если оболочка сломалась.",
+            ["восстановление", "recovery", "горячие клавиши", "hotkey", "панель задач", "рабочий стол"],
+            SettingKind.Toggle,
+            settings => settings.RecoveryHotkeyEnabled,
+            (settings, value) => UserSettingsEditor.With(settings, recoveryHotkeyEnabled: AsBool(value)),
+            []),
+
+        new(
+            "recoveryHotkeyId",
+            RecoveryPageId,
+            "Сочетание клавиш",
+            "Сочетание используется только для восстановления, поэтому состоит из трёх модификаторов и функциональной клавиши.",
+            ["сочетание", "комбинация", "клавиши", "hotkey", "восстановление"],
+            SettingKind.Choice,
+            settings => settings.RecoveryHotkeyId,
+            (settings, value) => UserSettingsEditor.With(settings, recoveryHotkeyId: value as string),
+            BuildRecoveryHotkeyChoices()),
+
+        new(
+            "safeModeEnabled",
+            RecoveryPageId,
+            "Безопасный режим",
+            "Запускать оболочку без хуков и оверлеев: она ничего не меняет в системе.",
+            ["безопасный режим", "safe mode", "восстановление", "авария", "краш"],
+            SettingKind.Toggle,
+            settings => settings.SafeModeEnabled,
+            (settings, value) => UserSettingsEditor.With(settings, safeModeEnabled: AsBool(value)),
+            []),
     ];
 
     private static List<SettingChoice> BuildAccentChoices()
@@ -236,6 +275,22 @@ public static class SettingsCatalog
         foreach (var accent in AccentPalette.All)
         {
             choices.Add(new SettingChoice(accent.Id, accent.Name));
+        }
+
+        return choices;
+    }
+
+    /// <summary>
+    /// Варианты сочетания клавиш восстановления: только редкие комбинации из трёх
+    /// модификаторов и функциональной клавиши.
+    /// </summary>
+    private static List<SettingChoice> BuildRecoveryHotkeyChoices()
+    {
+        var choices = new List<SettingChoice>();
+
+        foreach (var hotkey in RecoveryHotkey.Presets)
+        {
+            choices.Add(new SettingChoice(hotkey.Id, hotkey.Id));
         }
 
         return choices;

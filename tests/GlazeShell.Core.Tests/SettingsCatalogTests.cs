@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using GlazeShell.Core.Models;
+using GlazeShell.Core.Recovery;
 using GlazeShell.Core.Settings;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -190,5 +191,79 @@ public sealed class SettingsCatalogTests
 
         Assert.IsTrue(byTitle.Any(definition => definition.Id == "highContrast"));
         Assert.IsTrue(byKeyword.Any(definition => definition.Id == "reduceMotion"));
+    }
+
+    [TestMethod]
+    public void RecoveryPageExistsInTheSidebar()
+    {
+        var page = SettingsCatalog.Pages.Single(item => item.Id == SettingsCatalog.RecoveryPageId);
+
+        Assert.AreEqual("Восстановление", page.Title);
+        Assert.AreEqual("Система", page.Section);
+    }
+
+    [TestMethod]
+    public void RecoveryPageExposesHotkeyAndSafeMode()
+    {
+        var settings = SettingsCatalog.ForPage(SettingsCatalog.RecoveryPageId);
+
+        var hotkey = settings.Single(definition => definition.Id == "recoveryHotkeyEnabled");
+        var combination = settings.Single(definition => definition.Id == "recoveryHotkeyId");
+        var safeMode = settings.Single(definition => definition.Id == "safeModeEnabled");
+
+        Assert.AreEqual(SettingKind.Toggle, hotkey.Kind);
+        Assert.AreEqual(SettingKind.Choice, combination.Kind);
+        Assert.AreEqual(SettingKind.Toggle, safeMode.Kind);
+    }
+
+    [TestMethod]
+    public void RecoveryHotkeyChoicesAreRareCombinations()
+    {
+        var definition = SettingsCatalog.All.Single(item => item.Id == "recoveryHotkeyId");
+
+        Assert.IsNotEmpty(definition.Choices);
+
+        foreach (var choice in definition.Choices)
+        {
+            Assert.IsTrue(
+                RecoveryHotkey.TryParse(choice.Value, out _),
+                $"The choice '{choice.Value}' must be a supported recovery hotkey.");
+        }
+    }
+
+    [TestMethod]
+    public void RecoverySettingsWriteIntoSettings()
+    {
+        var hotkey = SettingsCatalog.All.Single(item => item.Id == "recoveryHotkeyEnabled");
+        var safeMode = SettingsCatalog.All.Single(item => item.Id == "safeModeEnabled");
+
+        var written = safeMode.Write(hotkey.Write(UserSettings.CreateDefault(), false), true);
+
+        Assert.IsFalse(written.RecoveryHotkeyEnabled);
+        Assert.IsTrue(written.SafeModeEnabled);
+    }
+
+    [TestMethod]
+    public void ResetRestoresRecoveryDefaults()
+    {
+        var changed = UserSettingsEditor.With(
+            UserSettings.CreateDefault(),
+            recoveryHotkeyEnabled: false,
+            safeModeEnabled: true);
+
+        var reset = SettingsCatalog.Reset(changed, SettingsCatalog.RecoveryPageId);
+
+        Assert.IsTrue(reset.RecoveryHotkeyEnabled);
+        Assert.IsFalse(reset.SafeModeEnabled);
+    }
+
+    [TestMethod]
+    public void RecoverySettingsAreFoundBySearch()
+    {
+        var byTitle = SettingsCatalog.Search("восстановление");
+        var byKeyword = SettingsCatalog.Search("safe mode");
+
+        Assert.IsTrue(byTitle.Any(definition => definition.Id == "recoveryHotkeyEnabled"));
+        Assert.IsTrue(byKeyword.Any(definition => definition.Id == "safeModeEnabled"));
     }
 }

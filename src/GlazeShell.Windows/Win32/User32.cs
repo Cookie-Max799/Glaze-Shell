@@ -214,6 +214,15 @@ internal static class User32
     internal const uint SwpNoActivate = 0x0010;
 
     internal const uint EventSystemForeground = 0x0003;
+
+    /// <summary>Кнопка «ОК» в сообщении.</summary>
+    internal const uint MbOk = 0x0000;
+
+    /// <summary>Значок информации в сообщении.</summary>
+    internal const uint MbIconInformation = 0x0040;
+
+    /// <summary>Сообщение выводится поверх других окон.</summary>
+    internal const uint MbSetForeground = 0x10000;
     internal const uint EventObjectCreate = 0x8000;
     internal const uint EventObjectDestroy = 0x8001;
     internal const uint EventObjectShow = 0x8002;
@@ -247,6 +256,12 @@ internal static class User32
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern nint FindWindow(string? className, string? windowName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern nint FindWindowEx(nint parent, nint childAfter, string? className, string? windowName);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    internal static extern int MessageBoxW(nint hwnd, string text, string caption, uint type);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern uint RegisterWindowMessage(string message);

@@ -66,8 +66,16 @@ public sealed partial class MainWindow : Window
     /// </summary>
     public event EventHandler? SettingsRequested;
 
+    /// <summary>
+    /// Запрос на восстановление интерфейса Windows (I2): панель задач и значки рабочего
+    /// стола возвращаются на место. Восстановлением занимается приложение, а не окно.
+    /// </summary>
+    public event EventHandler? RecoveryRequested;
+
     private void OnThemeSelectionChanged(object? sender, ThemeSelectionChangedEventArgs e) =>
         _themes.Apply(Root, e.Mode, e.AccentId);
+
+    private void OnRecoveryClick(object sender, RoutedEventArgs e) => RecoveryRequested?.Invoke(this, EventArgs.Empty);
 
     private void OnExplorerClick(object sender, RoutedEventArgs e) => ExplorerRequested?.Invoke(this, null);
 

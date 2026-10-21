@@ -58,6 +58,16 @@
 
                         <Button
                             HorizontalAlignment="Right"
+                            Click="OnRecoveryClick"
+                            ToolTipService.ToolTip="Восстановить интерфейс Windows (I2)">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon FontSize="15" Glyph="&#xE90F;" />
+                                <TextBlock Text="Восстановить UI" />
+                            </StackPanel>
+                        </Button>
+
+                        <Button
+                            HorizontalAlignment="Right"
                             Click="OnExplorerClick"
                             ToolTipService.ToolTip="Проводник Glaze Shell (E1/E2)">
                             <StackPanel Orientation="Horizontal" Spacing="8">

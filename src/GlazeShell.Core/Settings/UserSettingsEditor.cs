@@ -27,7 +27,10 @@ public static class UserSettingsEditor
         bool? topBarEnabled = null,
         bool? dockEnabled = null,
         bool? dockReplacesTaskbar = null,
-        ExplorerViewMode? explorerViewMode = null)
+        ExplorerViewMode? explorerViewMode = null,
+        bool? recoveryHotkeyEnabled = null,
+        string? recoveryHotkeyId = null,
+        bool? safeModeEnabled = null)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -48,6 +51,9 @@ public static class UserSettingsEditor
             explorerFavorites: source.ExplorerFavorites,
             explorerViewMode: explorerViewMode ?? source.ExplorerViewMode,
             reduceMotion: reduceMotion ?? source.ReduceMotion,
-            highContrast: highContrast ?? source.HighContrast);
+            highContrast: highContrast ?? source.HighContrast,
+            recoveryHotkeyEnabled: recoveryHotkeyEnabled ?? source.RecoveryHotkeyEnabled,
+            recoveryHotkeyId: recoveryHotkeyId ?? source.RecoveryHotkeyId,
+            safeModeEnabled: safeModeEnabled ?? source.SafeModeEnabled);
     }
 }

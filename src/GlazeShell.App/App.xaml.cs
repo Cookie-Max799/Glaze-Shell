@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using GlazeShell.App.Theming;
 using GlazeShell.Core.Configuration;
@@ -6,8 +7,10 @@ using GlazeShell.Core.Discovery;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Persistence;
+using GlazeShell.Core.Recovery;
 using GlazeShell.Core.Services;
 using GlazeShell.Data.Persistence;
+using GlazeShell.Data.Recovery;
 using GlazeShell.Data.Themes;
 using GlazeShell.Infrastructure.Diagnostics;
 using GlazeShell.Infrastructure.Logging;
@@ -27,6 +30,7 @@ namespace GlazeShell.App;
 public partial class App : Application
 {
     private readonly FileLogger _logger;
+    private readonly RecoveryCommandLineOptions _commandLine;
     private Window? _window;
     private SingleInstanceLease? _singleInstanceLease;
 
@@ -66,6 +70,30 @@ public partial class App : Application
     /// </summary>
     private GlobalHotkey? _hotkey;
 
+    /// <summary>
+    /// Редкая горячая клавиша восстановления интерфейса Windows (I2). Регистрируется всегда,
+    /// пока она включена в настройках: это последний путь к рабочему столу, когда оболочка
+    /// уже сломалась.
+    /// </summary>
+    private GlobalHotkey? _recoveryHotkey;
+
+    /// <summary>
+    /// Сторож восстановления (I2): отдельный процесс, который возвращает интерфейс Windows,
+    /// если оболочка завершилась неожиданно.
+    /// </summary>
+    private Process? _watchdog;
+
+    /// <summary>Хранилище состояния восстановления (I2).</summary>
+    private RecoveryStore? _recoveryStore;
+
+    /// <summary>Счётчик падений оболочки (I2).</summary>
+    private CrashTracker? _crashes;
+
+    /// <summary>
+    /// Работает ли оболочка в безопасном режиме (I2): без хуков и оверлеев.
+    /// </summary>
+    private bool _safeMode;
+
     private IDisposable? _settingsChangedSubscription;
 
     /// <summary>
@@ -76,6 +104,24 @@ public partial class App : Application
 
     public App()
     {
+        _commandLine = RecoveryCommandLine.Parse(Environment.GetCommandLineArgs().Skip(1).ToArray());
+        _logger = new FileLogger(UserDataPaths.GetLogFilePath(GlazeShellConfiguration.CreateDefault()));
+
+        // Сторож работает отдельным процессом и не должен касаться единственного экземпляра:
+        // иначе он сразу же выйдет, не дождавшись оболочки.
+        if (_commandLine.WatchdogProcessId is int watchdogProcessId)
+        {
+            RunWatchdog(watchdogProcessId);
+            return;
+        }
+
+        // Восстановление по ключу командной строки: возвращаем системный интерфейс и выходим.
+        if (_commandLine.RestoreUserInterface)
+        {
+            RestoreUserInterfaceOnly();
+            return;
+        }
+
         _singleInstanceLease = SingleInstanceHelper.Acquire();
         if (_singleInstanceLease is null)
         {
@@ -85,7 +131,6 @@ public partial class App : Application
         }
 
         InitializeComponent();
-        _logger = new FileLogger(UserDataPaths.GetLogFilePath(GlazeShellConfiguration.CreateDefault()));
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -124,6 +169,12 @@ public partial class App : Application
         var layoutWriter = new DesktopLayoutPersistenceWriter(store, eventManager, ReportPersistence);
         var settingsManager = new PersistingSettingsManager(store, eventManager, ReportPersistence);
         ReportPersistenceStatus(settingsManager.Load());
+
+        var settings = settingsManager.GetSettings();
+
+        // Восстановление (I2): незавершённая прошлая сессия означает падение оболочки,
+        // а несколько падений подряд включают безопасный режим.
+        _safeMode = PrepareRecovery(store.RootDirectory, settings).IsSafeMode;
 
         _themeManager = CreateThemeManager(store, eventManager, settingsManager.GetSettings().ActiveThemeId);
 
@@ -187,6 +238,9 @@ public partial class App : Application
         window.ExplorerRequested += (_, path) => OpenExplorer(path);
         window.SettingsRequested += (_, _) => OpenSettings();
 
+        // Кнопка «Восстановить UI» в главном окне возвращает системный интерфейс на место.
+        window.RecoveryRequested += (_, _) => RestoreWindowsUi("the main window");
+
         // Верхняя панель создаётся до активации главного окна: панель показывается без
         // перехвата фокуса, поэтому фокус остаётся у главного окна.
         void ApplyTopBar(bool enabled)
@@ -248,11 +302,14 @@ public partial class App : Application
         // к нижней границе монитора до решения о новом скрытии.
         _ = TaskbarHider.RestoreIfOffScreen();
 
-        ApplyTopBar(settingsManager.GetSettings().TopBarEnabled);
-        ApplyDock(settingsManager.GetSettings().DockEnabled);
+        // В безопасном режиме (I2) оболочка ничего не меняет в системе: ни хуков, ни
+        // оверлеев, ни скрытой панели задач.
+        ApplyTopBar(!_safeMode && settings.TopBarEnabled);
+        ApplyDock(!_safeMode && settings.DockEnabled);
         ApplyTaskbarReplacement(
-            settingsManager.GetSettings().DockEnabled &&
-            settingsManager.GetSettings().DockReplacesTaskbar);
+            !_safeMode &&
+            settings.DockEnabled &&
+            settings.DockReplacesTaskbar);
 
         // Ctrl K открывает поиск Glance (B1). Комбинацию может занимать другая программа:
         // тогда приложение работает без неё, а причина попадает в лог.
@@ -273,27 +330,47 @@ public partial class App : Application
                 "The Ctrl K shortcut is unavailable; it is probably taken by another application.");
         }
 
+        // Редкая клавиша восстановления (I2) и сторож: оба работают и в безопасном режиме,
+        // потому что это единственный путь вернуть системный интерфейс.
+        RegisterRecoveryHotkey(settings);
+        StartWatchdog();
+
         _settingsChangedSubscription = eventManager.Subscribe<SettingsChanged>(
             changed =>
             {
-                ApplyTopBar(changed.Settings.TopBarEnabled);
-                ApplyDock(changed.Settings.DockEnabled);
-                ApplyTaskbarReplacement(changed.Settings.DockEnabled && changed.Settings.DockReplacesTaskbar);
+                ApplyTopBar(!_safeMode && changed.Settings.TopBarEnabled);
+                ApplyDock(!_safeMode && changed.Settings.DockEnabled);
+                ApplyTaskbarReplacement(
+                    !_safeMode &&
+                    changed.Settings.DockEnabled &&
+                    changed.Settings.DockReplacesTaskbar);
+
+                RegisterRecoveryHotkey(changed.Settings);
             });
 
-        // Координатор запускается после создания окна: подписчики уже зарегистрированы,
-        // поэтому ни одно событие не теряется между подпиской и первым проходом источника.
-        try
+        if (_safeMode)
         {
-            ReportEventStatus(eventSources.Start());
+            _logger.Write(
+                GlazeLogLevel.Information,
+                "Recovery",
+                "The system event sources are not started in the safe mode.");
         }
-        catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception or System.Runtime.InteropServices.COMException)
+        else
         {
-            _logger.Write(GlazeLogLevel.Warning, "Events", "System event sources failed to start.", exception);
-        }
-        catch (Exception exception)
-        {
-            _logger.Write(GlazeLogLevel.Error, "Events", "Unexpected failure while starting system event sources.", exception);
+            // Координатор запускается после создания окна: подписчики уже зарегистрированы,
+            // поэтому ни одно событие не теряется между подпиской и первым проходом источника.
+            try
+            {
+                ReportEventStatus(eventSources.Start());
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception or System.Runtime.InteropServices.COMException)
+            {
+                _logger.Write(GlazeLogLevel.Warning, "Events", "System event sources failed to start.", exception);
+            }
+            catch (Exception exception)
+            {
+                _logger.Write(GlazeLogLevel.Error, "Events", "Unexpected failure while starting system event sources.", exception);
+            }
         }
 
         window.Closed += (_, _) => Shutdown(layoutWriter, eventSources, performance, eventLatency);
@@ -304,6 +381,248 @@ public partial class App : Application
         // фактическое время запуска приложения, а не только время композиции объектов.
         performance.LogBaseline();
         StartPerformanceSampling(performance);
+    }
+
+    /// <summary>
+    /// Готовит состояние восстановления (I2) и выбирает режим запуска.
+    /// </summary>
+    /// <remarks>
+    /// Незавершённая прошлая сессия считается падением: её момент добавляется к счётчику,
+    /// а несколько падений подряд включают безопасный режим. Текущая сессия сразу
+    /// записывается как незавершённая — она станет завершённой только при штатном выходе.
+    /// </remarks>
+    private StartupDecision PrepareRecovery(string rootDirectory, Core.Models.UserSettings settings)
+    {
+        var store = new RecoveryStore(rootDirectory);
+        var snapshot = store.Load(out var diagnostics);
+
+        foreach (var diagnostic in diagnostics)
+        {
+            _logger.Write(GlazeLogLevel.Warning, "Recovery", diagnostic);
+        }
+
+        var tracker = new CrashTracker(snapshot.Crashes);
+
+        if (!snapshot.SessionCompleted)
+        {
+            tracker.RecordCrash(DateTimeOffset.UtcNow);
+            _logger.Write(
+                GlazeLogLevel.Warning,
+                "Recovery",
+                "The previous session did not finish, so the shell is treated as crashed.");
+        }
+
+        tracker.Prune(DateTimeOffset.UtcNow);
+
+        _recoveryStore = store;
+        _crashes = tracker;
+
+        try
+        {
+            store.Save(new RecoverySnapshot(SessionCompleted: false, tracker.Crashes));
+        }
+        catch (Exception exception) when (exception is PersistenceException or IOException or UnauthorizedAccessException)
+        {
+            ReportPersistence("The recovery state could not be saved.", exception);
+        }
+
+        var decision = StartupModeResolver.Resolve(
+            requestedByCommandLine: _commandLine.SafeMode,
+            enabledInSettings: settings.SafeModeEnabled,
+            repeatedCrashes: tracker.ShouldEnterSafeMode(DateTimeOffset.UtcNow));
+
+        _logger.Write(
+            decision.IsSafeMode ? GlazeLogLevel.Warning : GlazeLogLevel.Information,
+            "Recovery",
+            $"Startup mode: {decision.Mode}. {decision.Reason}");
+
+        return decision;
+    }
+
+    /// <summary>
+    /// Регистрирует редкую клавишу восстановления (I2). Комбинацию может занимать другая
+    /// программа: тогда оболочка работает без неё, а причина попадает в лог.
+    /// </summary>
+    private void RegisterRecoveryHotkey(Core.Models.UserSettings settings)
+    {
+        _recoveryHotkey?.Dispose();
+        _recoveryHotkey = null;
+
+        if (!settings.RecoveryHotkeyEnabled)
+        {
+            return;
+        }
+
+        var hotkey = RecoveryHotkey.ParseOrDefault(settings.RecoveryHotkeyId);
+
+        _recoveryHotkey = GlobalHotkey.TryRegister(
+            ToGlobalModifiers(hotkey.Modifiers),
+            hotkey.VirtualKey,
+            exception => _logger.Write(GlazeLogLevel.Error, "Recovery", "The recovery hotkey handler failed.", exception));
+
+        if (_recoveryHotkey is null)
+        {
+            _logger.Write(
+                GlazeLogLevel.Warning,
+                "Recovery",
+                $"The recovery hotkey {hotkey.Id} is unavailable; it is probably taken by another application.");
+            return;
+        }
+
+        _recoveryHotkey.Pressed += OnRecoveryHotkeyPressed;
+    }
+
+    /// <summary>
+    /// Запускает сторож восстановления (I2): отдельный процесс, который вернёт интерфейс
+    /// Windows, если оболочка завершится неожиданно.
+    /// </summary>
+    private void StartWatchdog()
+    {
+        try
+        {
+            _watchdog = WatchdogLauncher.TryLaunch(Environment.ProcessId);
+
+            if (_watchdog is null)
+            {
+                _logger.Write(
+                    GlazeLogLevel.Warning,
+                    "Recovery",
+                    "The watchdog could not be started; the interface is restored on the next start only.");
+            }
+        }
+        catch (Exception exception)
+        {
+            _logger.Write(GlazeLogLevel.Warning, "Recovery", "The watchdog could not be started.", exception);
+        }
+    }
+
+    /// <summary>
+    /// Режим сторожа: ждёт завершения оболочки и возвращает интерфейс Windows. Выполняется
+    /// в отдельном процессе, поэтому хуки и оверлеи здесь не создаются.
+    /// </summary>
+    private void RunWatchdog(int parentProcessId)
+    {
+        try
+        {
+            _logger.Write(
+                GlazeLogLevel.Information,
+                "Recovery",
+                $"The watchdog watches the process {parentProcessId}.");
+
+            var finished = ProcessExitWatcher.WaitForExit(parentProcessId);
+
+            if (!finished)
+            {
+                return;
+            }
+
+            var result = WindowsUiRestorer.Restore();
+
+            _logger.Write(
+                GlazeLogLevel.Information,
+                "Recovery",
+                result.HasChanges
+                    ? $"The shell has finished, the Windows interface was restored. {string.Join(" ", result.Notes)}"
+                    : "The shell has finished, the Windows interface did not need any changes.");
+        }
+        catch (Exception exception)
+        {
+            _logger.Write(GlazeLogLevel.Error, "Recovery", "The watchdog failed.", exception);
+        }
+
+        Environment.Exit(0);
+    }
+
+    /// <summary>
+    /// Режим восстановления по ключу командной строки: возвращает системную панель задач и
+    /// иконки рабочего стола, показывает результат и завершает работу.
+    /// </summary>
+    private void RestoreUserInterfaceOnly()
+    {
+        try
+        {
+            var result = WindowsUiRestorer.Restore();
+
+            _logger.Write(
+                GlazeLogLevel.Information,
+                "Recovery",
+                result.HasChanges
+                    ? $"The Windows interface was restored. {string.Join(" ", result.Notes)}"
+                    : "The Windows interface did not need any changes.");
+
+            UserNotifier.ShowInformation(
+                result.HasChanges
+                    ? "Системная панель задач и значки рабочего стола возвращены на место."
+                    : "Системному интерфейсу не потребовалось восстановление.",
+                "Glaze Shell");
+        }
+        catch (Exception exception)
+        {
+            _logger.Write(GlazeLogLevel.Error, "Recovery", "The Windows interface could not be restored.", exception);
+        }
+
+        Environment.Exit(0);
+    }
+
+    /// <summary>
+    /// Возвращает интерфейс Windows к штатному виду: панель задач и значки рабочего стола
+    /// оказываются на месте, скрытие панели прекращается.
+    /// </summary>
+    /// <param name="source">Откуда пришёл запрос — для журнала.</param>
+    private void RestoreWindowsUi(string source)
+    {
+        try
+        {
+            _taskbarHider?.Dispose();
+            _taskbarHider = null;
+
+            var result = WindowsUiRestorer.Restore();
+
+            _logger.Write(
+                GlazeLogLevel.Information,
+                "Recovery",
+                result.HasChanges
+                    ? $"The Windows interface was restored from {source}. {string.Join(" ", result.Notes)}"
+                    : $"The Windows interface was requested from {source}, but nothing had to be changed.");
+        }
+        catch (Exception exception)
+        {
+            _logger.Write(GlazeLogLevel.Error, "Recovery", $"The Windows interface could not be restored from {source}.", exception);
+        }
+    }
+
+    /// <summary>
+    /// Обработка редкой клавиши восстановления (I2). Приходит с потока слушателя, поэтому
+    /// сама операция не трогает интерфейс и безопасна из любого потока.
+    /// </summary>
+    private void OnRecoveryHotkeyPressed(object? sender, EventArgs e) =>
+        RestoreWindowsUi("the recovery hotkey");
+
+    private static GlobalHotkey.Modifier ToGlobalModifiers(HotkeyModifiers modifiers)
+    {
+        var result = GlobalHotkey.Modifier.None;
+
+        if (modifiers.HasFlag(HotkeyModifiers.Alt))
+        {
+            result |= GlobalHotkey.Modifier.Alt;
+        }
+
+        if (modifiers.HasFlag(HotkeyModifiers.Control))
+        {
+            result |= GlobalHotkey.Modifier.Control;
+        }
+
+        if (modifiers.HasFlag(HotkeyModifiers.Shift))
+        {
+            result |= GlobalHotkey.Modifier.Shift;
+        }
+
+        if (modifiers.HasFlag(HotkeyModifiers.Windows))
+        {
+            result |= GlobalHotkey.Modifier.Windows;
+        }
+
+        return result;
     }
 
     /// <summary>
@@ -333,6 +652,29 @@ public partial class App : Application
         {
             _hotkey?.Dispose();
             _hotkey = null;
+        });
+
+        // Клавиша восстановления снимается по той же причине: нажатие не должно прийти
+        // в закрывающееся приложение.
+        TryShutdownStep("recovery hotkey", () =>
+        {
+            _recoveryHotkey?.Dispose();
+            _recoveryHotkey = null;
+        });
+
+        // Сторож завершается вместе с оболочкой: панель задач уже возвращена, а отдельный
+        // процесс после выхода пользователя не нужен.
+        TryShutdownStep("watchdog", () =>
+        {
+            _watchdog?.Kill();
+            _watchdog?.Dispose();
+            _watchdog = null;
+        });
+
+        // Сессия отмечена завершённой: следующий запуск не посчитает выход аварийным.
+        TryShutdownStep("recovery state", () =>
+        {
+            _recoveryStore?.Save(new RecoverySnapshot(SessionCompleted: true, _crashes?.Crashes ?? []));
         });
 
         TryShutdownStep("top bar", () =>

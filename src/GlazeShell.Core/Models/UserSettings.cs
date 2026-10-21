@@ -1,3 +1,5 @@
+using GlazeShell.Core.Recovery;
+
 namespace GlazeShell.Core.Models;
 
 public sealed record UserSettings
@@ -32,7 +34,10 @@ public sealed record UserSettings
         IReadOnlyList<string>? explorerFavorites = null,
         ExplorerViewMode explorerViewMode = ExplorerViewMode.Icons,
         bool reduceMotion = false,
-        bool highContrast = false)
+        bool highContrast = false,
+        bool recoveryHotkeyEnabled = true,
+        string? recoveryHotkeyId = null,
+        bool safeModeEnabled = false)
     {
         Language = ModelValidation.Required(language, nameof(language));
         ActiveThemeId = ModelValidation.Optional(activeThemeId, nameof(activeThemeId));
@@ -47,6 +52,9 @@ public sealed record UserSettings
         ExplorerViewMode = ValidateExplorerViewMode(explorerViewMode, nameof(explorerViewMode));
         ReduceMotion = reduceMotion;
         HighContrast = highContrast;
+        RecoveryHotkeyEnabled = recoveryHotkeyEnabled;
+        RecoveryHotkeyId = RecoveryHotkey.ParseOrDefault(recoveryHotkeyId).Id;
+        SafeModeEnabled = safeModeEnabled;
         StartWithWindows = startWithWindows;
         MinimizeToTray = minimizeToTray;
         ShowDesktopOnStartup = showDesktopOnStartup;
@@ -129,6 +137,24 @@ public sealed record UserSettings
     /// независимо от этого переключателя — он лишь включает её принудительно.
     /// </summary>
     public bool HighContrast { get; }
+
+    /// <summary>
+    /// Включена ли горячая клавиша восстановления интерфейса Windows (функция I2).
+    /// </summary>
+    public bool RecoveryHotkeyEnabled { get; }
+
+    /// <summary>
+    /// Комбинация клавиш восстановления интерфейса Windows (I2), например
+    /// <c>Ctrl+Alt+Shift+F12</c>. Значение приводится к поддерживаемому виду: неизвестная
+    /// комбинация заменяется на <see cref="Recovery.RecoveryHotkey.Default"/>.
+    /// </summary>
+    public string RecoveryHotkeyId { get; }
+
+    /// <summary>
+    /// Безопасный режим (функция I2): оболочка запускается без хуков и оверлеев и ничего
+    /// не меняет в системе.
+    /// </summary>
+    public bool SafeModeEnabled { get; }
 
     public static UserSettings CreateDefault() => new();
 

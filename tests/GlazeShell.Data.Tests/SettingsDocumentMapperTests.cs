@@ -1,5 +1,6 @@
 using System.Globalization;
 using GlazeShell.Core.Models;
+using GlazeShell.Core.Recovery;
 using GlazeShell.Data.Serialization;
 
 namespace GlazeShell.Data.Tests;
@@ -296,6 +297,60 @@ public sealed class SettingsDocumentMapperTests
         Assert.HasCount(2, settings.ExplorerFavorites);
         Assert.AreEqual("C:\\Work", settings.ExplorerFavorites[0]);
         Assert.AreEqual("C:\\Notes", settings.ExplorerFavorites[1]);
+    }
+
+    [TestMethod]
+    public void MapsRecoveryDefaults()
+    {
+        var document = new SettingsDocument();
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+
+        Assert.IsTrue(settings!.RecoveryHotkeyEnabled);
+        Assert.IsFalse(settings.SafeModeEnabled);
+        Assert.AreEqual(RecoveryHotkey.Default.Id, settings.RecoveryHotkeyId);
+    }
+
+    [TestMethod]
+    public void MapsRecoverySettings()
+    {
+        var document = new SettingsDocument
+        {
+            RecoveryHotkeyEnabled = false,
+            RecoveryHotkeyId = "Ctrl+Alt+Shift+F11",
+            SafeModeEnabled = true,
+        };
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+
+        Assert.IsFalse(settings!.RecoveryHotkeyEnabled);
+        Assert.AreEqual("Ctrl+Alt+Shift+F11", settings.RecoveryHotkeyId);
+        Assert.IsTrue(settings.SafeModeEnabled);
+    }
+
+    [TestMethod]
+    public void UnknownRecoveryHotkeyFallsBackToTheDefault()
+    {
+        var document = new SettingsDocument { RecoveryHotkeyId = "Ctrl+K" };
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+
+        Assert.AreEqual(RecoveryHotkey.Default.Id, settings!.RecoveryHotkeyId);
+    }
+
+    [TestMethod]
+    public void FromSettingsMapsRecoveryValues()
+    {
+        var settings = new UserSettings(
+            recoveryHotkeyEnabled: false,
+            recoveryHotkeyId: "Ctrl+Alt+Shift+F10",
+            safeModeEnabled: true);
+
+        var document = SettingsDocument.FromSettings(settings);
+
+        Assert.IsFalse(document.RecoveryHotkeyEnabled);
+        Assert.AreEqual("Ctrl+Alt+Shift+F10", document.RecoveryHotkeyId);
+        Assert.IsTrue(document.SafeModeEnabled);
     }
 
     [TestMethod]

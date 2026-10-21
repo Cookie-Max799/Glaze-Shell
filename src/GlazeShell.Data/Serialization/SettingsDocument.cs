@@ -49,6 +49,15 @@ public sealed class SettingsDocument
     /// <summary>Высокая контрастность (доступность, I5): принудительный контрастный режим.</summary>
     public bool HighContrast { get; set; }
 
+    /// <summary>Включена ли горячая клавиша восстановления интерфейса Windows (I2).</summary>
+    public bool RecoveryHotkeyEnabled { get; set; } = true;
+
+    /// <summary>Комбинация клавиш восстановления интерфейса Windows (I2).</summary>
+    public string? RecoveryHotkeyId { get; set; }
+
+    /// <summary>Безопасный режим запуска без хуков и оверлеев (I2).</summary>
+    public bool SafeModeEnabled { get; set; }
+
     public Dictionary<string, string>? MonitorNames { get; set; }
 
     public static SettingsDocument FromSettings(UserSettings settings)
@@ -78,6 +87,9 @@ public sealed class SettingsDocument
             ExplorerViewMode = settings.ExplorerViewMode.ToId(),
             ReduceMotion = settings.ReduceMotion,
             HighContrast = settings.HighContrast,
+            RecoveryHotkeyEnabled = settings.RecoveryHotkeyEnabled,
+            RecoveryHotkeyId = settings.RecoveryHotkeyId,
+            SafeModeEnabled = settings.SafeModeEnabled,
             MonitorNames = settings.MonitorNames.Count == 0
                 ? null
                 : new Dictionary<string, string>(settings.MonitorNames, StringComparer.OrdinalIgnoreCase)
@@ -157,7 +169,10 @@ public static class SettingsDocumentMapper
             explorerFavorites,
             explorerViewMode,
             document.ReduceMotion,
-            document.HighContrast);
+            document.HighContrast,
+            document.RecoveryHotkeyEnabled,
+            document.RecoveryHotkeyId,
+            document.SafeModeEnabled);
         diagnostics = Array.Empty<string>();
         return true;
     }
