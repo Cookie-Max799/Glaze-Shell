@@ -2,6 +2,7 @@
 using System.Diagnostics;
 using GlazeShell.App.Presentation;
 using GlazeShell.App.Theming;
+using GlazeShell.Core.Display;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Windows.WindowManagement;
@@ -60,6 +61,8 @@ public sealed partial class DockWindow : Window
     private readonly Window _owner;
     private readonly ThemeApplicator _themes;
     private readonly IDisposable _settingsChanged;
+    private readonly IDisposable _displayChanged;
+    private readonly ShellMonitorTarget _monitorTarget;
 
     // Магнификация не может опираться только на PointerMoved: окно показано без активации
     // (WS_EX_NOACTIVATE), и WinUI не всегда доставляет ему события ввода. Поэтому позиция
@@ -87,13 +90,16 @@ public sealed partial class DockWindow : Window
         IApplicationLauncher launcher,
         IWindowManager windows,
         IEventManager events,
+        IMonitorManager monitors,
         ThemeApplicator themes,
         Window owner)
     {
         ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(monitors);
 
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
         _themes = themes ?? throw new ArgumentNullException(nameof(themes));
+        _monitorTarget = new ShellMonitorTarget(monitors);
 
         ViewModel = new DockViewModel(applications, launcher, windows, settings, events, DispatcherQueue);
 
@@ -106,6 +112,7 @@ public sealed partial class DockWindow : Window
         ViewModel.Items.CollectionChanged += OnItemsChanged;
         Tiles.SizeChanged += OnTilesSizeChanged;
         _settingsChanged = events.Subscribe<SettingsChanged>(OnSettingsChanged);
+        _displayChanged = events.Subscribe<DisplayChanged>(OnDisplayChanged);
 
         _cursorWatch.Tick += OnCursorWatchTick;
 
@@ -119,6 +126,7 @@ public sealed partial class DockWindow : Window
             ViewModel.Items.CollectionChanged -= OnItemsChanged;
             Tiles.SizeChanged -= OnTilesSizeChanged;
             _settingsChanged.Dispose();
+            _displayChanged.Dispose();
             ViewModel.Dispose();
         };
     }
@@ -149,16 +157,26 @@ public sealed partial class DockWindow : Window
     }
 
     /// <summary>
-    /// Ставит dock по центру основного монитора вплотную к нижнему краю экрана: панель не
+    /// Ставит dock по центру целевого монитора вплотную к нижнему краю экрана: панель не
     /// парит над краем, а растворяется в нём — нижние углы прямые, скруглены только верхние
     /// (см. <see cref="OverlayWindow.ApplyTopRoundedRegion"/>). Рабочая область не
     /// резервируется, поэтому dock не смещает окна. Ширина считается по составу плиток:
     /// окно не должно быть шире содержимого, иначе стекло вышло бы за «pill».
     /// </summary>
+    /// <remarks>
+    /// Положение считается по целевому монитору (функция I6): при переносе dock на другой
+    /// монитор учитываются его собственные границы и масштаб, поэтому панель одинаково
+    /// выглядит при смешанном масштабировании.
+    /// </remarks>
     private void UpdateDockSize()
     {
-        var bounds = DisplayArea.Primary.OuterBounds;
-        var scale = OverlayWindow.GetScaleFactor(_hwnd);
+        if (_hwnd == 0)
+        {
+            return;
+        }
+
+        var target = _monitorTarget.Target;
+        var scale = target?.ScaleFactor ?? OverlayWindow.GetScaleFactor(_hwnd);
 
         var tiles = 0;
         var separators = 0;
@@ -177,11 +195,28 @@ public sealed partial class DockWindow : Window
 
         var count = ViewModel.Items.Count;
         var content = (tiles * TileSize) + (separators * SeparatorWidth) + ((count > 1 ? count - 1 : 0) * Gap);
+        var widthDip = content + (PaddingHorizontal * 2);
+        var heightDip = TileSize + PaddingTop + PaddingBottom;
 
-        var width = (int)Math.Round((content + (PaddingHorizontal * 2)) * scale);
-        var height = (int)Math.Round((TileSize + PaddingTop + PaddingBottom) * scale);
-        var left = bounds.X + ((bounds.Width - width) / 2);
-        var top = bounds.Y + bounds.Height - height;
+        var width = (int)Math.Round(widthDip * scale);
+        var height = (int)Math.Round(heightDip * scale);
+
+        int left;
+        int top;
+
+        if (target is not null)
+        {
+            var placement = ShellPlacementResolver.Resolve(target, ShellAnchor.Bottom, ShellAlignment.Center, widthDip, heightDip);
+            left = placement.X;
+            top = placement.Y;
+        }
+        else
+        {
+            // Мониторы неизвестны: dock остаётся на основном экране, как и раньше.
+            var bounds = DisplayArea.Primary.OuterBounds;
+            left = bounds.X + ((bounds.Width - width) / 2);
+            top = bounds.Y + bounds.Height - height;
+        }
 
         AppWindow.MoveAndResize(new RectInt32(left, top, width, height));
 
@@ -238,7 +273,7 @@ public sealed partial class DockWindow : Window
     /// «уменьшить движение», текущая магнификация сразу сбрасывается, чтобы dock мгновенно
     /// принял спокойный вид.
     /// </summary>
-    private void OnSettingsChanged(SettingsChanged _)
+    private void OnSettingsChanged(SettingsChanged changed) => _ = DispatcherQueue.TryEnqueue(() =>
     {
         _themes.ApplyFromSettings(Root);
         ApplyBackdrop();
@@ -247,6 +282,17 @@ public sealed partial class DockWindow : Window
         {
             ResetTiles();
         }
+    });
+
+    /// <summary>
+    /// Реакция на изменение конфигурации мониторов: dock перекладывается на целевой монитор
+    /// без перезапуска оболочки (функция I6).
+    /// </summary>
+    private void OnDisplayChanged(DisplayChanged changed)
+    {
+        _monitorTarget.Update(changed.Monitors);
+
+        _ = DispatcherQueue.TryEnqueue(UpdateDockSize);
     }
 
     /// <summary>

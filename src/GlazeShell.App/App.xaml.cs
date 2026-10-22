@@ -253,6 +253,7 @@ public partial class App : Application
                     launcher,
                     windowManager,
                     eventManager,
+                    monitorManager,
                     themeApplicator,
                     window);
 
@@ -271,7 +272,15 @@ public partial class App : Application
         {
             if (enabled)
             {
-                _dock ??= new DockWindow(settingsManager, discovery, launcher, windowManager, eventManager, themeApplicator, window);
+                _dock ??= new DockWindow(
+                    settingsManager,
+                    discovery,
+                    launcher,
+                    windowManager,
+                    eventManager,
+                    monitorManager,
+                    themeApplicator,
+                    window);
             }
             else
             {
@@ -722,9 +731,10 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Пишет задержку доставки событий и итог сессии по ресурсам. Вызывается из пути
-    /// закрытия после освобождения хуков: к этому моменту счётчики handles и потоков
-    /// показывают состояние после остановки источников событий.
+    /// Пишет задержку доставки событий, итог сессии по ресурсам и вердикт по бюджетам
+    /// производительности (функция I6). Вызывается из пути закрытия после освобождения
+    /// хуков: к этому моменту счётчики handles и потоков показывают состояние после
+    /// остановки источников событий.
     /// </summary>
     private void LogPerformanceSummary(PerformanceMonitor performance, EventLatencyRecorder eventLatency)
     {
@@ -733,8 +743,27 @@ public partial class App : Application
             "Performance",
             $"Event dispatch latency: {eventLatency.Snapshot().ToLogString()}.");
 
-        performance.LogSession();
+        var session = performance.LogSession();
         performance.Dispose();
+
+        if (session is null)
+        {
+            return;
+        }
+
+        // Бюджеты I6: idle CPU берётся как средняя загрузка за сессию, а память — как рабочий
+        // набор на момент закрытия. Время открытия Glance не измеряется: без замера бюджет
+        // просто не попадает в отчёт, а не считается нарушенным.
+        var measurement = new PerformanceMeasurement(
+            idleCpuPercent: session.Summary.AverageCpuUtilizationPercent,
+            idleMemoryBytes: session.End.WorkingSetBytes);
+
+        var report = PerformanceBudgetEvaluator.Evaluate(PerformanceBudgets.Default, measurement);
+
+        _logger.Write(
+            report.IsWithinBudget ? GlazeLogLevel.Information : GlazeLogLevel.Warning,
+            "Performance",
+            report.ToLogString());
     }
 
     /// <summary>

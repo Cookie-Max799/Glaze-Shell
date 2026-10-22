@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using GlazeShell.App.Presentation;
 using GlazeShell.App.Theming;
+using GlazeShell.Core.Display;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Windows.WindowManagement;
@@ -42,8 +43,12 @@ public sealed partial class TopBarWindow : Window
     private readonly Window _owner;
     private readonly ThemeApplicator _themes;
     private readonly IDisposable _settingsChanged;
+    private readonly IDisposable _displayChanged;
+    private readonly ShellMonitorTarget _monitorTarget;
     private nint _hwnd;
-    private int _pixelHeight;
+
+    /// <summary>Последнее применённое положение окна: панель переносится только при изменении.</summary>
+    private RectInt32 _placement;
 
     public TopBarWindow(
         ISettingsManager settings,
@@ -51,6 +56,7 @@ public sealed partial class TopBarWindow : Window
         IApplicationLauncher launcher,
         IWindowManager windows,
         IEventManager events,
+        IMonitorManager monitors,
         ThemeApplicator themes,
         Window owner)
     {
@@ -58,9 +64,11 @@ public sealed partial class TopBarWindow : Window
         ArgumentNullException.ThrowIfNull(applications);
         ArgumentNullException.ThrowIfNull(launcher);
         ArgumentNullException.ThrowIfNull(events);
+        ArgumentNullException.ThrowIfNull(monitors);
 
         _themes = themes ?? throw new ArgumentNullException(nameof(themes));
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+        _monitorTarget = new ShellMonitorTarget(monitors);
 
         ViewModel = new TopBarViewModel(
             windows,
@@ -91,6 +99,7 @@ public sealed partial class TopBarWindow : Window
         ViewModel.ActivateRequested += OnActivateRequested;
         ViewModel.ExplorerRequested += OnExplorerRequested;
         _settingsChanged = events.Subscribe<SettingsChanged>(OnSettingsChanged);
+        _displayChanged = events.Subscribe<DisplayChanged>(OnDisplayChanged);
         Activated += OnActivated;
 
         Closed += (_, _) =>
@@ -101,6 +110,7 @@ public sealed partial class TopBarWindow : Window
             ViewModel.ExplorerRequested -= OnExplorerRequested;
             ViewModel.Dispose();
             _settingsChanged.Dispose();
+            _displayChanged.Dispose();
         };
     }
 
@@ -163,10 +173,15 @@ public sealed partial class TopBarWindow : Window
     }
 
     /// <summary>
-    /// Раскладывает окно по основному монитору (24 px по бокам, 18 px сверху) и увеличивает
+    /// Раскладывает окно по целевому монитору (24 px по бокам, 18 px сверху) и увеличивает
     /// его по высоте под панель результатов Glance или popover «Центр управления». Рабочая
     /// область не резервируется, поэтому панель не смещает окна приложений.
     /// </summary>
+    /// <remarks>
+    /// Положение считается по целевому монитору (функция I6): при подключении или отключении
+    /// монитора панель переезжает вместе с оболочкой, а её размеры считаются по масштабу
+    /// именно этого монитора.
+    /// </remarks>
     private void UpdateOverlayBounds()
     {
         if (_hwnd == 0)
@@ -174,12 +189,8 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
-        var scale = OverlayWindow.GetScaleFactor(_hwnd);
-        var bounds = DisplayArea.Primary.OuterBounds;
-
-        var margin = (int)Math.Round(SideMargin * scale);
-        var top = (int)Math.Round(TopOffset * scale);
-        var width = Math.Max(1, bounds.Width - (margin * 2));
+        var target = _monitorTarget.Target;
+        var scale = target?.ScaleFactor ?? OverlayWindow.GetScaleFactor(_hwnd);
 
         var logicalHeight = (double)BarHeight;
 
@@ -199,10 +210,41 @@ public sealed partial class TopBarWindow : Window
 
         var pixelHeight = Math.Max(1, (int)Math.Round(logicalHeight * scale));
 
-        if (pixelHeight != _pixelHeight)
+        int left;
+        int top;
+        int width;
+
+        if (target is not null)
         {
-            AppWindow.MoveAndResize(new RectInt32(bounds.X + margin, bounds.Y + top, width, pixelHeight));
-            _pixelHeight = pixelHeight;
+            var placement = ShellPlacementResolver.Resolve(
+                target,
+                ShellAnchor.Top,
+                ShellAlignment.Stretch,
+                widthDip: 0,
+                heightDip: logicalHeight,
+                marginDip: SideMargin,
+                verticalMarginDip: TopOffset);
+
+            left = placement.X;
+            top = placement.Y;
+            width = placement.Width;
+        }
+        else
+        {
+            // Мониторы неизвестны: панель остаётся на основном экране, как и раньше.
+            var bounds = DisplayArea.Primary.OuterBounds;
+            var margin = (int)Math.Round(SideMargin * scale);
+            left = bounds.X + margin;
+            top = bounds.Y + (int)Math.Round(TopOffset * scale);
+            width = Math.Max(1, bounds.Width - (margin * 2));
+        }
+
+        var placementRect = new RectInt32(left, top, width, pixelHeight);
+
+        if (placementRect != _placement)
+        {
+            AppWindow.MoveAndResize(placementRect);
+            _placement = placementRect;
         }
 
         UpdateWindowRegion();
@@ -444,6 +486,17 @@ public sealed partial class TopBarWindow : Window
     {
         _themes.ApplyFromSettings(Root);
         ApplyBackdrop();
+    }
+
+    /// <summary>
+    /// Реакция на изменение конфигурации мониторов: верхняя панель переезжает на целевой
+    /// монитор вместе с остальной оболочкой, без перезапуска (функция I6).
+    /// </summary>
+    private void OnDisplayChanged(DisplayChanged changed)
+    {
+        _monitorTarget.Update(changed.Monitors);
+
+        _ = DispatcherQueue.TryEnqueue(UpdateOverlayBounds);
     }
 
     private void ApplyBackdrop() =>

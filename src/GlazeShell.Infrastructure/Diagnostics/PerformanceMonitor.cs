@@ -78,7 +78,9 @@ public sealed class PerformanceMonitor : IDisposable
     /// Снимает конечный снимок и считает итог сессии относительно baseline. Если baseline
     /// не снимался, итог не пишется: без опорного значения дельты не имеют смысла.
     /// </summary>
-    public void LogSession(string label = "shutdown")
+    /// <param name="label">Метка конечного снимка.</param>
+    /// <returns>Сводка и конечный снимок, либо <see langword="null"/>, если baseline не снят.</returns>
+    public PerformanceSessionResult? LogSession(string label = "shutdown")
     {
         PerformanceSnapshot? baseline;
 
@@ -89,7 +91,7 @@ public sealed class PerformanceMonitor : IDisposable
 
         if (baseline is null)
         {
-            return;
+            return null;
         }
 
         var end = ProcessMetricsCollector.Capture(label);
@@ -97,6 +99,8 @@ public sealed class PerformanceMonitor : IDisposable
 
         _logger.Write(GlazeLogLevel.Information, "Performance", $"End ({label}): {end.ToLogString()}.");
         _logger.Write(GlazeLogLevel.Information, "Performance", $"Session summary: {summary.ToLogString()}.");
+
+        return new PerformanceSessionResult(summary, end);
     }
 
     public void Dispose()
