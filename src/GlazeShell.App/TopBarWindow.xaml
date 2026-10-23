@@ -177,21 +177,34 @@
                         Height="22"
                         Fill="{StaticResource GlazeBorderBrush}" />
 
-                    <StackPanel
+                    <Button
+                        x:Name="ClockButton"
+                        Height="40"
+                        Padding="8,0"
                         VerticalAlignment="Center"
-                        AutomationProperties.Name="Дата и время">
-                        <TextBlock
-                            HorizontalAlignment="Right"
-                            FontSize="14"
-                            FontWeight="SemiBold"
-                            Foreground="{StaticResource GlazeTextPrimaryBrush}"
-                            Text="{x:Bind ViewModel.ClockTime, Mode=OneWay}" />
-                        <TextBlock
-                            HorizontalAlignment="Right"
-                            FontSize="11"
-                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                            Text="{x:Bind ViewModel.ClockDate, Mode=OneWay}" />
-                    </StackPanel>
+                        AutomationProperties.Name="Дата и время — открыть календарь"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Click="OnClockClick"
+                        CornerRadius="14"
+                        HorizontalContentAlignment="Right"
+                        ToolTipService.ToolTip="Календарь">
+                        <StackPanel
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Дата и время">
+                            <TextBlock
+                                HorizontalAlignment="Right"
+                                FontSize="14"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                                Text="{x:Bind ViewModel.ClockTime, Mode=OneWay}" />
+                            <TextBlock
+                                HorizontalAlignment="Right"
+                                FontSize="11"
+                                Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                Text="{x:Bind ViewModel.ClockDate, Mode=OneWay}" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Border>
 
@@ -403,6 +416,148 @@
                             CornerRadius="16" />
                     </StackPanel>
                 </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!--  Popover часов и календаря (D4): тот же слой, что и «Центр управления», и та же
+              геометрия (ширина 380, радиус 32, отступ 56 сверху). Открывается кликом по
+              часам в правом pill; поиск и «Центр управления» при этом закрываются.  -->
+        <Border
+            x:Name="CalendarPanel"
+            Width="380"
+            Margin="0,56,0,0"
+            Padding="16"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Background="{StaticResource GlazeGlassBrush}"
+            CornerRadius="32"
+            Visibility="{x:Bind ViewModel.Calendar.IsOpen, Mode=OneWay}">
+            <StackPanel Spacing="12">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock
+                            FontSize="19"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                            Text="{x:Bind ViewModel.Calendar.MonthTitle, Mode=OneWay}" />
+                        <TextBlock
+                            FontSize="11.5"
+                            Foreground="{StaticResource GlazeTextMutedBrush}"
+                            Text="{x:Bind ViewModel.Calendar.TodayLabel, Mode=OneWay}" />
+                    </StackPanel>
+
+                    <StackPanel
+                        Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="4"
+                        VerticalAlignment="Center">
+                        <Button
+                            Width="32"
+                            Height="32"
+                            Padding="0"
+                            AutomationProperties.Name="Предыдущий месяц"
+                            Background="{StaticResource GlazeElevatedBrush}"
+                            BorderThickness="0"
+                            Click="OnCalendarPreviousMonth"
+                            CornerRadius="16"
+                            ToolTipService.ToolTip="Предыдущий месяц">
+                            <FontIcon FontSize="12" Foreground="{StaticResource GlazeTextPrimaryBrush}" Glyph="&#xE76B;" />
+                        </Button>
+                        <Button
+                            Height="32"
+                            Padding="10,0"
+                            AutomationProperties.Name="Показать сегодняшний месяц"
+                            Background="{StaticResource GlazeElevatedBrush}"
+                            BorderThickness="0"
+                            Click="OnCalendarToday"
+                            Content="Сегодня"
+                            CornerRadius="16"
+                            IsEnabled="{x:Bind ViewModel.Calendar.CanGoToToday, Mode=OneWay}"
+                            ToolTipService.ToolTip="Показать сегодняшний месяц" />
+                        <Button
+                            Width="32"
+                            Height="32"
+                            Padding="0"
+                            AutomationProperties.Name="Следующий месяц"
+                            Background="{StaticResource GlazeElevatedBrush}"
+                            BorderThickness="0"
+                            Click="OnCalendarNextMonth"
+                            CornerRadius="16"
+                            ToolTipService.ToolTip="Следующий месяц">
+                            <FontIcon FontSize="12" Foreground="{StaticResource GlazeTextPrimaryBrush}" Glyph="&#xE76C;" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+
+                <ItemsControl
+                    HorizontalAlignment="Center"
+                    ItemsSource="{x:Bind ViewModel.Calendar.WeekdayLabels}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock
+                                Width="40"
+                                Margin="2,0"
+                                FontSize="11"
+                                Foreground="{StaticResource GlazeTextMutedBrush}"
+                                Text="{Binding}"
+                                TextAlignment="Center" />
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <ItemsControl
+                    HorizontalAlignment="Center"
+                    ItemsSource="{x:Bind ViewModel.Calendar.Weeks, Mode=OneWay}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Vertical" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="presentation:CalendarWeekViewModel">
+                            <ItemsControl ItemsSource="{x:Bind Days}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="presentation:CalendarDayViewModel">
+                                        <Grid
+                                            Width="40"
+                                            Height="40"
+                                            Margin="2"
+                                            AutomationProperties.Name="{x:Bind AutomationName}">
+                                            <Border Background="Transparent" CornerRadius="20" />
+                                            <Border
+                                                BorderBrush="{StaticResource GlazeAccentBrush}"
+                                                BorderThickness="1.5"
+                                                CornerRadius="20"
+                                                Visibility="{x:Bind IsToday}" />
+                                            <TextBlock
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Center"
+                                                FontSize="12.5"
+                                                Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                                                Opacity="{x:Bind Opacity}"
+                                                Text="{x:Bind DayText}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
             </StackPanel>
         </Border>
     </Grid>

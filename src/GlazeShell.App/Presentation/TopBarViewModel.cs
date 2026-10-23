@@ -67,6 +67,7 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         ArgumentNullException.ThrowIfNull(events);
 
         QuickSettings = new QuickSettingsViewModel(settings, new SystemVolumeProvider());
+        Calendar = new CalendarViewModel();
 
         _foregroundChanged = events.Subscribe<ForegroundWindowChanged>(OnForegroundChanged);
 
@@ -87,6 +88,9 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
 
     /// <summary>Состояние popover «Центр управления» (D1).</summary>
     public QuickSettingsViewModel QuickSettings { get; }
+
+    /// <summary>Состояние popover часов и календаря (D4).</summary>
+    public CalendarViewModel Calendar { get; }
 
     public string AppName
     {
@@ -179,11 +183,12 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
                 return;
             }
 
-            // Поиск и «Центр управления» не показываются одновременно: они занимают
-            // одну и ту же полосу под панелью.
+            // Поиск, «Центр управления» и календарь не показываются одновременно: они
+            // занимают одну и ту же полосу под панелью.
             if (HasQuery)
             {
                 QuickSettings.IsOpen = false;
+                Calendar.IsOpen = false;
             }
 
             OnPropertyChanged(nameof(HasQuery));
@@ -228,18 +233,34 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     public void ClearSearch() => SearchText = string.Empty;
 
     /// <summary>
-    /// Открывает или закрывает popover «Центр управления» (D1). Открытие закрывает поиск:
-    /// обе панели живут под верхней панелью в одном месте.
+    /// Открывает или закрывает popover «Центр управления» (D1). Открытие закрывает поиск
+    /// и календарь: все панели живут под верхней панелью в одном месте.
     /// </summary>
     public void ToggleQuickSettings()
     {
         var open = !QuickSettings.IsOpen;
         ClearSearch();
+        Calendar.IsOpen = false;
         QuickSettings.IsOpen = open;
     }
 
     /// <summary>Закрывает popover «Центр управления», не трогая поиск.</summary>
     public void CloseQuickSettings() => QuickSettings.IsOpen = false;
+
+    /// <summary>
+    /// Открывает или закрывает popover часов и календаря (D4). Открытие закрывает поиск
+    /// и «Центр управления»; при каждом открытии показывается текущий месяц.
+    /// </summary>
+    public void ToggleCalendar()
+    {
+        var open = !Calendar.IsOpen;
+        ClearSearch();
+        QuickSettings.IsOpen = false;
+        Calendar.IsOpen = open;
+    }
+
+    /// <summary>Закрывает popover календаря, не трогая поиск.</summary>
+    public void CloseCalendar() => Calendar.IsOpen = false;
 
     /// <summary>Сдвигает выбор по списку результатов на <paramref name="offset"/> позиций.</summary>
     public void MoveSelection(int offset)

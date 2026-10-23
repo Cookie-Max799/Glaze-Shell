@@ -34,6 +34,9 @@ public sealed partial class TopBarWindow : Window
     /// <summary>Ширина popover «Центр управления» (D1): как у popover-карточки папки в DESIGN §7.2.</summary>
     private const int QuickSettingsWidth = 380;
 
+    /// <summary>Ширина popover часов и календаря (D4): та же геометрия, что у «Центра управления».</summary>
+    private const int CalendarWidth = 380;
+
     /// <summary>Радиус pill-плиток и панели результатов: половина высоты строки, то есть капсула (DESIGN §7.1).</summary>
     private const int PillRadius = BarHeight / 2;
 
@@ -93,9 +96,11 @@ public sealed partial class TopBarWindow : Window
         StatusPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         ResultsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
         QuickSettingsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
+        CalendarPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
 
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         ViewModel.QuickSettings.PropertyChanged += OnQuickSettingsPropertyChanged;
+        ViewModel.Calendar.PropertyChanged += OnCalendarPropertyChanged;
         ViewModel.ActivateRequested += OnActivateRequested;
         ViewModel.ExplorerRequested += OnExplorerRequested;
         _settingsChanged = events.Subscribe<SettingsChanged>(OnSettingsChanged);
@@ -106,6 +111,7 @@ public sealed partial class TopBarWindow : Window
         {
             ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
             ViewModel.QuickSettings.PropertyChanged -= OnQuickSettingsPropertyChanged;
+            ViewModel.Calendar.PropertyChanged -= OnCalendarPropertyChanged;
             ViewModel.ActivateRequested -= OnActivateRequested;
             ViewModel.ExplorerRequested -= OnExplorerRequested;
             ViewModel.Dispose();
@@ -145,6 +151,7 @@ public sealed partial class TopBarWindow : Window
         }
 
         ViewModel.CloseQuickSettings();
+        ViewModel.CloseCalendar();
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
         SearchBox.Focus(FocusState.Programmatic);
@@ -206,6 +213,12 @@ public sealed partial class TopBarWindow : Window
             // У popover «Центр управления» отступ сверху уже равен строке pill плюс зазор,
             // поэтому он прижат к правому краю и сам задаёт нужную высоту окна.
             logicalHeight = MeasurePanelHeight(QuickSettingsPanel, QuickSettingsWidth);
+        }
+        else if (ViewModel.Calendar.IsOpen)
+        {
+            // Календарь использует ту же геометрию, что и «Центр управления», поэтому окно
+            // растёт по его натуральной высоте с учётом отступа под pill.
+            logicalHeight = MeasurePanelHeight(CalendarPanel, CalendarWidth);
         }
 
         var pixelHeight = Math.Max(1, (int)Math.Round(logicalHeight * scale));
@@ -297,6 +310,11 @@ public sealed partial class TopBarWindow : Window
             AddRegion(QuickSettingsPanel, panelRadius);
         }
 
+        if (ViewModel.Calendar.IsOpen)
+        {
+            AddRegion(CalendarPanel, panelRadius);
+        }
+
         if (regions.Count == 0)
         {
             return;
@@ -341,6 +359,12 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void OnStatusPointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        // Клик по часам открывает календарь (D4), а не «Центр управления».
+        if (IsWithin(e.OriginalSource as DependencyObject, ClockButton))
+        {
+            return;
+        }
+
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
         ViewModel.ToggleQuickSettings();
@@ -357,10 +381,49 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
+        // Фокус на часах: Enter/Space открывает календарь, а не «Центр управления».
+        if (IsWithin(e.OriginalSource as DependencyObject, ClockButton))
+        {
+            return;
+        }
+
         e.Handled = true;
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
         ViewModel.ToggleQuickSettings();
+    }
+
+    /// <summary>
+    /// Клик по часам открывает или закрывает popover календаря (D4). Окно разрешает
+    /// активацию, потому что в popover есть кнопки перелистывания и перехода к сегодня.
+    /// </summary>
+    private void OnClockClick(object sender, RoutedEventArgs e)
+    {
+        OverlayWindow.SetNonActivating(_hwnd, false);
+        Activate();
+        ViewModel.ToggleCalendar();
+    }
+
+    private void OnCalendarPreviousMonth(object sender, RoutedEventArgs e) => ViewModel.Calendar.PreviousMonth();
+
+    private void OnCalendarNextMonth(object sender, RoutedEventArgs e) => ViewModel.Calendar.NextMonth();
+
+    private void OnCalendarToday(object sender, RoutedEventArgs e) => ViewModel.Calendar.GoToToday();
+
+    /// <summary>Проверяет, находится ли элемент внутри контейнера (учёт вложенных текстов и иконок).</summary>
+    private static bool IsWithin(DependencyObject? source, DependencyObject container)
+    {
+        while (source is not null)
+        {
+            if (ReferenceEquals(source, container))
+            {
+                return true;
+            }
+
+            source = VisualTreeHelper.GetParent(source);
+        }
+
+        return false;
     }
 
     private void OnToggleMute(object sender, RoutedEventArgs e) => ViewModel.QuickSettings.ToggleMute();
@@ -432,6 +495,18 @@ public sealed partial class TopBarWindow : Window
     }
 
     /// <summary>
+    /// Размер окна и регион зависят от видимости календаря (D4): при открытии popover
+    /// окно растёт по высоте, при закрытии возвращается к строке pill.
+    /// </summary>
+    private void OnCalendarPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(CalendarViewModel.IsOpen))
+        {
+            UpdateOverlayBounds();
+        }
+    }
+
+    /// <summary>
     /// Команда поиска <c>open-shell</c> просит показать главное окно: панель им не владеет,
     /// поэтому переключение выполняет владелец.
     /// </summary>
@@ -471,9 +546,10 @@ public sealed partial class TopBarWindow : Window
 
         OverlayWindow.SetNonActivating(_hwnd, true);
 
-        // Клик по рабочему столу или другому приложению — это «light dismiss»: поиск
-        // и «Центр управления» закрываются вместе со своими панелями.
+        // Клик по рабочему столу или другому приложению — это «light dismiss»: поиск,
+        // «Центр управления» и календарь закрываются вместе со своими панелями.
         ViewModel.CloseQuickSettings();
+        ViewModel.CloseCalendar();
         ViewModel.ClearSearch();
     }
 
