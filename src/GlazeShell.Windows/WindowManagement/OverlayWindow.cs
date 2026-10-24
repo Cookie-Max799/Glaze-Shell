@@ -230,6 +230,144 @@ public static class OverlayWindow
     }
 
     /// <summary>
+    /// Придаёт окну форму прямоугольника со скруглёнными <b>только нижними</b> углами:
+    /// верхний край остаётся прямым, поэтому верхняя панель чуть выезжает из-за экрана
+    /// и «растворяется» в нём. Возвращает <c>false</c>, если маску задать не удалось.
+    /// </summary>
+    public static bool ApplyBottomRoundedRegion(nint hwnd, PixelRect rect, int cornerRadius)
+    {
+        if (hwnd == 0 || rect.Width <= 0 || rect.Height <= 0)
+        {
+            return false;
+        }
+
+        var radius = Math.Clamp(cornerRadius, 0, Math.Min(rect.Width, rect.Height) / 2);
+        var diameter = radius * 2;
+
+        var shape = Gdi32.CreateRoundRectRgn(
+            rect.X,
+            rect.Y,
+            rect.X + rect.Width + 1,
+            rect.Y + rect.Height + 1,
+            diameter,
+            diameter);
+
+        if (shape == 0)
+        {
+            return false;
+        }
+
+        if (radius > 0)
+        {
+            // Закрываем только нижние углы: полоса сверху до начала дуг нижних углов.
+            var band = Gdi32.CreateRectRgn(
+                rect.X,
+                rect.Y,
+                rect.X + rect.Width + 1,
+                rect.Y + radius);
+
+            if (band != 0)
+            {
+                _ = Gdi32.CombineRgn(shape, shape, band, Gdi32.RgnOr);
+                _ = Gdi32.DeleteObject(band);
+            }
+        }
+
+        if (User32.SetWindowRgn(hwnd, shape, true) == 0)
+        {
+            _ = Gdi32.DeleteObject(shape);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Формирует регион из полной полосы с нижним скруглением и дополнительных всплывающих
+    /// панелей (результаты Glance, «Центр управления», календарь).
+    /// </summary>
+    public static bool ApplyBottomRoundedRegions(nint hwnd, PixelRect barRect, int barCornerRadius, IReadOnlyList<PixelRegion>? panels)
+    {
+        if (hwnd == 0 || barRect.Width <= 0 || barRect.Height <= 0)
+        {
+            return false;
+        }
+
+        nint combined = 0;
+        var barRadius = Math.Clamp(barCornerRadius, 0, Math.Min(barRect.Width, barRect.Height) / 2);
+        var diameter = barRadius * 2;
+
+        var barShape = Gdi32.CreateRoundRectRgn(
+            barRect.X,
+            barRect.Y,
+            barRect.X + barRect.Width + 1,
+            barRect.Y + barRect.Height + 1,
+            diameter,
+            diameter);
+
+        if (barShape == 0)
+        {
+            return false;
+        }
+
+        if (barRadius > 0)
+        {
+            var band = Gdi32.CreateRectRgn(
+                barRect.X,
+                barRect.Y,
+                barRect.X + barRect.Width + 1,
+                barRect.Y + barRadius);
+
+            if (band != 0)
+            {
+                _ = Gdi32.CombineRgn(barShape, barShape, band, Gdi32.RgnOr);
+                _ = Gdi32.DeleteObject(band);
+            }
+        }
+
+        combined = barShape;
+
+        if (panels is not null)
+        {
+            foreach (var region in panels)
+            {
+                var rect = region.Bounds;
+
+                if (rect.Width <= 0 || rect.Height <= 0)
+                {
+                    continue;
+                }
+
+                var d = Math.Max(0, region.CornerRadius) * 2;
+
+                var part = Gdi32.CreateRoundRectRgn(
+                    rect.X,
+                    rect.Y,
+                    rect.X + rect.Width + 1,
+                    rect.Y + rect.Height + 1,
+                    d,
+                    d);
+
+                if (part == 0)
+                {
+                    continue;
+                }
+
+                _ = Gdi32.CombineRgn(combined, combined, part, Gdi32.RgnOr);
+                _ = Gdi32.DeleteObject(part);
+            }
+        }
+
+        if (User32.SetWindowRgn(hwnd, combined, true) == 0)
+        {
+            _ = Gdi32.DeleteObject(combined);
+            return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Придаёт окну форму набора скруглённых прямоугольников, каждый со своим радиусом.
     /// Возвращает <c>false</c>, если маску задать не удалось: тогда окно остаётся прямоугольным.
     /// </summary>

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net.NetworkInformation;
 using GlazeShell.Windows.Win32;
 
@@ -22,6 +23,10 @@ public static class SystemStatusProvider
     private const byte BatteryFlagCharging = 0x08;
     private const byte BatteryFlagNoBattery = 0x80;
     private const byte BatteryPercentUnknown = 0xFF;
+
+    private static TimeSpan _lastCpuTime = TimeSpan.Zero;
+    private static DateTime _lastCpuCheck = DateTime.UtcNow;
+    private static double _lastCpuUsage;
 
     public static PowerStatus GetPowerStatus()
     {
@@ -54,6 +59,40 @@ public static class SystemStatusProvider
         catch (Exception)
         {
             return false;
+        }
+    }
+
+    public static double GetCpuUsage()
+    {
+        try
+        {
+            var process = Process.GetCurrentProcess();
+            var now = DateTime.UtcNow;
+            var currentCpu = process.TotalProcessorTime;
+
+            if (_lastCpuTime == TimeSpan.Zero)
+            {
+                _lastCpuTime = currentCpu;
+                _lastCpuCheck = now;
+                return 0;
+            }
+
+            var timeDiff = (now - _lastCpuCheck).TotalMilliseconds;
+            if (timeDiff <= 0)
+            {
+                return _lastCpuUsage;
+            }
+
+            var cpuDiff = (currentCpu - _lastCpuTime).TotalMilliseconds;
+            var cpuUsage = (cpuDiff / (timeDiff * Environment.ProcessorCount)) * 100.0;
+            _lastCpuUsage = Math.Clamp(cpuUsage, 0, 100);
+            _lastCpuTime = currentCpu;
+            _lastCpuCheck = now;
+            return _lastCpuUsage;
+        }
+        catch
+        {
+            return 0;
         }
     }
 }

@@ -26,15 +26,15 @@ namespace GlazeShell.App;
 /// </summary>
 public sealed partial class DockWindow : Window
 {
-    private const int TileSize = 40;
-    private const int Gap = 5;
+    private const int TileSize = 36;
+    private const int Gap = 4;
     private const int SeparatorWidth = 2;
-    private const int PaddingHorizontal = 28;
-    private const int PaddingTop = 16;
-    private const int PaddingBottom = 8;
+    private const int PaddingHorizontal = 16;
+    private const int PaddingTop = 6;
+    private const int PaddingBottom = 4;
 
     /// <summary>Радиус капсулы dock (DESIGN §7.5: радиус 36).</summary>
-    private const int PillRadius = 22;
+    private const int PillRadius = 16;
 
     /// <summary>
     /// Максимальный подъём и масштаб плитки под курсором (DESIGN §7.5: 16 px / 1.2).
@@ -168,6 +168,8 @@ public sealed partial class DockWindow : Window
     /// монитор учитываются его собственные границы и масштаб, поэтому панель одинаково
     /// выглядит при смешанном масштабировании.
     /// </remarks>
+    private const int MinDockWidthDip = 560;
+
     private void UpdateDockSize()
     {
         if (_hwnd == 0)
@@ -195,7 +197,7 @@ public sealed partial class DockWindow : Window
 
         var count = ViewModel.Items.Count;
         var content = (tiles * TileSize) + (separators * SeparatorWidth) + ((count > 1 ? count - 1 : 0) * Gap);
-        var widthDip = content + (PaddingHorizontal * 2);
+        var widthDip = Math.Max(MinDockWidthDip, content + (PaddingHorizontal * 2));
         var heightDip = TileSize + PaddingTop + PaddingBottom;
 
         var width = (int)Math.Round(widthDip * scale);
@@ -632,6 +634,7 @@ public sealed partial class DockWindow : Window
         if (_themes.ReduceMotion)
         {
             scaleTransform.ScaleX = scale;
+            scaleTransform.ScaleY = scale;
             translateTransform.Y = -lift;
             return;
         }
@@ -639,14 +642,23 @@ public sealed partial class DockWindow : Window
         var duration = HoverDuration;
         var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
 
-        var scaleAnimation = new DoubleAnimation
+        var scaleAnimationX = new DoubleAnimation
         {
             To = scale,
             Duration = duration,
             EasingFunction = easing,
         };
-        Storyboard.SetTarget(scaleAnimation, scaleTransform);
-        Storyboard.SetTargetProperty(scaleAnimation, nameof(ScaleTransform.ScaleX));
+        Storyboard.SetTarget(scaleAnimationX, scaleTransform);
+        Storyboard.SetTargetProperty(scaleAnimationX, nameof(ScaleTransform.ScaleX));
+
+        var scaleAnimationY = new DoubleAnimation
+        {
+            To = scale,
+            Duration = duration,
+            EasingFunction = easing,
+        };
+        Storyboard.SetTarget(scaleAnimationY, scaleTransform);
+        Storyboard.SetTargetProperty(scaleAnimationY, nameof(ScaleTransform.ScaleY));
 
         var liftAnimation = new DoubleAnimation
         {
@@ -658,7 +670,8 @@ public sealed partial class DockWindow : Window
         Storyboard.SetTargetProperty(liftAnimation, nameof(TranslateTransform.Y));
 
         var storyboard = new Storyboard();
-        storyboard.Children.Add(scaleAnimation);
+        storyboard.Children.Add(scaleAnimationX);
+        storyboard.Children.Add(scaleAnimationY);
         storyboard.Children.Add(liftAnimation);
         storyboard.Begin();
     }

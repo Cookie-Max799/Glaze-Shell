@@ -6,6 +6,7 @@ using GlazeShell.Core.Display;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Windows.WindowManagement;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -18,40 +19,54 @@ using Windows.System;
 namespace GlazeShell.App;
 
 /// <summary>
-/// Плавающая верхняя панель (A6): topmost-окно без записи в панели задач, со стеклянным
-/// фоном и скруглёнными углами. Показывается без перехвата фокуса, а по <c>Ctrl K</c>
-/// разрешает активацию и ставит фокус в строку поиска Glance (B1).
+/// Плавающая верхняя панель (A6): topmost-окно без записи в панели задач во всю ширину
+/// экрана. В покое чуть выезжает из-за верхнего края, при наведении раскрывается полностью.
+/// Показывается без перехвата фокуса, по <c>Ctrl K</c> разрешает активацию и ставит фокус
+/// в строку поиска Glance (B1).
 /// </summary>
 public sealed partial class TopBarWindow : Window
 {
-    private const int BarHeight = 48;
-    private const int TopOffset = 18;
-    private const int SideMargin = 24;
+    private const int BarHeight = 30;
+
+    /// <summary>Сколько пикселей полосы видно над верхним краем экрана в свёрнутом виде.</summary>
+    private const int PeekHeight = 22;
+
+    /// <summary>Радиус нижних углов полосы.</summary>
+    private const int BarRadius = 24;
 
     /// <summary>Ширина строки поиска: она же служит ограничением при измерении панели результатов.</summary>
     private const int SearchWidth = 440;
 
-    /// <summary>Ширина popover «Центр управления» (D1): как у popover-карточки папки в DESIGN §7.2.</summary>
+    /// <summary>Ширина popover «Центр управления».</summary>
     private const int QuickSettingsWidth = 380;
 
-    /// <summary>Ширина popover часов и календаря (D4): та же геометрия, что у «Центра управления».</summary>
+    /// <summary>Ширина popover часов и календаря.</summary>
     private const int CalendarWidth = 380;
 
-    /// <summary>Радиус pill-плиток и панели результатов: половина высоты строки, то есть капсула (DESIGN §7.1).</summary>
-    private const int PillRadius = BarHeight / 2;
-
-    /// <summary>Радиус всплывающих панелей (DESIGN §4: popover — 32).</summary>
+    /// <summary>Радиус всплывающих панелей.</summary>
     private const int PanelRadius = 32;
+
+    /// <summary>Задержка сворачивания после ухода курсора.</summary>
+    private static readonly TimeSpan CollapseDelay = TimeSpan.FromMilliseconds(350);
 
     private readonly Window _owner;
     private readonly ThemeApplicator _themes;
     private readonly IDisposable _settingsChanged;
     private readonly IDisposable _displayChanged;
     private readonly ShellMonitorTarget _monitorTarget;
+    private readonly DispatcherTimer _revealWatch = new();
     private nint _hwnd;
 
     /// <summary>Последнее применённое положение окна: панель переносится только при изменении.</summary>
     private RectInt32 _placement;
+    private int _screenLeft;
+    private int _screenTop;
+    private int _screenWidth;
+    private int _windowHeightPx;
+    private double _scale = 1.0;
+    private double _reveal;
+    private double _lastAppliedReveal = -1;
+    private DateTimeOffset _collapseAt = DateTimeOffset.UtcNow + CollapseDelay;
 
     public TopBarWindow(
         ISettingsManager settings,
@@ -89,8 +104,12 @@ public sealed partial class TopBarWindow : Window
         ConfigureOverlay();
 
         // Регион и высота окна зависят от разметки: сначала применяем после загрузки, а
-        // затем при изменении ширины pill и высоты панели результатов.
-        Root.Loaded += (_, _) => UpdateOverlayBounds();
+        // затем при изменении размеров.
+        Root.Loaded += (_, _) =>
+        {
+            UpdateOverlayBounds();
+            StartRevealWatch();
+        };
         AppPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         SearchPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         StatusPill.SizeChanged += (_, _) => UpdateOverlayBounds();
@@ -109,6 +128,8 @@ public sealed partial class TopBarWindow : Window
 
         Closed += (_, _) =>
         {
+            _revealWatch.Stop();
+            _revealWatch.Tick -= OnRevealWatchTick;
             ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
             ViewModel.QuickSettings.PropertyChanged -= OnQuickSettingsPropertyChanged;
             ViewModel.Calendar.PropertyChanged -= OnCalendarPropertyChanged;
@@ -152,9 +173,17 @@ public sealed partial class TopBarWindow : Window
 
         ViewModel.CloseQuickSettings();
         ViewModel.CloseCalendar();
+        RevealImmediately();
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
-        SearchBox.Focus(FocusState.Programmatic);
+        if (SearchTextPopup is not null)
+        {
+            SearchTextPopup.IsOpen = true;
+        }
+        if (PopupSearchBox is not null)
+        {
+            PopupSearchBox.Focus(FocusState.Programmatic);
+        }
     }
 
     private void ConfigureOverlay()
@@ -177,18 +206,15 @@ public sealed partial class TopBarWindow : Window
 
         UpdateOverlayBounds();
         OverlayWindow.ShowWithoutActivation(_hwnd);
+        StartRevealWatch();
     }
 
     /// <summary>
-    /// Раскладывает окно по целевому монитору (24 px по бокам, 18 px сверху) и увеличивает
-    /// его по высоте под панель результатов Glance или popover «Центр управления». Рабочая
-    /// область не резервируется, поэтому панель не смещает окна приложений.
+    /// Раскладывает окно по целевому монитору во всю его ширину и увеличивает по высоте
+    /// под панель результатов Glance или popover. В свёрнутом виде окно поднято вверх так,
+    /// что над краем экрана остаётся только <see cref="PeekHeight"/> пикселей полосы.
+    /// Рабочая область не резервируется.
     /// </summary>
-    /// <remarks>
-    /// Положение считается по целевому монитору (функция I6): при подключении или отключении
-    /// монитора панель переезжает вместе с оболочкой, а её размеры считаются по масштабу
-    /// именно этого монитора.
-    /// </remarks>
     private void UpdateOverlayBounds()
     {
         if (_hwnd == 0)
@@ -198,70 +224,149 @@ public sealed partial class TopBarWindow : Window
 
         var target = _monitorTarget.Target;
         var scale = target?.ScaleFactor ?? OverlayWindow.GetScaleFactor(_hwnd);
+        _scale = scale <= 0 ? 1.0 : scale;
 
         var logicalHeight = (double)BarHeight;
 
         if (ViewModel.HasResults)
         {
-            // Панель измеряется независимо от текущей высоты окна: иначе Auto-строка
-            // получила бы ноль доступной высоты и её натуральный размер был бы потерян.
-            var constraint = SearchPill.ActualWidth > 0 ? SearchPill.ActualWidth : SearchWidth;
+            var constraint = 340;
             logicalHeight += MeasurePanelHeight(ResultsPanel, constraint);
         }
         else if (ViewModel.QuickSettings.IsOpen)
         {
-            // У popover «Центр управления» отступ сверху уже равен строке pill плюс зазор,
-            // поэтому он прижат к правому краю и сам задаёт нужную высоту окна.
             logicalHeight = MeasurePanelHeight(QuickSettingsPanel, QuickSettingsWidth);
         }
         else if (ViewModel.Calendar.IsOpen)
         {
-            // Календарь использует ту же геометрию, что и «Центр управления», поэтому окно
-            // растёт по его натуральной высоте с учётом отступа под pill.
             logicalHeight = MeasurePanelHeight(CalendarPanel, CalendarWidth);
         }
 
-        var pixelHeight = Math.Max(1, (int)Math.Round(logicalHeight * scale));
-
-        int left;
-        int top;
-        int width;
+        _windowHeightPx = Math.Max(1, (int)Math.Round(logicalHeight * _scale));
 
         if (target is not null)
         {
-            var placement = ShellPlacementResolver.Resolve(
-                target,
-                ShellAnchor.Top,
-                ShellAlignment.Stretch,
-                widthDip: 0,
-                heightDip: logicalHeight,
-                marginDip: SideMargin,
-                verticalMarginDip: TopOffset);
-
-            left = placement.X;
-            top = placement.Y;
-            width = placement.Width;
+            _screenLeft = target.Bounds.X;
+            _screenTop = target.Bounds.Y;
+            _screenWidth = Math.Max(1, target.Bounds.Width);
         }
         else
         {
-            // Мониторы неизвестны: панель остаётся на основном экране, как и раньше.
             var bounds = DisplayArea.Primary.OuterBounds;
-            var margin = (int)Math.Round(SideMargin * scale);
-            left = bounds.X + margin;
-            top = bounds.Y + (int)Math.Round(TopOffset * scale);
-            width = Math.Max(1, bounds.Width - (margin * 2));
+            _screenLeft = bounds.X;
+            _screenTop = bounds.Y;
+            _screenWidth = Math.Max(1, bounds.Width);
         }
 
-        var placementRect = new RectInt32(left, top, width, pixelHeight);
-
-        if (placementRect != _placement)
-        {
-            AppWindow.MoveAndResize(placementRect);
-            _placement = placementRect;
-        }
-
+        ApplyPlacement();
         UpdateWindowRegion();
     }
+
+    /// <summary>Применяет текущий прогресс выезда к положению окна.</summary>
+    private void ApplyPlacement()
+    {
+        if (_hwnd == 0 || _screenWidth <= 0)
+        {
+            return;
+        }
+
+        var hidden = (int)Math.Round((BarHeight - PeekHeight) * (1.0 - _reveal) * _scale);
+        var placement = new RectInt32(_screenLeft, _screenTop - hidden, _screenWidth, _windowHeightPx);
+
+        if (placement != _placement)
+        {
+            AppWindow.MoveAndResize(placement);
+            _placement = placement;
+        }
+    }
+
+    /// <summary>Запускает таймер слежения за курсором.</summary>
+    private void StartRevealWatch()
+    {
+        if (_revealWatch.IsEnabled)
+        {
+            return;
+        }
+
+        _revealWatch.Interval = TimeSpan.FromMilliseconds(16);
+        _revealWatch.Tick -= OnRevealWatchTick;
+        _revealWatch.Tick += OnRevealWatchTick;
+        _revealWatch.Start();
+    }
+
+    /// <summary>Выезд и автосворачивание панели.</summary>
+    private void OnRevealWatchTick(object? sender, object e)
+    {
+        if (_hwnd == 0)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var pinned = IsPinnedOpen();
+        var target = 0.0;
+
+        if (pinned || IsCursorOverBar())
+        {
+            _collapseAt = now + CollapseDelay;
+            target = 1.0;
+        }
+        else if (now < _collapseAt)
+        {
+            target = 1.0;
+        }
+
+        if (_themes.ReduceMotion)
+        {
+            _reveal = target;
+        }
+        else
+        {
+            _reveal += (target - _reveal) * 0.28;
+
+            if (Math.Abs(target - _reveal) < 0.002)
+            {
+                _reveal = target;
+            }
+        }
+
+        if (Math.Abs(_reveal - _lastAppliedReveal) > 0.0005)
+        {
+            _lastAppliedReveal = _reveal;
+            ApplyPlacement();
+        }
+    }
+
+    /// <summary>Курсор над видимой полосой панели.</summary>
+    private bool IsCursorOverBar()
+    {
+        if (!OverlayWindow.TryGetClientSize(_hwnd, out var clientWidth, out _) ||
+            !OverlayWindow.TryGetCursorPosition(_hwnd, out var x, out var y))
+        {
+            return false;
+        }
+
+        var barHeight = Math.Max(1, (int)Math.Round(BarHeight * _scale));
+        return x >= 0 && y >= 0 && x < clientWidth && y < barHeight;
+    }
+
+    /// <summary>Поиск или открытый popover удерживают панель раскрытой.</summary>
+    private bool IsPinnedOpen() =>
+        ViewModel.HasQuery ||
+        ViewModel.HasResults ||
+        ViewModel.QuickSettings.IsOpen ||
+        ViewModel.Calendar.IsOpen;
+
+    /// <summary>Мгновенно раскрывает панель.</summary>
+    private void RevealImmediately()
+    {
+        _reveal = 1;
+        _lastAppliedReveal = 1;
+        _collapseAt = DateTimeOffset.UtcNow + CollapseDelay;
+        ApplyPlacement();
+    }
+
+    private void HoldRevealed() => _collapseAt = DateTimeOffset.UtcNow + CollapseDelay;
 
     /// <summary>
     /// Измеряет всплывающую панель, пока её строка сетки ещё не получила высоту. Видимость
@@ -279,26 +384,20 @@ public sealed partial class TopBarWindow : Window
     }
 
     /// <summary>
-    /// Вырезает из окна три pill и всплывающую панель (результаты Glance или «Центр
-    /// управления») по их фактическим границам: системный acrylic-backdrop рисуется только
-    /// внутри этих фигур, поэтому панель выглядит как плавающие стёкла, а не как одна полоса
-    /// во всю ширину (DESIGN §7.1). Pills — капсулы, у панелей радиус popover (DESIGN §4).
+    /// Вырезает из окна полосу во всю ширину со скруглённым низом и всплывающие панели.
     /// </summary>
     private void UpdateWindowRegion()
     {
-        if (_hwnd == 0)
+        if (_hwnd == 0 || !OverlayWindow.TryGetClientSize(_hwnd, out var clientWidth, out _))
         {
             return;
         }
 
-        var scale = OverlayWindow.GetScaleFactor(_hwnd);
-        var pillRadius = (int)Math.Round(PillRadius * scale);
+        var scale = _scale <= 0 ? 1.0 : _scale;
+        var barHeight = Math.Max(1, (int)Math.Round(BarHeight * scale));
+        var barRadius = (int)Math.Round(BarRadius * scale);
         var panelRadius = (int)Math.Round(PanelRadius * scale);
-        var regions = new List<PixelRegion>(5);
-
-        AddRegion(AppPill, pillRadius);
-        AddRegion(SearchPill, pillRadius);
-        AddRegion(StatusPill, pillRadius);
+        var regions = new List<PixelRegion>(3);
 
         if (ViewModel.HasResults)
         {
@@ -315,12 +414,11 @@ public sealed partial class TopBarWindow : Window
             AddRegion(CalendarPanel, panelRadius);
         }
 
-        if (regions.Count == 0)
-        {
-            return;
-        }
-
-        OverlayWindow.ApplyRoundedRegions(_hwnd, regions);
+        OverlayWindow.ApplyBottomRoundedRegions(
+            _hwnd,
+            new PixelRect(0, 0, clientWidth, barHeight),
+            barRadius,
+            regions);
 
         void AddRegion(FrameworkElement element, int radius)
         {
@@ -348,9 +446,18 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void OnSearchPointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        HoldRevealed();
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
-        SearchBox.Focus(FocusState.Programmatic);
+        ViewModel.SearchText = string.Empty;
+        if (SearchTextPopup is not null)
+        {
+            SearchTextPopup.IsOpen = true;
+        }
+        if (PopupSearchBox is not null)
+        {
+            PopupSearchBox.Focus(FocusState.Programmatic);
+        }
     }
 
     /// <summary>
@@ -368,6 +475,7 @@ public sealed partial class TopBarWindow : Window
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
         ViewModel.ToggleQuickSettings();
+        HoldRevealed();
     }
 
     /// <summary>
@@ -391,6 +499,7 @@ public sealed partial class TopBarWindow : Window
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
         ViewModel.ToggleQuickSettings();
+        HoldRevealed();
     }
 
     /// <summary>
@@ -402,6 +511,7 @@ public sealed partial class TopBarWindow : Window
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
         ViewModel.ToggleCalendar();
+        HoldRevealed();
     }
 
     private void OnCalendarPreviousMonth(object sender, RoutedEventArgs e) => ViewModel.Calendar.PreviousMonth();
@@ -447,6 +557,10 @@ public sealed partial class TopBarWindow : Window
             case VirtualKey.Escape:
                 e.Handled = true;
                 ViewModel.ClearSearch();
+                if (SearchTextPopup is not null)
+                {
+                    SearchTextPopup.IsOpen = false;
+                }
                 break;
 
             case VirtualKey.Down:
@@ -472,36 +586,65 @@ public sealed partial class TopBarWindow : Window
         }
 
         await ViewModel.ActivateSelectedAsync();
+        if (SearchTextPopup is not null)
+        {
+            SearchTextPopup.IsOpen = false;
+        }
+    }
+
+    private void OnSearchPopupClosed(object sender, object e)
+    {
+        if (string.IsNullOrWhiteSpace(ViewModel.SearchText))
+        {
+            ViewModel.ClearSearch();
+        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(TopBarViewModel.HasResults))
+        if (e.PropertyName is nameof(TopBarViewModel.HasResults) or nameof(TopBarViewModel.HasQuery))
         {
+            if (ViewModel.HasResults || ViewModel.HasQuery)
+            {
+                HoldRevealed();
+                if (SearchTextPopup is not null && ViewModel.HasQuery)
+                {
+                    SearchTextPopup.IsOpen = true;
+                }
+            }
+
             UpdateOverlayBounds();
         }
     }
 
     /// <summary>
-    /// Размер окна и регион зависят от видимости «Центра управления»: при открытии popover
-    /// окно растёт по высоте, при закрытии возвращается к строке pill.
+    /// Размер окна и регион зависят от видимости «Центра управления».
     /// </summary>
     private void OnQuickSettingsPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(QuickSettingsViewModel.IsOpen))
         {
+            if (ViewModel.QuickSettings.IsOpen)
+            {
+                HoldRevealed();
+            }
+
             UpdateOverlayBounds();
         }
     }
 
     /// <summary>
-    /// Размер окна и регион зависят от видимости календаря (D4): при открытии popover
-    /// окно растёт по высоте, при закрытии возвращается к строке pill.
+    /// Размер окна и регион зависят от видимости календаря.
     /// </summary>
     private void OnCalendarPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(CalendarViewModel.IsOpen))
         {
+            if (ViewModel.Calendar.IsOpen)
+            {
+                HoldRevealed();
+            }
+
             UpdateOverlayBounds();
         }
     }
@@ -551,6 +694,12 @@ public sealed partial class TopBarWindow : Window
         ViewModel.CloseQuickSettings();
         ViewModel.CloseCalendar();
         ViewModel.ClearSearch();
+        if (SearchTextPopup is not null)
+        {
+            SearchTextPopup.IsOpen = false;
+        }
+
+        _collapseAt = DateTimeOffset.UtcNow + CollapseDelay;
     }
 
     /// <summary>

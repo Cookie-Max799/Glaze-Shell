@@ -44,12 +44,14 @@
         -->
         <Border
             Background="{StaticResource GlazeGlassBrush}"
-            CornerRadius="22,22,0,0"
+            BorderThickness="0"
+            CornerRadius="16,16,0,0"
             IsHitTestVisible="False" />
 
         <ItemsControl
             x:Name="Tiles"
-            Padding="28,16,28,8"
+            Padding="16,6,16,4"
+            HorizontalAlignment="Center"
             VerticalAlignment="Center"
             ItemsSource="{x:Bind ViewModel.Items}">
             <ItemsControl.ItemsPanel>
