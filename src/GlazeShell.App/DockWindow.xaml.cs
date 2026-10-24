@@ -303,7 +303,7 @@ public sealed partial class DockWindow : Window
     /// непрозрачный цвет берётся из системной палитры.
     /// </summary>
     private void ApplyBackdrop() =>
-        SystemBackdrop = _themes.HighContrast ? null : new DesktopAcrylicBackdrop();
+        SystemBackdrop = _themes.HighContrast ? null : new Microsoft.UI.Xaml.Media.MicaBackdrop();
 
     /// <summary>
     /// Таймер читает глобальную позицию курсора и, если он над dock, ведёт магнификацию.

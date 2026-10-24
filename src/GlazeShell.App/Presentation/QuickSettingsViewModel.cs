@@ -183,12 +183,18 @@ public sealed class QuickSettingsViewModel : INotifyPropertyChanged
             settings.MonitorNames,
             mode,
             settings.AccentId,
+            settings.BaseColorId,
             settings.TopBarEnabled,
             settings.DockEnabled,
             settings.DockPinnedApps,
             settings.DockReplacesTaskbar,
             settings.ExplorerFavorites,
-            settings.ExplorerViewMode));
+            settings.ExplorerViewMode,
+            settings.ReduceMotion,
+            settings.HighContrast,
+            settings.RecoveryHotkeyEnabled,
+            settings.RecoveryHotkeyId,
+            settings.SafeModeEnabled));
     }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

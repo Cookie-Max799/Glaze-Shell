@@ -1077,12 +1077,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             names,
             settings.ThemeMode,
             settings.AccentId,
+            settings.BaseColorId,
             settings.TopBarEnabled,
             settings.DockEnabled,
             settings.DockPinnedApps,
             settings.DockReplacesTaskbar,
             settings.ExplorerFavorites,
-            settings.ExplorerViewMode));
+            settings.ExplorerViewMode,
+            settings.ReduceMotion,
+            settings.HighContrast,
+            settings.RecoveryHotkeyEnabled,
+            settings.RecoveryHotkeyId,
+            settings.SafeModeEnabled));
 
         monitor.SetNames(
             BuildDefaultMonitorNames(Monitors.Select(static item => item.Monitor).ToList()).TryGetValue(monitor.Id, out var fallback)
@@ -1143,12 +1149,18 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             settings.MonitorNames,
             _themeMode,
             _accentId,
+            settings.BaseColorId,
             _topBarEnabled,
             _dockEnabled,
             settings.DockPinnedApps,
             _dockReplacesTaskbar,
             settings.ExplorerFavorites,
-            settings.ExplorerViewMode));
+            settings.ExplorerViewMode,
+            settings.ReduceMotion,
+            settings.HighContrast,
+            settings.RecoveryHotkeyEnabled,
+            settings.RecoveryHotkeyId,
+            settings.SafeModeEnabled));
     }
 
     private static Func<string?, string?> BuildMonitorNameResolver(Dictionary<string, string> displayNames) =>

@@ -27,6 +27,7 @@ public sealed record UserSettings
         IReadOnlyDictionary<string, string>? monitorNames = null,
         ThemeMode themeMode = ThemeMode.System,
         string? accentId = null,
+        string? baseColorId = null,
         bool topBarEnabled = true,
         bool dockEnabled = true,
         IReadOnlyList<string>? dockPinnedApps = null,
@@ -44,6 +45,7 @@ public sealed record UserSettings
         MonitorNames = NormalizeMonitorNames(monitorNames);
         ThemeMode = ValidateThemeMode(themeMode, nameof(themeMode));
         AccentId = NormalizeAccent(accentId);
+        BaseColorId = NormalizeAccent(baseColorId);
         TopBarEnabled = topBarEnabled;
         DockEnabled = dockEnabled;
         DockPinnedApps = NormalizeDockPinnedApps(dockPinnedApps);
@@ -89,6 +91,11 @@ public sealed record UserSettings
     /// <c>null</c>, если используется акцент темы по умолчанию.
     /// </summary>
     public string? AccentId { get; }
+
+    /// <summary>
+    /// Идентификатор основного цвета оформления.
+    /// </summary>
+    public string? BaseColorId { get; }
 
     /// <summary>
     /// Показывать ли плавающую верхнюю панель (Top bar, функция A6).

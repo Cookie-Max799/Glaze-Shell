@@ -510,12 +510,18 @@ public sealed class DockViewModel : IDisposable
             settings.MonitorNames,
             settings.ThemeMode,
             settings.AccentId,
+            settings.BaseColorId,
             settings.TopBarEnabled,
             settings.DockEnabled,
             _pinnedIds,
             settings.DockReplacesTaskbar,
             settings.ExplorerFavorites,
-            settings.ExplorerViewMode));
+            settings.ExplorerViewMode,
+            settings.ReduceMotion,
+            settings.HighContrast,
+            settings.RecoveryHotkeyEnabled,
+            settings.RecoveryHotkeyId,
+            settings.SafeModeEnabled));
     }
 
     private void QueueRebuild() => _ = _dispatcher.TryEnqueue(Rebuild);

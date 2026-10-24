@@ -231,6 +231,7 @@ public sealed partial class TopBarWindow : Window
         if (ViewModel.HasResults)
         {
             var constraint = 340;
+            logicalHeight += 6;
             logicalHeight += MeasurePanelHeight(ResultsPanel, constraint);
         }
         else if (ViewModel.QuickSettings.IsOpen)
@@ -306,7 +307,7 @@ public sealed partial class TopBarWindow : Window
         var pinned = IsPinnedOpen();
         var target = 0.0;
 
-        if (pinned || IsCursorOverBar())
+        if (pinned || IsCursorOverBar() || (SearchTextPopup is not null && SearchTextPopup.IsOpen))
         {
             _collapseAt = now + CollapseDelay;
             target = 1.0;
@@ -454,6 +455,7 @@ public sealed partial class TopBarWindow : Window
         {
             SearchTextPopup.IsOpen = true;
         }
+        _ = DispatcherQueue.TryEnqueue(() => UpdateOverlayBounds());
         if (PopupSearchBox is not null)
         {
             PopupSearchBox.Focus(FocusState.Programmatic);
@@ -611,9 +613,12 @@ public sealed partial class TopBarWindow : Window
                 {
                     SearchTextPopup.IsOpen = true;
                 }
+                _ = DispatcherQueue.TryEnqueue(() => UpdateOverlayBounds());
             }
-
-            UpdateOverlayBounds();
+            else
+            {
+                _ = DispatcherQueue.TryEnqueue(() => UpdateOverlayBounds());
+            }
         }
     }
 
@@ -711,6 +716,7 @@ public sealed partial class TopBarWindow : Window
     {
         _themes.ApplyFromSettings(Root);
         ApplyBackdrop();
+        _ = DispatcherQueue.TryEnqueue(() => UpdateOverlayBounds());
     }
 
     /// <summary>
@@ -725,5 +731,5 @@ public sealed partial class TopBarWindow : Window
     }
 
     private void ApplyBackdrop() =>
-        SystemBackdrop = _themes.HighContrast ? null : new DesktopAcrylicBackdrop();
+        SystemBackdrop = _themes.HighContrast ? null : new Microsoft.UI.Xaml.Media.MicaBackdrop();
 }

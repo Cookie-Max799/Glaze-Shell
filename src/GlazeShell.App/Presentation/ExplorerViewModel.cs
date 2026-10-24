@@ -539,12 +539,18 @@ public sealed class ExplorerViewModel : INotifyPropertyChanged
             settings.MonitorNames,
             settings.ThemeMode,
             settings.AccentId,
+            settings.BaseColorId,
             settings.TopBarEnabled,
             settings.DockEnabled,
             settings.DockPinnedApps,
             settings.DockReplacesTaskbar,
             favorites ?? settings.ExplorerFavorites,
-            viewMode ?? settings.ExplorerViewMode));
+            viewMode ?? settings.ExplorerViewMode,
+            settings.ReduceMotion,
+            settings.HighContrast,
+            settings.RecoveryHotkeyEnabled,
+            settings.RecoveryHotkeyId,
+            settings.SafeModeEnabled));
     }
 
     private string ResolveStartPath(string? requested)

@@ -160,6 +160,23 @@ public static class SettingsCatalog
             },
             BuildAccentChoices()),
 
+        new(
+            "baseColorId",
+            AppearancePageId,
+            "Основной цвет",
+            "Базовая цветовая схема оформления.",
+            ["основной", "base", "цвет", "scheme", "палитра"],
+            SettingKind.Choice,
+            settings => settings.BaseColorId ?? string.Empty,
+            (settings, value) =>
+            {
+                var baseColor = value as string;
+                return string.IsNullOrWhiteSpace(baseColor)
+                    ? UserSettingsEditor.With(settings, clearBaseColor: true)
+                    : UserSettingsEditor.With(settings, baseColorId: baseColor);
+            },
+            BuildAccentChoices()),
+
         // Dock.
         new(
             "dockEnabled",

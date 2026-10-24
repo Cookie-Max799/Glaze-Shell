@@ -27,6 +27,8 @@ public sealed class SettingsDocument
 
     public string? AccentId { get; set; }
 
+    public string? BaseColorId { get; set; }
+
     public bool TopBarEnabled { get; set; } = true;
 
     public bool DockEnabled { get; set; } = true;
@@ -75,6 +77,7 @@ public sealed class SettingsDocument
             ActiveThemeId = settings.ActiveThemeId,
             ThemeMode = settings.ThemeMode.ToId(),
             AccentId = settings.AccentId,
+            BaseColorId = settings.BaseColorId,
             TopBarEnabled = settings.TopBarEnabled,
             DockEnabled = settings.DockEnabled,
             DockReplacesTaskbar = settings.DockReplacesTaskbar,
@@ -135,6 +138,11 @@ public static class SettingsDocumentMapper
             messages.Add($"The accent '{document.AccentId}' is not valid.");
         }
 
+        if (document.BaseColorId is not null && !AccentPalette.IsKnown(document.BaseColorId))
+        {
+            messages.Add($"The base color '{document.BaseColorId}' is not valid.");
+        }
+
         var explorerViewMode = ExplorerViewMode.Icons;
         if (document.ExplorerViewMode is not null && !ExplorerViewModeExtensions.TryParse(document.ExplorerViewMode, out explorerViewMode))
         {
@@ -162,6 +170,7 @@ public static class SettingsDocumentMapper
             monitorNames,
             themeMode,
             document.AccentId,
+            document.BaseColorId,
             document.TopBarEnabled,
             document.DockEnabled,
             dockPinnedApps,

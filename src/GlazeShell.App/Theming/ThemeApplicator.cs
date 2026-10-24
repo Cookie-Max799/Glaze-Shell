@@ -84,7 +84,7 @@ public sealed class ThemeApplicator
             system.HighContrast,
             system.AnimationsEnabled);
 
-        Apply(root, settings.ThemeMode, settings.AccentId, accessibility, system.Palette);
+        Apply(root, settings.ThemeMode, settings.AccentId ?? settings.BaseColorId, accessibility, system.Palette);
     }
 
     public void Apply(FrameworkElement root, ThemeMode mode, string? accentId)
@@ -169,12 +169,15 @@ public sealed class ThemeApplicator
     private static void ApplyBrushes(GlazeTheme theme, Color accent)
     {
         var selection = GlazePalette.WithAlpha(accent, SelectionAlpha);
+        var glass = GlazePalette.WithAlpha(accent, 0x55);
+        var surface = GlazePalette.WithAlpha(accent, 0x14);
+        var elevated = GlazePalette.WithAlpha(accent, 0x24);
 
         SetBrush(BackgroundKey, theme.Background);
-        SetBrush(SurfaceKey, theme.Surface);
-        SetBrush(ElevatedKey, theme.Elevated);
-        SetBrush(BorderKey, theme.Border);
-        SetBrush(GlassKey, theme.Glass);
+        SetBrush(SurfaceKey, surface);
+        SetBrush(ElevatedKey, elevated);
+        SetBrush(BorderKey, Color.FromArgb(0x00, 0x00, 0x00, 0x00));
+        SetBrush(GlassKey, glass);
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         SetBrush(TextPrimaryKey, theme.TextPrimary);
@@ -183,8 +186,8 @@ public sealed class ThemeApplicator
         SetBrush(AccentKey, accent);
         SetBrush(SelectionKey, selection);
 
-        SetBrush(ListViewItemPointerOverKey, theme.Elevated);
-        SetBrush(ListViewItemPressedKey, theme.Elevated);
+        SetBrush(ListViewItemPointerOverKey, elevated);
+        SetBrush(ListViewItemPressedKey, elevated);
         SetBrush(ListViewItemSelectedKey, selection);
         SetBrush(ListViewItemSelectedPointerOverKey, selection);
         SetBrush(ListViewItemSelectedPressedKey, selection);

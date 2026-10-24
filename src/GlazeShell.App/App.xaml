@@ -18,7 +18,7 @@
             <SolidColorBrush x:Key="GlazeSurfaceBrush" Color="#1E1B3D" />
             <SolidColorBrush x:Key="GlazeElevatedBrush" Color="#2A2754" />
             <SolidColorBrush x:Key="GlazeBorderBrush" Color="#3A3670" />
-            <SolidColorBrush x:Key="GlazeGlassBrush" Color="#44221E4A" />
+            <SolidColorBrush x:Key="GlazeGlassBrush" Color="#66221E4A" />
             <SolidColorBrush x:Key="GlazeBlackBrush" Color="#000000" />
             <SolidColorBrush x:Key="GlazeWhiteBrush" Color="#FFFFFF" />
 
