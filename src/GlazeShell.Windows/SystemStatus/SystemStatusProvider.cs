@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net.NetworkInformation;
+using System.Runtime.InteropServices;
 using GlazeShell.Windows.Win32;
 
 namespace GlazeShell.Windows.SystemStatus;
@@ -24,7 +25,9 @@ public static class SystemStatusProvider
     private const byte BatteryFlagNoBattery = 0x80;
     private const byte BatteryPercentUnknown = 0xFF;
 
-    private static TimeSpan _lastCpuTime = TimeSpan.Zero;
+    private static ulong _lastIdleTime;
+    private static ulong _lastKernelTime;
+    private static ulong _lastUserTime;
     private static DateTime _lastCpuCheck = DateTime.UtcNow;
     private static double _lastCpuUsage;
 
@@ -62,31 +65,63 @@ public static class SystemStatusProvider
         }
     }
 
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetSystemTimes(
+        out FILETIME idleTime,
+        out FILETIME kernelTime,
+        out FILETIME userTime);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FILETIME
+    {
+        public uint Low;
+        public uint High;
+    }
+
+    private static ulong ToULong(FILETIME time) => ((ulong)time.High << 32) | time.Low;
+
     public static double GetCpuUsage()
     {
         try
         {
-            var process = Process.GetCurrentProcess();
             var now = DateTime.UtcNow;
-            var currentCpu = process.TotalProcessorTime;
-
-            if (_lastCpuTime == TimeSpan.Zero)
-            {
-                _lastCpuTime = currentCpu;
-                _lastCpuCheck = now;
-                return 0;
-            }
-
-            var timeDiff = (now - _lastCpuCheck).TotalMilliseconds;
-            if (timeDiff <= 0)
+            if (!GetSystemTimes(out var idle, out var kernel, out var user))
             {
                 return _lastCpuUsage;
             }
 
-            var cpuDiff = (currentCpu - _lastCpuTime).TotalMilliseconds;
-            var cpuUsage = (cpuDiff / (timeDiff * Environment.ProcessorCount)) * 100.0;
-            _lastCpuUsage = Math.Clamp(cpuUsage, 0, 100);
-            _lastCpuTime = currentCpu;
+            var idleTime = ToULong(idle);
+            var kernelTime = ToULong(kernel);
+            var userTime = ToULong(user);
+
+            if (_lastCpuCheck == DateTime.MinValue || _lastCpuCheck == DateTime.UtcNow.AddDays(-1))
+            {
+                _lastIdleTime = idleTime;
+                _lastKernelTime = kernelTime;
+                _lastUserTime = userTime;
+                _lastCpuCheck = now;
+                return 0;
+            }
+
+            var idleDiff = idleTime - _lastIdleTime;
+            var kernelDiff = kernelTime - _lastKernelTime;
+            var userDiff = userTime - _lastUserTime;
+
+            var total = kernelDiff + userDiff;
+            if (total == 0)
+            {
+                _lastIdleTime = idleTime;
+                _lastKernelTime = kernelTime;
+                _lastUserTime = userTime;
+                _lastCpuCheck = now;
+                return _lastCpuUsage;
+            }
+
+            var usage = (1.0 - (double)idleDiff / total) * 100.0;
+            _lastCpuUsage = Math.Clamp(usage, 0, 100);
+            _lastIdleTime = idleTime;
+            _lastKernelTime = kernelTime;
+            _lastUserTime = userTime;
             _lastCpuCheck = now;
             return _lastCpuUsage;
         }

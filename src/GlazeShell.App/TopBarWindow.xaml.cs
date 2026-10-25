@@ -111,7 +111,10 @@ public sealed partial class TopBarWindow : Window
             StartRevealWatch();
         };
         AppPill.SizeChanged += (_, _) => UpdateOverlayBounds();
-        SearchPill.SizeChanged += (_, _) => UpdateOverlayBounds();
+        if (SearchHit is not null)
+        {
+            SearchHit.SizeChanged += (_, _) => UpdateOverlayBounds();
+        }
         StatusPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         ResultsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
         QuickSettingsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
@@ -173,6 +176,7 @@ public sealed partial class TopBarWindow : Window
 
         ViewModel.CloseQuickSettings();
         ViewModel.CloseCalendar();
+        ViewModel.SearchText = string.Empty;
         RevealImmediately();
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
@@ -180,6 +184,7 @@ public sealed partial class TopBarWindow : Window
         {
             SearchTextPopup.IsOpen = true;
         }
+        _ = DispatcherQueue.TryEnqueue(() => UpdateOverlayBounds());
         if (PopupSearchBox is not null)
         {
             PopupSearchBox.Focus(FocusState.Programmatic);
@@ -445,21 +450,9 @@ public sealed partial class TopBarWindow : Window
     /// Клик по строке поиска временно разрешает активацию окна, чтобы поле получило фокус
     /// ввода. Остальное время окно не перехватывает фокус активного приложения.
     /// </summary>
-    private void OnSearchPointerPressed(object sender, PointerRoutedEventArgs e)
+    private void OnSearchPointerPressed(object sender, object e)
     {
-        HoldRevealed();
-        OverlayWindow.SetNonActivating(_hwnd, false);
-        Activate();
-        ViewModel.SearchText = string.Empty;
-        if (SearchTextPopup is not null)
-        {
-            SearchTextPopup.IsOpen = true;
-        }
-        _ = DispatcherQueue.TryEnqueue(() => UpdateOverlayBounds());
-        if (PopupSearchBox is not null)
-        {
-            PopupSearchBox.Focus(FocusState.Programmatic);
-        }
+        FocusSearch();
     }
 
     /// <summary>
@@ -476,6 +469,11 @@ public sealed partial class TopBarWindow : Window
 
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
+        if (SearchTextPopup is not null && SearchTextPopup.IsOpen)
+        {
+            SearchTextPopup.IsOpen = false;
+        }
+        ViewModel.ClearSearch();
         ViewModel.ToggleQuickSettings();
         HoldRevealed();
     }
@@ -512,6 +510,11 @@ public sealed partial class TopBarWindow : Window
     {
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
+        if (SearchTextPopup is not null && SearchTextPopup.IsOpen)
+        {
+            SearchTextPopup.IsOpen = false;
+        }
+        ViewModel.ClearSearch();
         ViewModel.ToggleCalendar();
         HoldRevealed();
     }

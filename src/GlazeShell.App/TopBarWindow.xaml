@@ -45,24 +45,36 @@
                 IsHitTestVisible="False" />
 
             <!--  Центральная плитка: поиск.  -->
-            <Border
-                x:Name="SearchPill"
+            <Grid
+                x:Name="SearchHit"
                 Grid.Row="0"
                 Grid.Column="1"
-                Width="28"
-                Height="28"
-                Margin="0,1"
+                Width="36"
+                Height="36"
                 HorizontalAlignment="Right"
-                Background="{StaticResource GlazeElevatedBrush}"
-                CornerRadius="14"
-                PointerPressed="OnSearchPointerPressed">
-                <FontIcon
+                VerticalAlignment="Center"
+                Background="Transparent"
+                AutomationProperties.Name="Поиск"
+                IsTabStop="True"
+                PointerPressed="OnSearchPointerPressed"
+                Tapped="OnSearchPointerPressed">
+                <Border
+                    x:Name="SearchPill"
+                    Width="28"
+                    Height="28"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
-                    FontSize="12"
-                    Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                    Glyph="&#xE721;" />
-            </Border>
+                    Background="{StaticResource GlazeElevatedBrush}"
+                    CornerRadius="14"
+                    IsHitTestVisible="False">
+                    <FontIcon
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                        Glyph="&#xE721;" />
+                </Border>
+            </Grid>
 
             <Popup
                 x:Name="SearchTextPopup"
@@ -371,16 +383,19 @@
                         FontSize="11.5"
                         Foreground="{StaticResource GlazeTextMutedBrush}"
                         Text="СИСТЕМА" />
-                    <StackPanel Orientation="Horizontal" Spacing="8">
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Stretch">
                         <Button
+                            HorizontalAlignment="Stretch"
                             Click="OnOpenNetworkSettings"
                             Content="Сеть"
                             CornerRadius="16" />
                         <Button
+                            HorizontalAlignment="Stretch"
                             Click="OnOpenBluetoothSettings"
                             Content="Bluetooth"
                             CornerRadius="16" />
                         <Button
+                            HorizontalAlignment="Stretch"
                             Click="OnOpenSoundSettings"
                             Content="Звук"
                             CornerRadius="16" />

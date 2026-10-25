@@ -237,7 +237,7 @@ public sealed partial class DockWindow : Window
         {
             OverlayWindow.ApplyTopRoundedRegion(
                 _hwnd,
-                new PixelRect(0, 0, clientWidth, clientHeight),
+                new PixelRect(-2, 0, clientWidth + 4, clientHeight),
                 (int)Math.Round(PillRadius * scale));
         }
     }

@@ -96,15 +96,15 @@ public static class GlanceRanker
 
         if (title.Contains(term, StringComparison.OrdinalIgnoreCase))
         {
-            return 400;
+            return 300;
         }
 
         if (candidate.Subtitle.Contains(term, StringComparison.OrdinalIgnoreCase))
         {
-            return 250;
+            return 180;
         }
 
-        return candidate.Keywords.Contains(term, StringComparison.OrdinalIgnoreCase) ? 150 : 0;
+        return candidate.Keywords.Contains(term, StringComparison.OrdinalIgnoreCase) ? 100 : 0;
     }
 
     private static bool StartsWithWord(string text, string term)
