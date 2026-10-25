@@ -76,6 +76,12 @@ public sealed partial class DockWindow : Window
     private bool _cursorInside;
     private bool _cursorWatchRunning;
 
+    /// <summary>Состав плиток на прошлом проходе: по нему видно, какие плитки появились.</summary>
+    private readonly HashSet<string> _knownKeys = new(StringComparer.Ordinal);
+
+    /// <summary>Плитка, у которой проигрывается анимация появления, чтобы не запускать её дважды.</summary>
+    private readonly HashSet<string> _enteringKeys = new(StringComparer.Ordinal);
+
     // Кэш раскладки плиток в координатах ItemsControl: пересчитывается после изменения состава
     // и при изменении размеров, чтобы на каждое движение курсора не обходить визуальное дерево.
     private double[] _tileCenters = [];
@@ -248,6 +254,107 @@ public sealed partial class DockWindow : Window
         _centersDirty = true;
         _glowIndex = -1;
         UpdateDockSize();
+
+        // Появление плитки — отдельная анимация: она проигрывается после раскладки, когда
+        // у контейнера уже есть размер, иначе стартовый масштаб применился бы к нулевой
+        // геометрии и эффект не был бы виден.
+        _ = DispatcherQueue.TryEnqueue(AnimateNewTiles);
+    }
+
+    /// <summary>
+    /// Показывает плитки, которых не было на прошлом проходе: новая плитка «выпрыгивает»
+    /// из-под панели с лёгким перелётом, как это делает dock macOS при запуске приложения.
+    /// </summary>
+    private void AnimateNewTiles()
+    {
+        var present = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var index = 0; index < ViewModel.Items.Count; index++)
+        {
+            var item = ViewModel.Items[index];
+
+            if (item.IsSeparator)
+            {
+                continue;
+            }
+
+            present.Add(item.Key);
+
+            if (_knownKeys.Contains(item.Key) || !_enteringKeys.Add(item.Key))
+            {
+                continue;
+            }
+
+            if (TileAt(index) is { } tile)
+            {
+                PlayEntrance(tile, item.Key);
+            }
+        }
+
+        _knownKeys.Clear();
+        _knownKeys.UnionWith(present);
+    }
+
+    /// <summary>
+    /// Анимация появления плитки: масштаб от 0.4 до 1 и подъём снизу. По завершении плитка
+    /// возвращается к обычному состоянию, чтобы магнификация работала с чистого листа.
+    /// </summary>
+    private void PlayEntrance(Border tile, string key)
+    {
+        var (scaleTransform, translateTransform) = EnsureTransforms(tile);
+
+        // Доступность (I5): при «уменьшить движение» плитка просто появляется.
+        if (_themes.ReduceMotion)
+        {
+            scaleTransform.ScaleX = 1;
+            scaleTransform.ScaleY = 1;
+            translateTransform.Y = 0;
+            _enteringKeys.Remove(key);
+            return;
+        }
+
+        var duration = TimeSpan.FromMilliseconds(260);
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+
+        var storyboard = new Storyboard();
+
+        foreach (var property in new[] { nameof(ScaleTransform.ScaleX), nameof(ScaleTransform.ScaleY) })
+        {
+            var animation = new DoubleAnimation
+            {
+                From = 0.4,
+                To = 1,
+                Duration = duration,
+                EasingFunction = easing,
+            };
+
+            Storyboard.SetTarget(animation, scaleTransform);
+            Storyboard.SetTargetProperty(animation, property);
+            storyboard.Children.Add(animation);
+        }
+
+        var lift = new DoubleAnimation
+        {
+            From = -18,
+            To = 0,
+            Duration = duration,
+            EasingFunction = easing,
+        };
+
+        Storyboard.SetTarget(lift, translateTransform);
+        Storyboard.SetTargetProperty(lift, nameof(TranslateTransform.Y));
+        storyboard.Children.Add(lift);
+
+        storyboard.Completed += (_, _) =>
+        {
+            scaleTransform.ScaleX = 1;
+            scaleTransform.ScaleY = 1;
+            translateTransform.Y = 0;
+            _enteringKeys.Remove(key);
+            _centersDirty = true;
+        };
+
+        storyboard.Begin();
     }
 
     private void OnActivateRequested(object? sender, EventArgs e)
@@ -339,8 +446,14 @@ public sealed partial class DockWindow : Window
         _cursorInside = true;
 
         var scale = OverlayWindow.GetScaleFactor(_hwnd);
-        var tilesX = clientX / (scale <= 0 ? 1.0 : scale);
-        ApplyMagnification(tilesX);
+        var dipScale = scale <= 0 ? 1.0 : scale;
+
+        // Координаты курсора приходят в физических пикселях окна, а центры плиток хранятся
+        // в координатах ItemsControl: без пересчёта магнификация считалась бы со сдвигом
+        // на боковой отступ панели и увеличивала бы не ту плитку.
+        var rootX = clientX / dipScale;
+        var tilesOrigin = Tiles.TransformToVisual(Root).TransformPoint(new Point(0, 0));
+        ApplyMagnification(rootX - tilesOrigin.X);
     }
 
     /// <summary>
@@ -440,14 +553,70 @@ public sealed partial class DockWindow : Window
 
     private async void OnTileTapped(object sender, TappedRoutedEventArgs e)
     {
-        if (sender is not Border { DataContext: DockItemViewModel item })
+        if (sender is not Border { DataContext: DockItemViewModel item } tile)
         {
             return;
         }
 
         e.Handled = true;
-        ResetTiles();
+        PlayPress(tile);
         await ViewModel.ActivateItemAsync(item);
+    }
+
+    /// <summary>
+    /// Отклик на нажатие: плитка коротко проседает и возвращается. Работает независимо от
+    /// состояния наведения, поэтому клик виден и тогда, когда магнификация уже сброшена.
+    /// </summary>
+    private void PlayPress(Border tile)
+    {
+        var (scaleTransform, translateTransform) = EnsureTransforms(tile);
+
+        if (_themes.ReduceMotion)
+        {
+            return;
+        }
+
+        var duration = TimeSpan.FromMilliseconds(90);
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var storyboard = new Storyboard();
+
+        foreach (var property in new[] { nameof(ScaleTransform.ScaleX), nameof(ScaleTransform.ScaleY) })
+        {
+            var animation = new DoubleAnimation
+            {
+                To = 0.86,
+                Duration = duration,
+                EasingFunction = easing,
+                AutoReverse = true,
+            };
+
+            Storyboard.SetTarget(animation, scaleTransform);
+            Storyboard.SetTargetProperty(animation, property);
+            storyboard.Children.Add(animation);
+        }
+
+        var press = new DoubleAnimation
+        {
+            To = 3,
+            Duration = duration,
+            EasingFunction = easing,
+            AutoReverse = true,
+        };
+
+        Storyboard.SetTarget(press, translateTransform);
+        Storyboard.SetTargetProperty(press, nameof(TranslateTransform.Y));
+        storyboard.Children.Add(press);
+
+        // После нажатия состояние плитки снова подчиняется магнификации.
+        storyboard.Completed += (_, _) =>
+        {
+            scaleTransform.ScaleX = 1;
+            scaleTransform.ScaleY = 1;
+            translateTransform.Y = 0;
+            _centersDirty = true;
+        };
+
+        storyboard.Begin();
     }
 
     /// <summary>
@@ -457,7 +626,7 @@ public sealed partial class DockWindow : Window
     /// </summary>
     private async void OnTileKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (sender is not Border { DataContext: DockItemViewModel item })
+        if (sender is not Border { DataContext: DockItemViewModel item } tile)
         {
             return;
         }
@@ -468,7 +637,7 @@ public sealed partial class DockWindow : Window
         }
 
         e.Handled = true;
-        ResetTiles();
+        PlayPress(tile);
         await ViewModel.ActivateItemAsync(item);
     }
 

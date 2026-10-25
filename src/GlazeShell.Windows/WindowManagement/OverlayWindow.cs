@@ -150,6 +150,45 @@ public static class OverlayWindow
     }
 
     /// <summary>
+    /// Активное окно и его процесс. Смена активного окна читается по дескриптору, смена
+    /// приложения — по процессу: полное чтение окна с именем и путём выполняется только
+    /// при смене, поэтому опрос раз в кадр не стоит ничего.
+    /// </summary>
+    public static bool TryGetForegroundWindow(out nint hwnd, out uint processId)
+    {
+        hwnd = User32.GetForegroundWindow();
+        processId = 0;
+
+        if (hwnd == 0)
+        {
+            return false;
+        }
+
+        _ = User32.GetWindowThreadProcessId(hwnd, out processId);
+        return true;
+    }
+
+    /// <summary>
+    /// Позиция курсора в физических пикселях экрана. Нужна панелям, которые полностью
+    /// уезжают за край: окно-relative координаты у скрытого окна отрицательные, а «горячая
+    /// зона» у верхней кромки экрана должна оставаться рабочей.
+    /// </summary>
+    public static bool TryGetCursorScreenPosition(out int x, out int y)
+    {
+        x = 0;
+        y = 0;
+
+        if (!User32.GetCursorPos(out var cursor))
+        {
+            return false;
+        }
+
+        x = cursor.X;
+        y = cursor.Y;
+        return true;
+    }
+
+    /// <summary>
     /// Придаёт окну форму набора скруглённых прямоугольников (регион окна) в физических
     /// пикселях. Так «стеклянный» backdrop рисуется только внутри pill, а промежутки между
     /// ними пропускают рабочий стол. Возвращает <c>false</c>, если маску задать не удалось:

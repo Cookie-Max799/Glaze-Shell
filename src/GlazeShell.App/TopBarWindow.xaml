@@ -36,37 +36,47 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!--  Левая плитка: активное приложение (DESIGN §7.1) — плитка, имя и расположение.  -->
+            <!--  Левая плитка: активное приложение (DESIGN §7.1) — значок, имя и заголовок окна.  -->
             <Border
                 x:Name="AppPill"
                 Grid.Row="0"
                 Grid.Column="0"
                 Margin="0,3"
-                Padding="6,0,10,0"
+                Padding="4,0,10,0"
                 VerticalAlignment="Center"
                 AutomationProperties.Name="Активное приложение"
                 Background="{StaticResource GlazeElevatedBrush}"
-                CornerRadius="16"
+                CornerRadius="10"
                 IsHitTestVisible="False">
                 <StackPanel
                     Orientation="Horizontal"
                     Spacing="7"
                     VerticalAlignment="Center">
-                    <Border
-                        Width="20"
-                        Height="20"
-                        Background="{StaticResource GlazeBrandGradientBrush}"
-                        CornerRadius="6">
-                        <TextBlock
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            FontSize="10"
-                            FontWeight="SemiBold"
-                            Foreground="{StaticResource GlazeWhiteBrush}"
-                            Text="{x:Bind ViewModel.AppInitial, Mode=OneWay}" />
-                    </Border>
+                    <Grid
+                        Width="16"
+                        Height="16"
+                        VerticalAlignment="Center">
+                        <Border
+                            Background="{StaticResource GlazeBrandGradientBrush}"
+                            CornerRadius="5"
+                            Visibility="{x:Bind ViewModel.IsAppIconFallback, Mode=OneWay}">
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontSize="9"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource GlazeWhiteBrush}"
+                                Text="{x:Bind ViewModel.AppInitial, Mode=OneWay}" />
+                        </Border>
+                        <Image
+                            Width="16"
+                            Height="16"
+                            Source="{x:Bind ViewModel.AppIcon, Mode=OneWay}"
+                            Stretch="Uniform"
+                            Visibility="{x:Bind ViewModel.HasAppIcon, Mode=OneWay}" />
+                    </Grid>
                     <TextBlock
-                        MaxWidth="200"
+                        MaxWidth="150"
                         VerticalAlignment="Center"
                         FontSize="11"
                         FontWeight="SemiBold"
@@ -77,9 +87,10 @@
                         VerticalAlignment="Center"
                         FontSize="8"
                         Foreground="{StaticResource GlazeTextMutedBrush}"
-                        Glyph="&#xE70D;" />
+                        Glyph="&#xE70D;"
+                        Visibility="{x:Bind ViewModel.HasLocation, Mode=OneWay}" />
                     <TextBlock
-                        MaxWidth="260"
+                        MaxWidth="240"
                         VerticalAlignment="Center"
                         FontSize="11"
                         Foreground="{StaticResource GlazeTextSecondaryBrush}"
@@ -89,42 +100,76 @@
                 </StackPanel>
             </Border>
 
-            <!--  Центральная плитка: поиск.  -->
+            <!--  Центральная плитка: поиск. Поле живёт в самой панели, а не в popup:
+                  иначе клик по нему не доходит до окна, показанного без активации.  -->
             <Grid
                 x:Name="SearchHit"
                 Grid.Row="0"
                 Grid.Column="1"
-                Height="24"
+                Height="20"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 Background="Transparent"
-                AutomationProperties.Name="Поиск"
-                IsTabStop="True"
-                PointerPressed="OnSearchPointerPressed"
-                Tapped="OnSearchPointerPressed">
+                AutomationProperties.Name="Поиск">
                 <Border
                     x:Name="SearchPill"
-                    Padding="9,0"
+                    Width="440"
+                    Height="20"
+                    Padding="8,0"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Background="{StaticResource GlazeElevatedBrush}"
-                    CornerRadius="12"
-                    IsHitTestVisible="False">
-                    <StackPanel
-                        Orientation="Horizontal"
-                        Spacing="6"
-                        VerticalAlignment="Center">
+                    CornerRadius="10">
+                    <Grid ColumnSpacing="6">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
                         <FontIcon
                             VerticalAlignment="Center"
                             FontSize="11"
                             Foreground="{StaticResource GlazeTextSecondaryBrush}"
                             Glyph="&#xE721;" />
-                        <TextBlock
+
+                        <TextBox
+                            x:Name="SearchBox"
+                            Grid.Column="1"
+                            MinHeight="0"
+                            Padding="0"
                             VerticalAlignment="Center"
+                            VerticalContentAlignment="Center"
+                            AutomationProperties.Name="Поиск приложений, файлов, настроек"
+                            Background="Transparent"
+                            BorderThickness="0"
                             FontSize="11"
-                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                            Text="Поиск приложений, файлов, настроек…" />
+                            Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                            GotFocus="OnSearchGotFocus"
+                            KeyDown="OnSearchKeyDown"
+                            LostFocus="OnSearchLostFocus"
+                            PlaceholderForeground="{StaticResource GlazeTextSecondaryBrush}"
+                            PlaceholderText="Поиск приложений, файлов, настроек…"
+                            PointerPressed="OnSearchPointerPressed"
+                            Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                            UseSystemFocusVisuals="False">
+                            <TextBox.Resources>
+                                <!--  Поле поиска рисуется без собственной рамки и фона:
+                                      стекло панели остаётся единственной поверхностью.  -->
+                                <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                                <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                                <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                                <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                                <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                                <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                                <Thickness x:Key="TextControlBorderThemeThickness">0</Thickness>
+                                <Thickness x:Key="TextControlBorderThemeThicknessFocused">0</Thickness>
+                                <Thickness x:Key="TextControlThemePadding">0</Thickness>
+                            </TextBox.Resources>
+                        </TextBox>
+
                         <Border
+                            Grid.Column="2"
                             Padding="5,1"
                             VerticalAlignment="Center"
                             Background="{StaticResource GlazeSurfaceBrush}"
@@ -134,37 +179,9 @@
                                 Foreground="{StaticResource GlazeTextMutedBrush}"
                                 Text="Ctrl K" />
                         </Border>
-                    </StackPanel>
+                    </Grid>
                 </Border>
             </Grid>
-
-            <Popup
-                x:Name="SearchTextPopup"
-                Grid.Row="0"
-                Grid.Column="1"
-                HorizontalAlignment="Center"
-                VerticalAlignment="Top"
-                IsOpen="False"
-                IsLightDismissEnabled="True"
-                Closed="OnSearchPopupClosed">
-                <Border
-                    Width="440"
-                    Margin="0,34,0,0"
-                    Padding="12,6"
-                    Background="{StaticResource GlazeGlassBrush}"
-                    CornerRadius="16">
-                    <TextBox
-                        x:Name="PopupSearchBox"
-                        Padding="0"
-                        VerticalContentAlignment="Center"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        FontSize="12"
-                        KeyDown="OnSearchKeyDown"
-                        PlaceholderText="Поиск приложений, файлов, настроек…"
-                        Text="{x:Bind ViewModel.SearchText, Mode=TwoWay}" />
-                </Border>
-            </Popup>
 
             <!--  Правая плитка: статус (сеть, звук, батарея) и часы (DESIGN §7.1).  -->
             <Border
@@ -257,10 +274,10 @@
                 x:Name="ResultsPanel"
                 Grid.Row="1"
                 Grid.Column="1"
-                Width="340"
-                Margin="0,8,0,0"
+                Width="440"
+                Margin="0,6,0,0"
                 Padding="6"
-                HorizontalAlignment="Right"
+                HorizontalAlignment="Center"
                 VerticalAlignment="Top"
                 Background="{StaticResource GlazeGlassBrush}"
                 BorderThickness="0"

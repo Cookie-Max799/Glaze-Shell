@@ -31,6 +31,13 @@ public sealed partial class TopBarWindow : Window
     /// <summary>Сколько пикселей полосы видно над верхним краем экрана в свёрнутом виде.</summary>
     private const int PeekHeight = 22;
 
+    /// <summary>
+    /// Высота «горячей зоны» у кромки экрана, когда работает чужая программа: панель
+    /// полностью скрыта и выезжает только от касания кромки, чтобы не перекрывать
+    /// заголовки окон и вкладки.
+    /// </summary>
+    private const int ForeignHotZone = 2;
+
     /// <summary>Радиус нижних углов полосы.</summary>
     private const int BarRadius = 24;
 
@@ -64,6 +71,9 @@ public sealed partial class TopBarWindow : Window
     private double _reveal;
     private double _lastAppliedReveal = -1;
     private DateTimeOffset _collapseAt = DateTimeOffset.UtcNow + CollapseDelay;
+    private readonly int _ownProcessId = Environment.ProcessId;
+    private nint _foregroundHwnd;
+    private bool _foreignForeground;
 
     public TopBarWindow(
         ISettingsManager settings,
@@ -106,6 +116,7 @@ public sealed partial class TopBarWindow : Window
         {
             UpdateOverlayBounds();
             StartRevealWatch();
+            UpdateForegroundState();
         };
         AppPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         if (SearchHit is not null)
@@ -157,14 +168,14 @@ public sealed partial class TopBarWindow : Window
     {
         if (DispatcherQueue.HasThreadAccess)
         {
-            FocusSearchCore();
+            FocusSearchCore(clearText: true);
             return;
         }
 
-        _ = DispatcherQueue.TryEnqueue(FocusSearchCore);
+        _ = DispatcherQueue.TryEnqueue(() => FocusSearchCore(clearText: true));
     }
 
-    private void FocusSearchCore()
+    private void FocusSearchCore(bool clearText)
     {
         if (_hwnd == 0)
         {
@@ -173,25 +184,26 @@ public sealed partial class TopBarWindow : Window
 
         ViewModel.CloseQuickSettings();
         ViewModel.CloseCalendar();
-        ViewModel.ClearSearch();
+
+        if (clearText)
+        {
+            ViewModel.ClearSearch();
+        }
+
         RevealImmediately();
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
 
-        if (SearchTextPopup is not null)
-        {
-            SearchTextPopup.IsOpen = true;
-        }
-
-        // Фокус ставится после того, как popup раскрылся и окно получило размер: сразу после
-        // вызова он уходил бы в ещё не готовое поле и курсор не появлялся.
+        // Фокус ставится после того, как окно стало активным: сразу после вызова он уходил
+        // бы в ещё не готовое поле и курсор не появлялся.
         _ = DispatcherQueue.TryEnqueue(() =>
         {
             UpdateOverlayBounds();
 
-            if (PopupSearchBox is not null)
+            if (SearchBox is not null)
             {
-                PopupSearchBox.Focus(FocusState.Programmatic);
+                SearchBox.Focus(FocusState.Programmatic);
+                SearchBox.Select(SearchBox.Text.Length, 0);
             }
         });
     }
@@ -240,7 +252,7 @@ public sealed partial class TopBarWindow : Window
 
         if (ViewModel.HasResults)
         {
-            var constraint = 340;
+            const int constraint = 440;
             logicalHeight += 6;
             logicalHeight += MeasurePanelHeight(ResultsPanel, constraint);
         }
@@ -281,7 +293,10 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
-        var hidden = (int)Math.Round((BarHeight - PeekHeight) * (1.0 - _reveal) * _scale);
+        // В покое над краем экрана остаётся кромка панели; когда работает чужая программа,
+        // панель убирается полностью и появляется только под курсором у кромки.
+        var peek = _foreignForeground ? 0 : PeekHeight;
+        var hidden = (int)Math.Round((BarHeight - peek) * (1.0 - _reveal) * _scale);
         var placement = new RectInt32(_screenLeft, _screenTop - hidden, _screenWidth, _windowHeightPx);
 
         if (placement != _placement)
@@ -305,7 +320,10 @@ public sealed partial class TopBarWindow : Window
         _revealWatch.Start();
     }
 
-    /// <summary>Выезд и автосворачивание панели.</summary>
+    /// <summary>
+    /// Выезд и автосворачивание панели. Пока в фокусе чужая программа, панель полностью
+    /// убирается за верхний край и выезжает только под курсор, оказавшийся у кромки экрана.
+    /// </summary>
     private void OnRevealWatchTick(object? sender, object e)
     {
         if (_hwnd == 0)
@@ -313,11 +331,13 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
+        UpdateForegroundState();
+
         var now = DateTimeOffset.UtcNow;
         var pinned = IsPinnedOpen();
         var target = 0.0;
 
-        if (pinned || IsCursorOverBar() || (SearchTextPopup is not null && SearchTextPopup.IsOpen))
+        if (pinned || IsCursorOverHotZone())
         {
             _collapseAt = now + CollapseDelay;
             target = 1.0;
@@ -348,17 +368,61 @@ public sealed partial class TopBarWindow : Window
         }
     }
 
-    /// <summary>Курсор над видимой полосой панели.</summary>
-    private bool IsCursorOverBar()
+    /// <summary>
+    /// Следит за активным окном. Трекер окон пропускает собственный процесс, поэтому
+    /// возврат в Glaze Shell по событиям не виден: смена активного окна читается напрямую.
+    /// Сравнение дешёвое (один вызов Win32), полное чтение окна выполняется только при смене.
+    /// </summary>
+    private void UpdateForegroundState()
     {
-        if (!OverlayWindow.TryGetClientSize(_hwnd, out var clientWidth, out _) ||
-            !OverlayWindow.TryGetCursorPosition(_hwnd, out var x, out var y))
+        if (!OverlayWindow.TryGetForegroundWindow(out var hwnd, out var processId) || hwnd == _foregroundHwnd)
+        {
+            return;
+        }
+
+        _foregroundHwnd = hwnd;
+        ViewModel.RefreshForeground();
+
+        var foreign = processId != _ownProcessId;
+
+        if (foreign == _foreignForeground)
+        {
+            return;
+        }
+
+        _foreignForeground = foreign;
+
+        // Уход в другое приложение убирает панель сразу, без 350 мс ожидания.
+        if (foreign)
+        {
+            _collapseAt = DateTimeOffset.UtcNow;
+        }
+
+        // Высота «кромки» в покое зависит от режима, поэтому положение пересчитывается,
+        // даже если прогресс выезда не менялся.
+        _lastAppliedReveal = -1;
+    }
+
+    /// <summary>
+    /// Курсор в «горячей зоне» у верхней кромки экрана. Зона считается в экранных координатах
+    /// и от состояния выезда не зависит: полностью скрытая панель иначе не могла бы
+    /// вызваться курсором. В чужом приложении зона узкая — одно прикосновение к кромке,
+    /// чтобы панель не всплывала над строкой вкладок браузера.
+    /// </summary>
+    private bool IsCursorOverHotZone()
+    {
+        if (_screenWidth <= 0 ||
+            !OverlayWindow.TryGetCursorScreenPosition(out var x, out var y))
         {
             return false;
         }
 
-        var barHeight = Math.Max(1, (int)Math.Round(BarHeight * _scale));
-        return x >= 0 && y >= 0 && x < clientWidth && y < barHeight;
+        // Скрытая в чужом приложении панель ловится узкой полосой у кромки; как только она
+        // выехала, зоной становится вся полоса — иначе клик по поиску не успевал бы
+        // удержать панель открытой.
+        var zone = !_foreignForeground || _reveal >= 0.5 ? BarHeight : ForeignHotZone;
+        var zoneHeight = Math.Max(1, (int)Math.Round(zone * _scale));
+        return x >= _screenLeft && x < _screenLeft + _screenWidth && y >= _screenTop && y < _screenTop + zoneHeight;
     }
 
     /// <summary>Поиск или открытый popover удерживают панель раскрытой.</summary>
@@ -455,7 +519,34 @@ public sealed partial class TopBarWindow : Window
     /// Клик по строке поиска временно разрешает активацию окна, чтобы поле получило фокус
     /// ввода. Остальное время окно не перехватывает фокус активного приложения.
     /// </summary>
-    private void OnSearchPointerPressed(object sender, object e) => FocusSearch();
+    private void OnSearchPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        // Клик не должен стирать уже набранный запрос: очистка — только по Ctrl K.
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            FocusSearchCore(clearText: false);
+            return;
+        }
+
+        _ = DispatcherQueue.TryEnqueue(() => FocusSearchCore(clearText: false));
+    }
+
+    /// <summary>
+    /// Поиск в фокусе: панель удерживается раскрытой и не сворачивается, пока пользователь
+    /// печатает, даже если курсор ушёл с полосы.
+    /// </summary>
+    private void OnSearchGotFocus(object sender, RoutedEventArgs e) => HoldRevealed();
+
+    private void OnSearchLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(ViewModel.SearchText))
+        {
+            return;
+        }
+
+        ViewModel.ClearSearch();
+        _collapseAt = DateTimeOffset.UtcNow + CollapseDelay;
+    }
 
     /// <summary>
     /// Клик по правому pill открывает «Центр управления» (D1): окно разрешает активацию,
@@ -471,10 +562,6 @@ public sealed partial class TopBarWindow : Window
 
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
-        if (SearchTextPopup is not null && SearchTextPopup.IsOpen)
-        {
-            SearchTextPopup.IsOpen = false;
-        }
         ViewModel.ClearSearch();
         ViewModel.ToggleQuickSettings();
         HoldRevealed();
@@ -512,10 +599,6 @@ public sealed partial class TopBarWindow : Window
     {
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
-        if (SearchTextPopup is not null && SearchTextPopup.IsOpen)
-        {
-            SearchTextPopup.IsOpen = false;
-        }
         ViewModel.ClearSearch();
         ViewModel.ToggleCalendar();
         HoldRevealed();
@@ -564,10 +647,6 @@ public sealed partial class TopBarWindow : Window
             case VirtualKey.Escape:
                 e.Handled = true;
                 ViewModel.ClearSearch();
-                if (SearchTextPopup is not null)
-                {
-                    SearchTextPopup.IsOpen = false;
-                }
                 break;
 
             case VirtualKey.Down:
@@ -593,18 +672,6 @@ public sealed partial class TopBarWindow : Window
         }
 
         await ViewModel.ActivateSelectedAsync();
-        if (SearchTextPopup is not null)
-        {
-            SearchTextPopup.IsOpen = false;
-        }
-    }
-
-    private void OnSearchPopupClosed(object sender, object e)
-    {
-        if (string.IsNullOrWhiteSpace(ViewModel.SearchText))
-        {
-            ViewModel.ClearSearch();
-        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
@@ -614,10 +681,6 @@ public sealed partial class TopBarWindow : Window
             if (ViewModel.HasResults || ViewModel.HasQuery)
             {
                 HoldRevealed();
-                if (SearchTextPopup is not null && ViewModel.HasQuery)
-                {
-                    SearchTextPopup.IsOpen = true;
-                }
                 _ = DispatcherQueue.TryEnqueue(() => UpdateOverlayBounds());
             }
             else
@@ -704,10 +767,6 @@ public sealed partial class TopBarWindow : Window
         ViewModel.CloseQuickSettings();
         ViewModel.CloseCalendar();
         ViewModel.ClearSearch();
-        if (SearchTextPopup is not null)
-        {
-            SearchTextPopup.IsOpen = false;
-        }
 
         _collapseAt = DateTimeOffset.UtcNow + CollapseDelay;
     }

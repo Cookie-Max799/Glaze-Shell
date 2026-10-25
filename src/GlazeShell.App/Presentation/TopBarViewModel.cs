@@ -11,6 +11,8 @@ using GlazeShell.Windows.Applications;
 using GlazeShell.Windows.Audio;
 using GlazeShell.Windows.SystemStatus;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
 
 namespace GlazeShell.App.Presentation;
 
@@ -29,6 +31,11 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
 
     private const string DefaultAppName = "Glaze Shell";
 
+    /// <summary>Подпись рабочего стола: его окно тоже становится foreground-окном.</summary>
+    private const string DesktopName = "Рабочий стол";
+
+    private const int AppIconSize = 32;
+
     private readonly IWindowManager _windows;
     private readonly IApplicationLauncher _launcher;
     private readonly GlanceSearchCatalog _catalog;
@@ -39,6 +46,9 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
 
     private string _appName = DefaultAppName;
     private string _appLocation = string.Empty;
+    private ImageSource? _appIcon;
+    private string? _appIconPath;
+    private readonly Dictionary<string, ImageSource> _iconCache = new(StringComparer.OrdinalIgnoreCase);
     private string _clockTime = string.Empty;
     private string _clockDate = string.Empty;
     private string _batteryText = string.Empty;
@@ -111,6 +121,28 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     }
 
     public bool HasLocation => _appLocation.Length > 0;
+
+    /// <summary>
+    /// Значок активного приложения. Пока он не загружен, левая плитка показывает букву-инициал
+    /// на бренд-градиенте, поэтому панель не «мигает» пустотой при смене окна.
+    /// </summary>
+    public ImageSource? AppIcon
+    {
+        get => _appIcon;
+        private set
+        {
+            if (Set(ref _appIcon, value))
+            {
+                OnPropertyChanged(nameof(HasAppIcon));
+                OnPropertyChanged(nameof(IsAppIconFallback));
+            }
+        }
+    }
+
+    public bool HasAppIcon => _appIcon is not null;
+
+    /// <summary>Плитка-инициал показывается только пока настоящий значок не загружен.</summary>
+    public bool IsAppIconFallback => _appIcon is null;
 
     public string AppInitial =>
         string.IsNullOrEmpty(_appName) ? "?" : char.ToUpperInvariant(_appName[0]).ToString();
@@ -414,6 +446,46 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         _ = _dispatcher.TryEnqueue(() => ApplyForeground(changed.Window));
     }
 
+    /// <summary>
+    /// Обновляет левую плитку по активному окну. Событие трекера окон приходит только для
+    /// чужих окон, поэтому возврат в Glaze Shell по нему не виден: полное чтение окна
+    /// выполняется при смене процесса активного окна.
+    /// </summary>
+    public void RefreshForeground()
+    {
+        WindowInfo? foreground;
+
+        try
+        {
+            foreground = _windows.GetForegroundWindow();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            Trace.WriteLine($"GlazeShell.TopBar: reading the foreground window failed. {exception}");
+            return;
+        }
+
+        if (foreground is null)
+        {
+            AppName = DefaultAppName;
+            AppLocation = string.Empty;
+            ApplyAppIcon(Environment.ProcessPath);
+            return;
+        }
+
+        // В фокусе сама оболочка — плитка показывает Glaze Shell, как строка меню macOS
+        // показывает активное приложение, а не предыдущее.
+        if (foreground.ProcessId == _ownProcessId)
+        {
+            AppName = DefaultAppName;
+            AppLocation = string.Empty;
+            ApplyAppIcon(Environment.ProcessPath);
+            return;
+        }
+
+        ApplyForeground(foreground);
+    }
+
     private void ApplyForeground(WindowInfo? window)
     {
         if (window is null)
@@ -432,6 +504,16 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
 
         // Событие приходит без сведений о процессе, поэтому имя уточняется по идентификатору.
         var resolved = window.ProcessName is null ? _windows.GetWindow(window.Id) ?? window : window;
+
+        // Рабочий стол — тоже foreground-окно, но имя процесса у него ничего не объясняет.
+        if (IsDesktop(resolved))
+        {
+            AppName = DesktopName;
+            AppLocation = string.Empty;
+            ApplyAppIcon(null);
+            return;
+        }
+
         var name = ApplicationNameResolver.GetFriendlyName(resolved.ProcessId)
             ?? resolved.ProcessName
             ?? resolved.Title;
@@ -440,6 +522,70 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
 
         var location = resolved.Title;
         AppLocation = string.Equals(location, AppName, StringComparison.OrdinalIgnoreCase) ? string.Empty : location;
+
+        ApplyAppIcon(resolved.ExecutablePath);
+    }
+
+    /// <summary>Окно рабочего стола: оболочка Explorer без заголовка документа.</summary>
+    private static bool IsDesktop(WindowInfo window) =>
+        string.Equals(window.ProcessName, "explorer", StringComparison.OrdinalIgnoreCase) &&
+        (string.IsNullOrWhiteSpace(window.Title) ||
+         string.Equals(window.Title, "Program Manager", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Показывает значок приложения в левой плитке. Значок достаётся в фоне и кэшируется по
+    /// пути: извлечение иконки через shell — небыстрая операция, а <c>WriteableBitmap</c>
+    /// обязан создаваться на потоке интерфейса. Пока значка нет, плитка показывает букву.
+    /// </summary>
+    private void ApplyAppIcon(string? path)
+    {
+        if (string.Equals(path, _appIconPath, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _appIconPath = path;
+
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            AppIcon = null;
+            return;
+        }
+
+        if (_iconCache.TryGetValue(path, out var cached))
+        {
+            AppIcon = cached;
+            return;
+        }
+
+        AppIcon = null;
+        var captured = path;
+
+        _ = Task.Run(() =>
+        {
+            var pixels = ShellIconProvider.TryGetIcon(captured, AppIconSize);
+
+            if (pixels is null)
+            {
+                return;
+            }
+
+            _ = _dispatcher.TryEnqueue(() =>
+            {
+                // Пользователь мог уже переключиться на другое окно: устаревший значок
+                // не должен перебивать актуальный.
+                if (!string.Equals(captured, _appIconPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                if (IconBitmap.Create(pixels) is { } source)
+                {
+                    _iconCache[captured] = source;
+                    AppIcon = source;
+                }
+            });
+        });
     }
 
     private void RefreshClockAndStatus()
