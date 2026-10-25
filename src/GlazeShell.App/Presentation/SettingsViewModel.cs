@@ -155,7 +155,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged, IDisposable
     private readonly List<SettingRowViewModel> _allRows = [];
     private SettingsPageItemViewModel? _selectedPage;
     private string _searchText = string.Empty;
-    private string _emptyHint = "На этой странице пока нет настроек — раздел появится в следующих слайсах.";
+    private string _emptyHint = "На этой странице нет настроек.";
 
     public SettingsViewModel(ISettingsManager settings, IEventManager events)
     {
@@ -296,7 +296,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged, IDisposable
 
         _emptyHint = searching
             ? "Ничего не найдено. Попробуйте другое слово."
-            : "На этой странице пока нет настроек — раздел появится в следующих слайсах.";
+            : "На этой странице нет настроек.";
 
         OnPropertyChanged(nameof(HasSettings));
         OnPropertyChanged(nameof(IsEmpty));

@@ -127,9 +127,9 @@ public sealed partial class ExplorerWindow : Window
         }
     }
 
-    private void OnItemDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    private void OnItemClick(object sender, ItemClickEventArgs e)
     {
-        if ((sender as FrameworkElement)?.DataContext is ExplorerItemViewModel item)
+        if (e.ClickedItem is ExplorerItemViewModel item)
         {
             _ = ViewModel.OpenItemAsync(item);
         }

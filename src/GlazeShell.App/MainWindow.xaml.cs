@@ -87,43 +87,6 @@ public sealed partial class MainWindow : Window
     private void OnLaunchClick(object sender, RoutedEventArgs e) =>
         ViewModel.LaunchCommand.Execute(null);
 
-    /// <summary>
-    /// Переключатель верхней панели. Привязка односторонняя намеренно: <c>CheckBox.IsChecked</c> —
-    /// это <c>bool?</c>, и <c>x:Bind</c> с <c>Mode=TwoWay</c> на загрузке окна записывает в источник
-    /// своё стартовое значение (<c>false</c>), сбрасывая настройку. Поэтому состояние читается
-    /// из самого переключателя по клику.
-    /// </summary>
-    private void OnTopBarToggle(object sender, RoutedEventArgs e)
-    {
-        if (sender is CheckBox toggle)
-        {
-            ViewModel.IsTopBarEnabled = toggle.IsChecked == true;
-        }
-    }
-
-    /// <summary>
-    /// Переключатель dock. См. <see cref="OnTopBarToggle"/>: по той же причине привязка односторонняя.
-    /// </summary>
-    private void OnDockToggle(object sender, RoutedEventArgs e)
-    {
-        if (sender is CheckBox toggle)
-        {
-            ViewModel.IsDockEnabled = toggle.IsChecked == true;
-        }
-    }
-
-    /// <summary>
-    /// Переключатель замены системной панели задач. См. <see cref="OnTopBarToggle"/>:
-    /// привязка односторонняя, состояние читается из переключателя по клику.
-    /// </summary>
-    private void OnReplaceTaskbarToggle(object sender, RoutedEventArgs e)
-    {
-        if (sender is CheckBox toggle)
-        {
-            ViewModel.IsDockReplacesTaskbar = toggle.IsChecked == true;
-        }
-    }
-
     private void OnCloseClick(object sender, RoutedEventArgs e) =>
         ViewModel.CloseCommand.Execute(null);
 

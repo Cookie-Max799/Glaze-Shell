@@ -45,12 +45,12 @@
         <Border
             Background="{StaticResource GlazeGlassBrush}"
             BorderThickness="0"
-            CornerRadius="16,16,0,0"
+            CornerRadius="22,22,0,0"
             IsHitTestVisible="False" />
 
         <ItemsControl
             x:Name="Tiles"
-            Padding="16,6,16,4"
+            Padding="28,20,28,8"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             ItemsSource="{x:Bind ViewModel.Items}">
@@ -69,6 +69,7 @@
                     <Grid>
                         <!--  Плитка приложения: только значок, без подложки.  -->
                         <Border
+                            x:Name="TileBorder"
                             Width="40"
                             Height="40"
                             AutomationProperties.Name="{x:Bind ToolTip, Mode=OneWay}"

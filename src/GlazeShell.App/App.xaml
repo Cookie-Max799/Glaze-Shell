@@ -57,12 +57,12 @@
             <SolidColorBrush x:Key="FocusVisualSecondaryBrush" Color="#A99BFF" />
 
             <Style x:Key="ApplicationCardStyle" TargetType="ListViewItem">
-            <Setter Property="Background" Value="{StaticResource GlazeSurfaceBrush}" />
-            <Setter Property="CornerRadius" Value="12" />
-            <Setter Property="Margin" Value="0,0,0,8" />
-            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-            <Setter Property="Padding" Value="0" />
-            <Setter Property="UseSystemFocusVisuals" Value="True" />
+                <Setter Property="Background" Value="{StaticResource GlazeSurfaceBrush}" />
+                <Setter Property="CornerRadius" Value="16" />
+                <Setter Property="Margin" Value="0,0,0,8" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="UseSystemFocusVisuals" Value="True" />
             </Style>
         </ResourceDictionary>
     </Application.Resources>

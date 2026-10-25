@@ -169,15 +169,12 @@ public sealed class ThemeApplicator
     private static void ApplyBrushes(GlazeTheme theme, Color accent)
     {
         var selection = GlazePalette.WithAlpha(accent, SelectionAlpha);
-        var glass = GlazePalette.WithAlpha(accent, 0x55);
-        var surface = GlazePalette.WithAlpha(accent, 0x14);
-        var elevated = GlazePalette.WithAlpha(accent, 0x24);
 
         SetBrush(BackgroundKey, theme.Background);
-        SetBrush(SurfaceKey, surface);
-        SetBrush(ElevatedKey, elevated);
+        SetBrush(SurfaceKey, theme.Surface);
+        SetBrush(ElevatedKey, theme.Elevated);
         SetBrush(BorderKey, Color.FromArgb(0x00, 0x00, 0x00, 0x00));
-        SetBrush(GlassKey, glass);
+        SetBrush(GlassKey, theme.Glass);
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         SetBrush(TextPrimaryKey, theme.TextPrimary);
@@ -186,8 +183,8 @@ public sealed class ThemeApplicator
         SetBrush(AccentKey, accent);
         SetBrush(SelectionKey, selection);
 
-        SetBrush(ListViewItemPointerOverKey, elevated);
-        SetBrush(ListViewItemPressedKey, elevated);
+        SetBrush(ListViewItemPointerOverKey, theme.Elevated);
+        SetBrush(ListViewItemPressedKey, theme.Elevated);
         SetBrush(ListViewItemSelectedKey, selection);
         SetBrush(ListViewItemSelectedPointerOverKey, selection);
         SetBrush(ListViewItemSelectedPressedKey, selection);

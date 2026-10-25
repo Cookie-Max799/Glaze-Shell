@@ -32,26 +32,70 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
-                <RowDefinition Height="30" />
+                <RowDefinition Height="26" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!--  Левая плитка пустая для баланса.  -->
+            <!--  Левая плитка: активное приложение (DESIGN §7.1) — плитка, имя и расположение.  -->
             <Border
                 x:Name="AppPill"
                 Grid.Row="0"
                 Grid.Column="0"
-                Width="1"
-                IsHitTestVisible="False" />
+                Margin="0,3"
+                Padding="6,0,10,0"
+                VerticalAlignment="Center"
+                AutomationProperties.Name="Активное приложение"
+                Background="{StaticResource GlazeElevatedBrush}"
+                CornerRadius="16"
+                IsHitTestVisible="False">
+                <StackPanel
+                    Orientation="Horizontal"
+                    Spacing="7"
+                    VerticalAlignment="Center">
+                    <Border
+                        Width="20"
+                        Height="20"
+                        Background="{StaticResource GlazeBrandGradientBrush}"
+                        CornerRadius="6">
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="10"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource GlazeWhiteBrush}"
+                            Text="{x:Bind ViewModel.AppInitial, Mode=OneWay}" />
+                    </Border>
+                    <TextBlock
+                        MaxWidth="200"
+                        VerticalAlignment="Center"
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                        Text="{x:Bind ViewModel.AppName, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis" />
+                    <FontIcon
+                        VerticalAlignment="Center"
+                        FontSize="8"
+                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                        Glyph="&#xE70D;" />
+                    <TextBlock
+                        MaxWidth="260"
+                        VerticalAlignment="Center"
+                        FontSize="11"
+                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                        Text="{x:Bind ViewModel.AppLocation, Mode=OneWay}"
+                        TextTrimming="CharacterEllipsis"
+                        Visibility="{x:Bind ViewModel.HasLocation, Mode=OneWay}" />
+                </StackPanel>
+            </Border>
 
             <!--  Центральная плитка: поиск.  -->
             <Grid
                 x:Name="SearchHit"
                 Grid.Row="0"
                 Grid.Column="1"
-                Width="36"
-                Height="36"
-                HorizontalAlignment="Right"
+                Height="24"
+                HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 Background="Transparent"
                 AutomationProperties.Name="Поиск"
@@ -60,19 +104,37 @@
                 Tapped="OnSearchPointerPressed">
                 <Border
                     x:Name="SearchPill"
-                    Width="28"
-                    Height="28"
+                    Padding="9,0"
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Background="{StaticResource GlazeElevatedBrush}"
-                    CornerRadius="14"
+                    CornerRadius="12"
                     IsHitTestVisible="False">
-                    <FontIcon
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        FontSize="12"
-                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                        Glyph="&#xE721;" />
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        VerticalAlignment="Center">
+                        <FontIcon
+                            VerticalAlignment="Center"
+                            FontSize="11"
+                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                            Glyph="&#xE721;" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            FontSize="11"
+                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                            Text="Поиск приложений, файлов, настроек…" />
+                        <Border
+                            Padding="5,1"
+                            VerticalAlignment="Center"
+                            Background="{StaticResource GlazeSurfaceBrush}"
+                            CornerRadius="6">
+                            <TextBlock
+                                FontSize="9.5"
+                                Foreground="{StaticResource GlazeTextMutedBrush}"
+                                Text="Ctrl K" />
+                        </Border>
+                    </StackPanel>
                 </Border>
             </Grid>
 
@@ -80,15 +142,15 @@
                 x:Name="SearchTextPopup"
                 Grid.Row="0"
                 Grid.Column="1"
-                HorizontalAlignment="Right"
+                HorizontalAlignment="Center"
                 VerticalAlignment="Top"
                 IsOpen="False"
                 IsLightDismissEnabled="True"
                 Closed="OnSearchPopupClosed">
                 <Border
-                    Width="320"
+                    Width="440"
                     Margin="0,34,0,0"
-                    Padding="10,6"
+                    Padding="12,6"
                     Background="{StaticResource GlazeGlassBrush}"
                     CornerRadius="16">
                     <TextBox
@@ -104,44 +166,44 @@
                 </Border>
             </Popup>
 
-            <!--  Правая плитка: статус и часы.  -->
+            <!--  Правая плитка: статус (сеть, звук, батарея) и часы (DESIGN §7.1).  -->
             <Border
                 x:Name="StatusPill"
                 Grid.Row="0"
                 Grid.Column="2"
-                Padding="12,0"
-                Margin="0,4"
+                Margin="0,3"
+                Padding="10,0"
                 AutomationProperties.Name="Центр управления"
                 Background="{StaticResource GlazeElevatedBrush}"
-                CornerRadius="18"
+                CornerRadius="16"
                 IsTabStop="True"
                 KeyDown="OnStatusKeyDown"
                 PointerPressed="OnStatusPointerPressed">
                 <StackPanel
                     Orientation="Horizontal"
-                    Spacing="10"
+                    Spacing="9"
                     VerticalAlignment="Center">
-                    <TextBlock
+                    <FontIcon
                         VerticalAlignment="Center"
-                        MaxWidth="260"
-                        FontSize="11"
-                        FontWeight="SemiBold"
-                        Foreground="{StaticResource GlazeTextPrimaryBrush}"
-                        Text="{x:Bind ViewModel.AppName, Mode=OneWay}"
-                        TextTrimming="CharacterEllipsis" />
-                    <TextBlock
-                        VerticalAlignment="Center"
-                        FontSize="11"
+                        FontSize="12"
                         Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                        Text="{x:Bind ViewModel.CpuText, Mode=OneWay}" />
+                        Glyph="{x:Bind ViewModel.NetworkGlyph, Mode=OneWay}"
+                        ToolTipService.ToolTip="{x:Bind ViewModel.NetworkText, Mode=OneWay}" />
+                    <FontIcon
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                        Glyph="{x:Bind ViewModel.QuickSettings.VolumeGlyph, Mode=OneWay}"
+                        ToolTipService.ToolTip="{x:Bind ViewModel.QuickSettings.VolumeLabel, Mode=OneWay}" />
                     <StackPanel
                         Orientation="Horizontal"
                         Spacing="3"
                         AutomationProperties.Name="Питание"
-                        ToolTipService.ToolTip="Питание">
+                        ToolTipService.ToolTip="Питание"
+                        Visibility="{x:Bind ViewModel.HasBattery, Mode=OneWay}">
                         <FontIcon
                             VerticalAlignment="Center"
-                            FontSize="13"
+                            FontSize="12"
                             Foreground="{StaticResource GlazeTextSecondaryBrush}"
                             Glyph="{x:Bind ViewModel.BatteryGlyph, Mode=OneWay}" />
                         <TextBlock
@@ -153,19 +215,20 @@
 
                     <Rectangle
                         Width="1"
-                        Height="16"
-                        Fill="{StaticResource GlazeBorderBrush}" />
+                        Height="14"
+                        Fill="{StaticResource GlazeTextMutedBrush}"
+                        Opacity="0.4" />
 
                     <Button
                         x:Name="ClockButton"
-                        Height="24"
-                        Padding="6,0"
+                        Height="20"
+                        Padding="2,0"
                         VerticalAlignment="Center"
                         AutomationProperties.Name="Дата и время — открыть календарь"
                         Background="Transparent"
                         BorderThickness="0"
                         Click="OnClockClick"
-                        CornerRadius="8"
+                        CornerRadius="6"
                         HorizontalContentAlignment="Right"
                         ToolTipService.ToolTip="Календарь">
                         <StackPanel
@@ -383,23 +446,31 @@
                         FontSize="11.5"
                         Foreground="{StaticResource GlazeTextMutedBrush}"
                         Text="СИСТЕМА" />
-                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Stretch">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
                         <Button
+                            Grid.Column="0"
                             HorizontalAlignment="Stretch"
                             Click="OnOpenNetworkSettings"
                             Content="Сеть"
                             CornerRadius="16" />
                         <Button
+                            Grid.Column="1"
                             HorizontalAlignment="Stretch"
                             Click="OnOpenBluetoothSettings"
                             Content="Bluetooth"
                             CornerRadius="16" />
                         <Button
+                            Grid.Column="2"
                             HorizontalAlignment="Stretch"
                             Click="OnOpenSoundSettings"
                             Content="Звук"
                             CornerRadius="16" />
-                    </StackPanel>
+                    </Grid>
                 </StackPanel>
             </StackPanel>
         </Border>

@@ -234,7 +234,8 @@
                 <GridView
                     x:Name="IconView"
                     Padding="14"
-                    IsItemClickEnabled="False"
+                    IsItemClickEnabled="True"
+                    ItemClick="OnItemClick"
                     ItemsSource="{x:Bind ViewModel.Items}"
                     KeyDown="OnItemsKeyDown"
                     SelectionMode="Single"
@@ -246,7 +247,6 @@
                                 Padding="4"
                                 AutomationProperties.Name="{x:Bind Name, Mode=OneWay}"
                                 Background="Transparent"
-                                DoubleTapped="OnItemDoubleTapped"
                                 Spacing="6"
                                 ToolTipService.ToolTip="{x:Bind ToolTip}">
                                 <Grid Height="52" HorizontalAlignment="Center">
@@ -318,7 +318,8 @@
                         x:Name="ItemsList"
                         Grid.Row="1"
                         Padding="0,6"
-                        IsItemClickEnabled="False"
+                        IsItemClickEnabled="True"
+                        ItemClick="OnItemClick"
                         ItemsSource="{x:Bind ViewModel.Items}"
                         KeyDown="OnItemsKeyDown"
                         SelectionMode="Single">
@@ -328,7 +329,6 @@
                                     Background="Transparent"
                                     ColumnSpacing="8"
                                     AutomationProperties.Name="{x:Bind Name, Mode=OneWay}"
-                                    DoubleTapped="OnItemDoubleTapped"
                                     ToolTipService.ToolTip="{x:Bind ToolTip}">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />

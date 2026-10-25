@@ -11,9 +11,6 @@ namespace GlazeShell.Core.Settings;
 /// </summary>
 public static class SettingsCatalog
 {
-    /// <summary>Идентификатор страницы «Общие».</summary>
-    public const string GeneralPageId = "general";
-
     /// <summary>Идентификатор страницы «Оформление».</summary>
     public const string AppearancePageId = "appearance";
 
@@ -22,9 +19,6 @@ public static class SettingsCatalog
 
     /// <summary>Идентификатор страницы «Верхняя панель».</summary>
     public const string TopBarPageId = "topbar";
-
-    /// <summary>Идентификатор страницы «Glance».</summary>
-    public const string GlancePageId = "glance";
 
     /// <summary>Идентификатор страницы «Проводник».</summary>
     public const string ExplorerPageId = "explorer";
@@ -37,22 +31,15 @@ public static class SettingsCatalog
 
     /// <summary>Идентификатор страницы «О программе».</summary>
     public const string AboutPageId = "about";
-
     /// <summary>Все страницы настроек в порядке сайдбара.</summary>
     public static IReadOnlyList<SettingsPage> Pages { get; } =
     [
-        new(GeneralPageId, "Общие", "\uE713", "Основные"),
         new(AppearancePageId, "Оформление", "\uE790", "Основные"),
         new(DockPageId, "Dock", "\uE8FC", "Интерфейс"),
         new(TopBarPageId, "Верхняя панель", "\uE7C4", "Интерфейс"),
-        new(GlancePageId, "Glance", "\uE721", "Интерфейс"),
         new(ExplorerPageId, "Проводник", "\uE8B7", "Интерфейс"),
         new(AccessibilityPageId, "Доступность", "\uE776", "Система"),
         new(RecoveryPageId, "Восстановление", "\uE90F", "Система"),
-        new("windows", "Windows", "\uE782", "Система"),
-        new("notifications", "Уведомления", "\uEA8F", "Система"),
-        new("shortcuts", "Горячие клавиши", "\uE765", "Система"),
-        new("privacy", "Приватность", "\uE72E", "Система"),
         new(AboutPageId, "О программе", "\uE946", "Система"),
     ];
 
@@ -93,40 +80,6 @@ public static class SettingsCatalog
 
     private static IReadOnlyList<SettingDefinition> BuildDefinitions() =>
     [
-        // Основные.
-        new(
-            "startWithWindows",
-            GeneralPageId,
-            "Запускать при входе в систему",
-            "Glaze Shell стартует вместе с Windows и сразу показывает панели.",
-            ["автозапуск", "startup", "login", "автостарт"],
-            SettingKind.Toggle,
-            settings => settings.StartWithWindows,
-            (settings, value) => UserSettingsEditor.With(settings, startWithWindows: AsBool(value)),
-            []),
-
-        new(
-            "minimizeToTray",
-            GeneralPageId,
-            "Сворачивать в трей",
-            "Кнопка сворачивания убирает окно, а не закрывает приложение.",
-            ["трей", "tray", "свернуть", "minimize"],
-            SettingKind.Toggle,
-            settings => settings.MinimizeToTray,
-            (settings, value) => UserSettingsEditor.With(settings, minimizeToTray: AsBool(value)),
-            []),
-
-        new(
-            "restoreLastLayout",
-            GeneralPageId,
-            "Восстанавливать раскладку",
-            "При запуске возвращать расположение панелей и рабочих столов.",
-            ["раскладка", "layout", "восстановление"],
-            SettingKind.Toggle,
-            settings => settings.RestoreLastLayout,
-            (settings, value) => UserSettingsEditor.With(settings, restoreLastLayout: AsBool(value)),
-            []),
-
         // Оформление.
         new(
             "themeMode",
@@ -157,23 +110,6 @@ public static class SettingsCatalog
                 return string.IsNullOrWhiteSpace(accent)
                     ? UserSettingsEditor.With(settings, clearAccent: true)
                     : UserSettingsEditor.With(settings, accentId: accent);
-            },
-            BuildAccentChoices()),
-
-        new(
-            "baseColorId",
-            AppearancePageId,
-            "Основной цвет",
-            "Базовая цветовая схема оформления.",
-            ["основной", "base", "цвет", "scheme", "палитра"],
-            SettingKind.Choice,
-            settings => settings.BaseColorId ?? string.Empty,
-            (settings, value) =>
-            {
-                var baseColor = value as string;
-                return string.IsNullOrWhiteSpace(baseColor)
-                    ? UserSettingsEditor.With(settings, clearBaseColor: true)
-                    : UserSettingsEditor.With(settings, baseColorId: baseColor);
             },
             BuildAccentChoices()),
 

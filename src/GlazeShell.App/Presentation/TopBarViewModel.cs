@@ -45,7 +45,6 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     private string _batteryGlyph = "\uE83F";
     private string _networkGlyph = "\uE702";
     private string _networkText = "Нет сети";
-    private string _cpuText = "CPU 0%";
     private string _searchText = string.Empty;
     private GlanceResultViewModel? _selectedResult;
     private bool _hasBattery;
@@ -150,12 +149,6 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     {
         get => _networkText;
         private set => Set(ref _networkText, value);
-    }
-
-    public string CpuText
-    {
-        get => _cpuText;
-        private set => Set(ref _cpuText, value);
     }
 
     public bool IsOnline
@@ -467,9 +460,6 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         IsOnline = online;
         NetworkGlyph = online ? "\uE701" : "\uE702";
         NetworkText = online ? "В сети" : "Нет сети";
-
-        var cpu = SystemStatusProvider.GetCpuUsage();
-        CpuText = string.Create(CultureInfo.CurrentCulture, $"CPU {cpu:0}%");
     }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

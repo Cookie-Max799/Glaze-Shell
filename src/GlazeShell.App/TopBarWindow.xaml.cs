@@ -34,9 +34,6 @@ public sealed partial class TopBarWindow : Window
     /// <summary>Радиус нижних углов полосы.</summary>
     private const int BarRadius = 24;
 
-    /// <summary>Ширина строки поиска: она же служит ограничением при измерении панели результатов.</summary>
-    private const int SearchWidth = 440;
-
     /// <summary>Ширина popover «Центр управления».</summary>
     private const int QuickSettingsWidth = 380;
 
@@ -176,19 +173,27 @@ public sealed partial class TopBarWindow : Window
 
         ViewModel.CloseQuickSettings();
         ViewModel.CloseCalendar();
-        ViewModel.SearchText = string.Empty;
+        ViewModel.ClearSearch();
         RevealImmediately();
         OverlayWindow.SetNonActivating(_hwnd, false);
         Activate();
+
         if (SearchTextPopup is not null)
         {
             SearchTextPopup.IsOpen = true;
         }
-        _ = DispatcherQueue.TryEnqueue(() => UpdateOverlayBounds());
-        if (PopupSearchBox is not null)
+
+        // Фокус ставится после того, как popup раскрылся и окно получило размер: сразу после
+        // вызова он уходил бы в ещё не готовое поле и курсор не появлялся.
+        _ = DispatcherQueue.TryEnqueue(() =>
         {
-            PopupSearchBox.Focus(FocusState.Programmatic);
-        }
+            UpdateOverlayBounds();
+
+            if (PopupSearchBox is not null)
+            {
+                PopupSearchBox.Focus(FocusState.Programmatic);
+            }
+        });
     }
 
     private void ConfigureOverlay()
@@ -422,7 +427,7 @@ public sealed partial class TopBarWindow : Window
 
         OverlayWindow.ApplyBottomRoundedRegions(
             _hwnd,
-            new PixelRect(0, 0, clientWidth, barHeight),
+            new PixelRect(-1, 0, clientWidth + 2, barHeight),
             barRadius,
             regions);
 
@@ -450,10 +455,7 @@ public sealed partial class TopBarWindow : Window
     /// Клик по строке поиска временно разрешает активацию окна, чтобы поле получило фокус
     /// ввода. Остальное время окно не перехватывает фокус активного приложения.
     /// </summary>
-    private void OnSearchPointerPressed(object sender, object e)
-    {
-        FocusSearch();
-    }
+    private void OnSearchPointerPressed(object sender, object e) => FocusSearch();
 
     /// <summary>
     /// Клик по правому pill открывает «Центр управления» (D1): окно разрешает активацию,

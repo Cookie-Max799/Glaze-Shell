@@ -26,20 +26,21 @@ namespace GlazeShell.App;
 /// </summary>
 public sealed partial class DockWindow : Window
 {
-    private const int TileSize = 36;
-    private const int Gap = 4;
+    private const int TileSize = 40;
+    private const int Gap = 5;
     private const int SeparatorWidth = 2;
-    private const int PaddingHorizontal = 16;
-    private const int PaddingTop = 6;
-    private const int PaddingBottom = 4;
+    private const int PaddingHorizontal = 28;
+    private const int PaddingTop = 20;
+    private const int PaddingBottom = 8;
 
-    /// <summary>Радиус капсулы dock (DESIGN §7.5: радиус 36).</summary>
-    private const int PillRadius = 16;
+    /// <summary>Радиус капсулы dock (DESIGN §7.5: радиус 22).</summary>
+    private const int PillRadius = 22;
 
     /// <summary>
-    /// Максимальный подъём и масштаб плитки под курсором (DESIGN §7.5: 16 px / 1.2).
-    /// Верхний отступ окна (16 px) подобран так, чтобы увеличенная плитка не выходила
-    /// за границы капсулы: 4 px прироста + 12 px подъёма = 16 px.
+    /// Максимальный подъём и масштаб плитки под курсором (DESIGN §7.5: 12 px / 1.2).
+    /// Верхний отступ окна (20 px) подобран так, чтобы увеличенная плитка не выходила
+    /// за границы капсулы: 8 px прироста (плитка 40 → 48 растёт от нижней кромки) плюс
+    /// 12 px подъёма = 20 px.
     /// </summary>
     private const double HoverLift = 12;
     private const double HoverScale = 1.2;
@@ -581,7 +582,9 @@ public sealed partial class DockWindow : Window
         {
             var child = VisualTreeHelper.GetChild(parent, i);
 
-            if (child is Border { Width: TileSize } border)
+            // Плитка опознаётся по имени из разметки: сравнение по ширине ломалось, стоило
+            // поправить размер в XAML, и магнификация молча переставала работать.
+            if (child is Border { Name: "TileBorder" } border)
             {
                 return border;
             }
