@@ -224,7 +224,6 @@ public sealed partial class TopBarWindow : Window
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         OverlayWindow.MakeTopMostToolWindow(_hwnd);
         OverlayWindow.SetNonActivating(_hwnd, true);
-        OverlayWindow.UseRoundedCorners(_hwnd);
 
         UpdateOverlayBounds();
         OverlayWindow.ShowWithoutActivation(_hwnd);
@@ -461,6 +460,7 @@ public sealed partial class TopBarWindow : Window
     /// <summary>
     /// Вырезает из окна полосу во всю ширину со скруглённым низом и всплывающие панели.
     /// </summary>
+    [System.Diagnostics.Conditional("GLAZE_WINDOW_REGION")]
     private void UpdateWindowRegion()
     {
         if (_hwnd == 0 || !OverlayWindow.TryGetClientSize(_hwnd, out var clientWidth, out _))

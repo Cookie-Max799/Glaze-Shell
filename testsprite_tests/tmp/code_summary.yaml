@@ -1,0 +1,61 @@
+project_name: Glaze Shell
+project_type: desktop
+description: Windows shell replacement built with WinUI 3 / Windows App SDK. Custom top bar, dock, overlays, glance/search, quick settings, calendar, window/process monitoring and native Windows integration.
+
+tech_stack:
+  - name: C#
+    version: "net10.0 / net10.0-windows10.0.19041.0"
+  - name: WinUI 3
+    version: "Windows App SDK"
+  - name: XAML
+    version: "WinUI"
+  - name: P/Invoke / Win32
+    version: "User32/GDI32/Kernel32/COM"
+  - name: JSON
+    version: "System.Text.Json"
+
+features:
+  - name: TopBar
+    description: Custom top bar with app name, search, system status/clock, overlays for search/quick settings/calendar
+  - name: Dock
+    description: App dock with pinned/running apps, hover/animations, overlay region for hit-testing
+  - name: Glance/Search
+    description: App/window search with ranking (GlanceRanker), popup search UI, Ctrl+K integration
+  - name: Quick Settings
+    description: Network/Bluetooth/Sound quick actions, toggle panel
+  - name: Calendar
+    description: Calendar popup from clock
+  - name: Window Management
+    description: Window tracking, activation/focus handling, overlays
+  - name: Process/System Monitoring
+    description: Process list, CPU/memory/network status via native APIs
+  - name: Theming
+    description: Acrylic/glass-like materials, custom styles
+
+architecture:
+  projects:
+    - GlazeShell.App: WinUI 3 app, UI/windows, ViewModels, DI/composition
+    - GlazeShell.Core: Domain models, interfaces, events, Glance logic
+    - GlazeShell.Data: Persistence (JSON), settings/migrations
+    - GlazeShell.Infrastructure: Logging, paths, diagnostics
+    - GlazeShell.Windows: Win32/COM interop, hooks, native integrations
+  tests:
+    - GlazeShell.Core.Tests
+    - GlazeShell.Data.Tests
+    - GlazeShell.Windows.Tests
+
+entry_points:
+  - src/GlazeShell.App/App.xaml.cs
+  - src/GlazeShell.App/Program.cs
+
+build:
+  solution: GlazeShell.slnx
+  script: glaze.cmd
+  platform: x64
+  configuration: Debug/Release
+
+ui_files:
+  - src/GlazeShell.App/TopBarWindow.xaml
+  - src/GlazeShell.App/TopBarWindow.xaml.cs
+  - src/GlazeShell.App/DockWindow.xaml
+  - src/GlazeShell.App/DockWindow.xaml.cs
