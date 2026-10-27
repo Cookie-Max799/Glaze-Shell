@@ -23,7 +23,11 @@ namespace GlazeShell.App.Presentation;
 /// </remarks>
 public sealed class ExplorerViewModel : INotifyPropertyChanged
 {
-    private const int IconSize = 48;
+    /// <summary>Логический размер значка в сетке Explorer: совпадает с разметкой (48 DIP).</summary>
+    private const double IconDips = 48;
+
+    /// <summary>Верхняя граница запроса значка: защита от неверного масштаба монитора.</summary>
+    private const int MaxIconPixels = 256;
 
     private readonly IFileSystemBrowser _browser;
     private readonly ISettingsManager _settings;
@@ -43,6 +47,30 @@ public sealed class ExplorerViewModel : INotifyPropertyChanged
     private ExplorerSortOption _selectedSort;
     private ExplorerViewOption _selectedView;
     private ExplorerViewMode _viewMode;
+
+    /// <summary>Масштаб монитора, под который запрашиваются значки (1.0 при 96 DPI).</summary>
+    private double _iconScale = 1.0;
+
+    /// <summary>Размер запроса значка в физических пикселях отображения.</summary>
+    private int IconSize =>
+        Math.Clamp((int)Math.Round(IconDips * _iconScale), (int)IconDips, MaxIconPixels);
+
+    /// <summary>
+    /// Пересчитывает значки под масштаб монитора: 48 DIP при 125 % — это 60 пикселей, поэтому
+    /// значки, запрошенные под прежний размер, сбрасываются и загружаются заново.
+    /// </summary>
+    public void SetIconScale(double scale)
+    {
+        if (scale <= 0 || Math.Abs(scale - _iconScale) < 0.001)
+        {
+            return;
+        }
+
+        _iconScale = scale;
+        _iconCache.Clear();
+        _iconRequested.Clear();
+        LoadIcons();
+    }
 
     public ExplorerViewModel(IFileSystemBrowser browser, ISettingsManager settings, DispatcherQueue dispatcher)
     {

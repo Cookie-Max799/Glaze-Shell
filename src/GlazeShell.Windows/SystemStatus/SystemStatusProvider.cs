@@ -28,7 +28,7 @@ public static class SystemStatusProvider
     private static ulong _lastIdleTime;
     private static ulong _lastKernelTime;
     private static ulong _lastUserTime;
-    private static DateTime _lastCpuCheck = DateTime.UtcNow;
+    private static bool _hasCpuBaseline;
     private static double _lastCpuUsage;
 
     public static PowerStatus GetPowerStatus()
@@ -80,11 +80,14 @@ public static class SystemStatusProvider
 
     private static ulong ToULong(FILETIME time) => ((ulong)time.High << 32) | time.Low;
 
+    /// <summary>
+    /// Загрузка процессора в процентах за интервал между двумя вызовами. Первый вызов только
+    /// запоминает базовые значения счётчиков ядра и возвращает 0: разницу считать не с чем.
+    /// </summary>
     public static double GetCpuUsage()
     {
         try
         {
-            var now = DateTime.UtcNow;
             if (!GetSystemTimes(out var idle, out var kernel, out var user))
             {
                 return _lastCpuUsage;
@@ -94,12 +97,9 @@ public static class SystemStatusProvider
             var kernelTime = ToULong(kernel);
             var userTime = ToULong(user);
 
-            if (_lastCpuCheck == DateTime.MinValue || _lastCpuCheck == DateTime.UtcNow.AddDays(-1))
+            if (!_hasCpuBaseline)
             {
-                _lastIdleTime = idleTime;
-                _lastKernelTime = kernelTime;
-                _lastUserTime = userTime;
-                _lastCpuCheck = now;
+                StoreCpuSample(idleTime, kernelTime, userTime);
                 return 0;
             }
 
@@ -108,26 +108,28 @@ public static class SystemStatusProvider
             var userDiff = userTime - _lastUserTime;
 
             var total = kernelDiff + userDiff;
+            StoreCpuSample(idleTime, kernelTime, userTime);
+
             if (total == 0)
             {
-                _lastIdleTime = idleTime;
-                _lastKernelTime = kernelTime;
-                _lastUserTime = userTime;
-                _lastCpuCheck = now;
                 return _lastCpuUsage;
             }
 
-            var usage = (1.0 - (double)idleDiff / total) * 100.0;
+            var usage = (1.0 - ((double)idleDiff / total)) * 100.0;
             _lastCpuUsage = Math.Clamp(usage, 0, 100);
-            _lastIdleTime = idleTime;
-            _lastKernelTime = kernelTime;
-            _lastUserTime = userTime;
-            _lastCpuCheck = now;
             return _lastCpuUsage;
         }
         catch
         {
             return 0;
         }
+    }
+
+    private static void StoreCpuSample(ulong idleTime, ulong kernelTime, ulong userTime)
+    {
+        _lastIdleTime = idleTime;
+        _lastKernelTime = kernelTime;
+        _lastUserTime = userTime;
+        _hasCpuBaseline = true;
     }
 }

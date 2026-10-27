@@ -55,6 +55,10 @@ public sealed partial class ExplorerWindow : Window
         _themes.ApplyFromSettings(Root);
         _settingsChanged = events.Subscribe<SettingsChanged>(_ => _themes.ApplyFromSettings(Root));
 
+        // Значки запрашиваются в пикселях отображения: масштаб известен только после загрузки
+        // корневого элемента, когда XamlRoot уже связан с окном.
+        Root.Loaded += (_, _) => ViewModel.SetIconScale(Root.XamlRoot?.RasterizationScale ?? 1.0);
+
         AppWindow.Resize(new SizeInt32(DefaultWidth, DefaultHeight));
 
         Activated += OnActivated;

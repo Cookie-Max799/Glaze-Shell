@@ -223,7 +223,14 @@ public sealed class DockViewModel : IDisposable
     /// <summary>Задержка перед пересборкой списка запущенных: окна появляются пачкой.</summary>
     private static readonly TimeSpan RunningRefreshDelay = TimeSpan.FromMilliseconds(250);
 
-    private const int IconSize = 64;
+    /// <summary>
+    /// Логический размер значка плитки: плитка 40 DIP увеличивается под курсором до 1.2,
+    /// поэтому значок просится под 48 DIP, чтобы увеличение не растягивало пиксели.
+    /// </summary>
+    private const double IconDips = 48;
+
+    /// <summary>Верхняя граница запроса значка: защита от неверного масштаба монитора.</summary>
+    private const int MaxIconPixels = 256;
 
     private readonly IApplicationManager _applications;
     private readonly IApplicationLauncher _launcher;
@@ -249,6 +256,34 @@ public sealed class DockViewModel : IDisposable
     private readonly Dictionary<string, int> _windowCountByAppId = new(StringComparer.OrdinalIgnoreCase);
 
     private bool _initialized;
+
+    /// <summary>Масштаб монитора, под который запрашиваются значки (1.0 при 96 DPI).</summary>
+    private double _iconScale = 1.0;
+
+    /// <summary>Размер запроса значка в физических пикселях отображения.</summary>
+    private int IconSize =>
+        Math.Clamp((int)Math.Round(IconDips * _iconScale), (int)IconDips, MaxIconPixels);
+
+    /// <summary>
+    /// Пересчитывает значки под масштаб монитора (I6). Кэш сбрасывается: значки, запрошенные
+    /// под прежний размер, пришлось бы растягивать на плитке.
+    /// </summary>
+    public void SetIconScale(double scale)
+    {
+        if (scale <= 0 || Math.Abs(scale - _iconScale) < 0.001)
+        {
+            return;
+        }
+
+        _iconScale = scale;
+        _iconCache.Clear();
+        _iconRequested.Clear();
+
+        if (_initialized)
+        {
+            Rebuild();
+        }
+    }
 
     public DockViewModel(
         IApplicationManager applications,

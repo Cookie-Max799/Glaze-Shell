@@ -117,6 +117,36 @@ public sealed partial class TopBarWindow : Window
             UpdateOverlayBounds();
             StartRevealWatch();
             UpdateForegroundState();
+
+            var diag = string.Join(
+                " | ",
+                $"vm.Cpu='{ViewModel.CpuText}'",
+                $"vm.Clock='{ViewModel.ClockTime}'",
+                $"vm.Net='{ViewModel.NetworkGlyph}'",
+                $"vm.App='{ViewModel.AppName}'",
+                $"vm.HasGpu={ViewModel.HasGpu}",
+                $"cpu.Text='{CpuBlock.Text}'",
+                $"cpu.W={CpuBlock.ActualWidth}",
+                $"cpu.Vis={CpuBlock.Visibility}",
+                $"cpu.Fg={(CpuBlock.Foreground as Microsoft.UI.Xaml.Media.SolidColorBrush)?.Color}",
+                $"pill.W={StatusPill.ActualWidth}");
+            System.IO.File.AppendAllText(
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "topbar-diag.txt"),
+                diag + Environment.NewLine);
+
+            var diagTimer = DispatcherQueue.CreateTimer();
+            diagTimer.Interval = TimeSpan.FromSeconds(3);
+            diagTimer.IsRepeating = false;
+            diagTimer.Tick += (_, _) => System.IO.File.AppendAllText(
+                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "topbar-diag.txt"),
+                string.Join(
+                    " | ",
+                    "after3s",
+                    $"vm.Cpu='{ViewModel.CpuText}'",
+                    $"vm.Clock='{ViewModel.ClockTime}'",
+                    $"vm.Net='{ViewModel.NetworkGlyph}'",
+                    $"cpu.Text='{CpuBlock.Text}'") + Environment.NewLine);
+            diagTimer.Start();
         };
         AppPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         if (SearchHit is not null)
@@ -246,6 +276,10 @@ public sealed partial class TopBarWindow : Window
         var target = _monitorTarget.Target;
         var scale = target?.ScaleFactor ?? OverlayWindow.GetScaleFactor(_hwnd);
         _scale = scale <= 0 ? 1.0 : scale;
+
+        // Значок просится в пикселях отображения: при масштабе 125 % и выше 16 DIP — это
+        // больше 16 пикселей, и значок остаётся резким.
+        ViewModel.SetIconScale(_scale);
 
         var logicalHeight = (double)BarHeight;
 

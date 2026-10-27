@@ -187,6 +187,10 @@ public sealed partial class DockWindow : Window
         var target = _monitorTarget.Target;
         var scale = target?.ScaleFactor ?? OverlayWindow.GetScaleFactor(_hwnd);
 
+        // Значки просятся в пикселях отображения: при 125 % плитка 40 DIP с увеличением
+        // до 1.2 требует 60 пикселей, иначе значок растягивается и мылится.
+        ViewModel.SetIconScale(scale);
+
         var tiles = 0;
         var separators = 0;
 

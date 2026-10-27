@@ -193,7 +193,7 @@
                 Padding="10,0"
                 AutomationProperties.Name="Центр управления"
                 Background="{StaticResource GlazeElevatedBrush}"
-                CornerRadius="16"
+                CornerRadius="10"
                 IsTabStop="True"
                 KeyDown="OnStatusKeyDown"
                 PointerPressed="OnStatusPointerPressed">
@@ -230,6 +230,28 @@
                             Foreground="{StaticResource GlazeTextSecondaryBrush}"
                             Text="{x:Bind ViewModel.BatteryText, Mode=OneWay}" />
                     </StackPanel>
+
+                    <TextBlock
+                        x:Name="CpuBlock"
+                        MinWidth="46"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="{x:Bind ViewModel.CpuText, Mode=OneWay}"
+                        FontSize="11"
+                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                        Text="{x:Bind ViewModel.CpuText, Mode=OneWay}"
+                        TextAlignment="Right"
+                        ToolTipService.ToolTip="Загрузка процессора" />
+
+                    <TextBlock
+                        MinWidth="46"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="{x:Bind ViewModel.GpuText, Mode=OneWay}"
+                        FontSize="11"
+                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                        Text="{x:Bind ViewModel.GpuText, Mode=OneWay}"
+                        TextAlignment="Right"
+                        ToolTipService.ToolTip="Загрузка графического процессора"
+                        Visibility="{x:Bind ViewModel.HasGpu, Mode=OneWay}" />
 
                     <Rectangle
                         Width="1"
@@ -282,7 +304,7 @@
                 VerticalAlignment="Top"
                 Background="{StaticResource GlazeGlassBrush}"
                 BorderThickness="0"
-                CornerRadius="16"
+                CornerRadius="32"
                 Visibility="{x:Bind ViewModel.HasResults, Mode=OneWay}">
                 <Grid>
                     <ListView

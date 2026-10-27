@@ -34,7 +34,11 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Подпись рабочего стола: его окно тоже становится foreground-окном.</summary>
     private const string DesktopName = "Рабочий стол";
 
-    private const int AppIconSize = 32;
+    /// <summary>Логический размер значка в левой плитке: совпадает с разметкой (16 DIP).</summary>
+    private const double AppIconDips = 16;
+
+    /// <summary>Верхняя граница запроса значка: защита от неверного масштаба монитора.</summary>
+    private const int MaxIconPixels = 256;
 
     private readonly IWindowManager _windows;
     private readonly IApplicationLauncher _launcher;
@@ -60,6 +64,11 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     private bool _hasBattery;
     private bool _isCharging;
     private bool _isOnline;
+    private double _iconScale = 1.0;
+    private readonly GpuUsageProvider _gpu = new();
+    private int _cpuPercent;
+    private int _gpuPercent;
+    private bool _hasGpu;
 
     public TopBarViewModel(
         IWindowManager windows,
@@ -169,6 +178,73 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     {
         get => _batteryGlyph;
         private set => Set(ref _batteryGlyph, value);
+    }
+
+    /// <summary>Загрузка процессора в виде «ЦП 12 %» для правого pill (A6).</summary>
+    public string CpuText => string.Create(CultureInfo.CurrentCulture, $"ЦП {_cpuPercent}%");
+
+    /// <summary>Загрузка графического процессора в виде «ГП 7 %» для правого pill (A6).</summary>
+    public string GpuText => string.Create(CultureInfo.CurrentCulture, $"ГП {_gpuPercent}%");
+
+    public int CpuPercent
+    {
+        get => _cpuPercent;
+        private set
+        {
+            if (Set(ref _cpuPercent, value))
+            {
+                OnPropertyChanged(nameof(CpuText));
+            }
+        }
+    }
+
+    public int GpuPercent
+    {
+        get => _gpuPercent;
+        private set
+        {
+            if (Set(ref _gpuPercent, value))
+            {
+                OnPropertyChanged(nameof(GpuText));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Есть ли GPU с доступным счётчиком загрузки: индикатор показывается только тогда,
+    /// когда счётчик существует и вернул хотя бы один движок.
+    /// </summary>
+    public bool HasGpu
+    {
+        get => _hasGpu;
+        private set => Set(ref _hasGpu, value);
+    }
+
+    /// <summary>
+    /// Размер запроса значка в физических пикселях: 16 DIP, умноженные на масштаб монитора.
+    /// Значок просится ровно в пикселях отображения, поэтому не размывается интерполяцией
+    /// при масштабе 125 % и выше.
+    /// </summary>
+    private int AppIconSize =>
+        Math.Clamp((int)Math.Round(AppIconDips * _iconScale), (int)AppIconDips, MaxIconPixels);
+
+    /// <summary>
+    /// Пересчитывает значки под масштаб монитора (I6). При смене масштаба кэш сбрасывается:
+    /// значки, запрошенные под прежний размер, пришлось бы растягивать.
+    /// </summary>
+    public void SetIconScale(double scale)
+    {
+        if (scale <= 0 || Math.Abs(scale - _iconScale) < 0.001)
+        {
+            return;
+        }
+
+        _iconScale = scale;
+        _iconCache.Clear();
+
+        var path = _appIconPath;
+        _appIconPath = null;
+        ApplyAppIcon(path);
     }
 
     public string NetworkGlyph
@@ -437,6 +513,7 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         _timer.Stop();
         _foregroundChanged.Dispose();
         QuickSettings.Dispose();
+        _gpu.Dispose();
     }
 
     private void OnForegroundChanged(ForegroundWindowChanged changed)
@@ -606,6 +683,14 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         IsOnline = online;
         NetworkGlyph = online ? "\uE701" : "\uE702";
         NetworkText = online ? "В сети" : "Нет сети";
+
+        CpuPercent = (int)Math.Round(SystemStatusProvider.GetCpuUsage());
+        HasGpu = _gpu.TryGetUsage(out var gpu);
+
+        if (HasGpu)
+        {
+            GpuPercent = (int)Math.Round(gpu);
+        }
     }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

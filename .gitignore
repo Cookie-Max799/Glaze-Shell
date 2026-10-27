@@ -36,6 +36,18 @@ AGENTS.md
 # Локальная входная папка для исходных визуальных ассетов (кладётся вручную, раскладывается по пути)
 assets-src/
 
+# Артефакты тестов и покрытия (не часть репозитория)
+testsprite_tests/
+*.trx
+*.coverage
+*.coveragexml
+coverage*.json
+coverage*.xml
+coverage/
+playwright-report/
+test-results/
+*.received.*
+
 # Дополнительно
 Thumbs.db
 Desktop.ini
