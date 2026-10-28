@@ -106,6 +106,11 @@ public sealed partial class TopBarWindow : Window
         InitializeComponent();
         Title = "Glaze Shell — Верхняя панель";
 
+        // x:Bind в окне обновляются по событию Activated, а панель показывается без
+        // активации (WS_EX_NOACTIVATE), поэтому Activated не приходит и привязки
+        // оставались бы пустыми: без часов, индикаторов нагрузки и иконок.
+        Bindings?.Update();
+
         _themes.ApplyFromSettings(Root);
 
         ConfigureOverlay();
@@ -117,36 +122,6 @@ public sealed partial class TopBarWindow : Window
             UpdateOverlayBounds();
             StartRevealWatch();
             UpdateForegroundState();
-
-            var diag = string.Join(
-                " | ",
-                $"vm.Cpu='{ViewModel.CpuText}'",
-                $"vm.Clock='{ViewModel.ClockTime}'",
-                $"vm.Net='{ViewModel.NetworkGlyph}'",
-                $"vm.App='{ViewModel.AppName}'",
-                $"vm.HasGpu={ViewModel.HasGpu}",
-                $"cpu.Text='{CpuBlock.Text}'",
-                $"cpu.W={CpuBlock.ActualWidth}",
-                $"cpu.Vis={CpuBlock.Visibility}",
-                $"cpu.Fg={(CpuBlock.Foreground as Microsoft.UI.Xaml.Media.SolidColorBrush)?.Color}",
-                $"pill.W={StatusPill.ActualWidth}");
-            System.IO.File.AppendAllText(
-                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "topbar-diag.txt"),
-                diag + Environment.NewLine);
-
-            var diagTimer = DispatcherQueue.CreateTimer();
-            diagTimer.Interval = TimeSpan.FromSeconds(3);
-            diagTimer.IsRepeating = false;
-            diagTimer.Tick += (_, _) => System.IO.File.AppendAllText(
-                System.IO.Path.Combine(System.IO.Path.GetTempPath(), "topbar-diag.txt"),
-                string.Join(
-                    " | ",
-                    "after3s",
-                    $"vm.Cpu='{ViewModel.CpuText}'",
-                    $"vm.Clock='{ViewModel.ClockTime}'",
-                    $"vm.Net='{ViewModel.NetworkGlyph}'",
-                    $"cpu.Text='{CpuBlock.Text}'") + Environment.NewLine);
-            diagTimer.Start();
         };
         AppPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         if (SearchHit is not null)

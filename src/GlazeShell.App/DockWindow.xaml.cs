@@ -113,6 +113,10 @@ public sealed partial class DockWindow : Window
         InitializeComponent();
         Title = "Glaze Shell — Dock";
 
+        // Панель показывается без активации, поэтому Activated не приходит и x:Bind
+        // не обновлялись бы: плитки приложений оставались бы пустыми.
+        Bindings?.Update();
+
         _themes.ApplyFromSettings(Root);
 
         ViewModel.ActivateRequested += OnActivateRequested;

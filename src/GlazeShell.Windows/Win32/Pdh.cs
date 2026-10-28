@@ -46,7 +46,7 @@ internal static class Pdh
     [DllImport("pdh.dll", ExactSpelling = true)]
     internal static extern uint PdhCollectQueryData(nint query);
 
-    [DllImport("pdh.dll", ExactSpelling = true)]
+    [DllImport("pdh.dll", ExactSpelling = true, EntryPoint = "PdhGetFormattedCounterArrayW")]
     internal static extern uint PdhGetFormattedCounterArray(
         nint counter,
         uint format,

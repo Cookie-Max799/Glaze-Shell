@@ -243,6 +243,7 @@
                         ToolTipService.ToolTip="Загрузка процессора" />
 
                     <TextBlock
+                        x:Name="GpuBlock"
                         MinWidth="46"
                         VerticalAlignment="Center"
                         AutomationProperties.Name="{x:Bind ViewModel.GpuText, Mode=OneWay}"

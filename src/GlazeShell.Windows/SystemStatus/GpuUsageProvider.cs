@@ -10,8 +10,9 @@ namespace GlazeShell.Windows.SystemStatus;
 /// </summary>
 /// <remarks>
 /// Используется PDH, а не WMI: счётчик читается за доли миллисекунды и не поднимает службу
-/// WMI ради одного процента. Значение берётся как максимум по экземплярам (движкам) всех
-/// адаптеров — сумма по движкам легко превышает 100 % и не отражает общую загрузку.
+/// WMI ради одного процента. Счётчик отдаёт значение на каждую пару «процесс × движок»,
+/// поэтому сначала складываются процессы одного движка, а затем берётся самый загруженный
+/// движок — сумма по всем движкам легко превышает 100 % и не отражает общую загрузку.
 /// Провайдер best-effort: если счётчика нет (нет GPU, старый драйвер) или он не отдал
 /// ни одного экземпляра, индикатор просто не показывается.
 /// </remarks>
@@ -108,6 +109,11 @@ public sealed class GpuUsageProvider : IDisposable
             var peak = 0.0;
             var itemSize = Marshal.SizeOf<PdhFmtCounterValueItem>();
 
+            // Счётчик отдаёт по экземпляру на каждую пару «процесс × движок», поэтому
+            // сначала складываем значения процессов одного движка, а затем берём самый
+            // загруженный движок: сумма по всем движкам легко превышает 100 %.
+            var engines = new Dictionary<string, double>(StringComparer.Ordinal);
+
             for (var index = 0; index < itemCount; index++)
             {
                 var item = Marshal.PtrToStructure<PdhFmtCounterValueItem>(
@@ -118,9 +124,17 @@ public sealed class GpuUsageProvider : IDisposable
                     continue;
                 }
 
-                if (item.Value.Value > peak)
+                var key = ReadEngineKey(item.Name);
+                engines[key] = engines.TryGetValue(key, out var total)
+                    ? total + item.Value.Value
+                    : item.Value.Value;
+            }
+
+            foreach (var total in engines.Values)
+            {
+                if (total > peak)
                 {
-                    peak = item.Value.Value;
+                    peak = total;
                 }
             }
 
@@ -158,6 +172,36 @@ public sealed class GpuUsageProvider : IDisposable
             Marshal.FreeHGlobal(_buffer);
             _buffer = 0;
         }
+    }
+
+    /// <summary>
+    /// Ключ движка из имени экземпляра <c>pid_1234_luid_0x0_0xB996_phys_0_eng_0_engtype_3d</c>:
+    /// идентификатор процесса отбрасывается, остаётся адаптер, физическое устройство и движок.
+    /// </summary>
+    private static string ReadEngineKey(nint name)
+    {
+        if (name == 0)
+        {
+            return string.Empty;
+        }
+
+        var text = Marshal.PtrToStringUni(name);
+
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        var luid = text.IndexOf("_luid_", StringComparison.OrdinalIgnoreCase);
+
+        if (luid >= 0)
+        {
+            text = text[luid..];
+        }
+
+        var engineType = text.IndexOf("_engtype_", StringComparison.OrdinalIgnoreCase);
+
+        return engineType >= 0 ? text[..engineType] : text;
     }
 
     private bool GrowBuffer()
