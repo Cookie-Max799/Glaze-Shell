@@ -248,7 +248,11 @@ public sealed partial class DockWindow : Window
 
         // Капсула: окно обрезается прямоугольником со скруглённым верхом, поэтому
         // acrylic-backdrop заполняет только саму панель, а не прямоугольник вокруг неё.
-        // Эксперимент: без маски и без системного скругления — углы рисует XAML.
+        // Нижний край остаётся прямым — панель прижата к краю экрана.
+        OverlayWindow.ApplyTopRoundedRegion(
+            _hwnd,
+            new PixelRect(0, 0, width, height),
+            (int)Math.Round(PillRadius * scale));
     }
 
     private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)

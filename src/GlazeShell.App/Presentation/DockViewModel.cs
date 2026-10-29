@@ -654,9 +654,14 @@ public sealed class DockViewModel : IDisposable
                 continue;
             }
 
-            running.Add(application);
+            // У приложения из меню «Пуск» путь к исполняемому файлу иногда не резолвится
+            // (ярлык без цели или сломанный IShellItem). Окно уже запущенной программы
+            // знает этот путь, поэтому значок берётся оттуда, а не остаётся буквой.
+            var primaryWindow = primary!;
+
+            running.Add(WithExecutablePath(application, primaryWindow.ExecutablePath));
             _runningIds.Add(application.Id);
-            _primaryWindowByAppId[application.Id] = primary!.Id;
+            _primaryWindowByAppId[application.Id] = primaryWindow.Id;
             _windowCountByAppId[application.Id] = count;
         }
 
@@ -715,6 +720,36 @@ public sealed class DockViewModel : IDisposable
     }
 
     private sealed record UnknownApplication(WindowInfo Primary, int Count);
+
+    /// <summary>
+    /// Дополняет найденное приложение путём к исполняемому файлу окна, если у ярлыка цели
+    /// нет. Идентичность и остальные поля сохраняются: копия нужна только для значка и
+    /// запуска, а ключом плитки остаётся прежний <see cref="CoreApplication.Id"/>.
+    /// </summary>
+    private static CoreApplication WithExecutablePath(CoreApplication application, string? executablePath)
+    {
+        if (!string.IsNullOrEmpty(application.ExecutablePath) || string.IsNullOrWhiteSpace(executablePath))
+        {
+            return application;
+        }
+
+        return new CoreApplication(
+            application.Id,
+            application.Name,
+            application.Type,
+            executablePath,
+            application.PackageFamilyName,
+            application.ApplicationUserModelId,
+            application.IconPath,
+            application.Description,
+            application.Publisher,
+            application.Version,
+            application.IsSystemApplication,
+            application.Arguments,
+            application.WorkingDirectory,
+            application.IconIndex,
+            application.Source);
+    }
 
     private List<DockItemViewModel> BuildDesiredItems(List<CoreApplication> running)
     {
