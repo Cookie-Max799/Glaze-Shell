@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Diagnostics;
 using GlazeShell.App.Presentation;
 using GlazeShell.App.Theming;
@@ -77,6 +77,9 @@ public sealed partial class TopBarWindow : Window
     private readonly int _ownProcessId = Environment.ProcessId;
     private nint _foregroundHwnd;
     private bool _foreignForeground;
+
+    /// <summary>Окно сейчас активируемо и может держать клавиатуру (поиск или popover).</summary>
+    private bool _inputEnabled;
 
     public TopBarWindow(
         ISettingsManager settings,
@@ -199,8 +202,11 @@ public sealed partial class TopBarWindow : Window
         }
 
         RevealImmediately();
-        OverlayWindow.SetNonActivating(_hwnd, false);
-        Activate();
+
+        // Окно показано без активации, а система запрещает фоновому процессу менять
+        // активное окно: просто Activate() мигал бы кнопкой на панели задач, и поле
+        // оставалось бы без клавиатуры. EnableInput присоединяет очереди ввода.
+        EnableInput();
 
         // Фокус ставится после того, как окно стало активным: сразу после вызова он уходил
         // бы в ещё не готовое поле и курсор не появлялся.
@@ -344,6 +350,13 @@ public sealed partial class TopBarWindow : Window
 
         UpdateForegroundState();
 
+        // Окно в режиме без активации не получает нажатий в элементы, поэтому клик
+        // по строке поиска распознаётся по глобальному состоянию кнопки мыши.
+        if (!_inputEnabled && _reveal > 0.5 && OverlayWindow.IsLeftButtonDown() && IsCursorOverSearchBox())
+        {
+            FocusSearchCore(clearText: false);
+        }
+
         var now = DateTimeOffset.UtcNow;
         var pinned = IsPinnedOpen();
         var target = 0.0;
@@ -376,6 +389,19 @@ public sealed partial class TopBarWindow : Window
         {
             _lastAppliedReveal = _reveal;
             ApplyPlacement();
+        }
+
+        // Полностью убранная панель не должна удерживать клавиатуру: иначе после ухода
+        // в чужое приложение фокус оставался бы у скрытого окна.
+        if (_reveal <= 0 && _inputEnabled && !IsPinnedOpen())
+        {
+            if (SearchBox is { FocusState: not FocusState.Unfocused })
+            {
+                _ = SearchBox.Focus(FocusState.Unfocused);
+            }
+
+            _inputEnabled = false;
+            OverlayWindow.SetNonActivating(_hwnd, true);
         }
     }
 
@@ -436,8 +462,38 @@ public sealed partial class TopBarWindow : Window
         return x >= _screenLeft && x < _screenLeft + _screenWidth && y >= _screenTop && y < _screenTop + zoneHeight;
     }
 
-    /// <summary>Поиск или открытый popover удерживают панель раскрытой.</summary>
+    /// <summary>
+    /// Курсор над строкой поиска. Границы берутся из разметки, поэтому клик срабатывает
+    /// ровно по видимому полю, а не по полосе панели целиком.
+    /// </summary>
+    private bool IsCursorOverSearchBox()
+    {
+        if (SearchBox is null ||
+            SearchBox.ActualWidth <= 0 ||
+            SearchBox.ActualHeight <= 0 ||
+            !OverlayWindow.TryGetCursorPosition(_hwnd, out var x, out var y))
+        {
+            return false;
+        }
+
+        var bounds = SearchBox
+            .TransformToVisual(null)
+            .TransformBounds(new Rect(0, 0, SearchBox.ActualWidth, SearchBox.ActualHeight));
+
+        var left = (int)Math.Round(bounds.X * _scale);
+        var top = (int)Math.Round(bounds.Y * _scale);
+        var right = (int)Math.Round((bounds.X + bounds.Width) * _scale);
+        var bottom = (int)Math.Round((bounds.Y + bounds.Height) * _scale);
+
+        return x >= left && x < right && y >= top && y < bottom;
+    }
+
+    /// <summary>
+    /// Поиск или открытый popover удерживают панель раскрытой. Пока у окна есть ввод,
+    /// панель тоже не сворачивается: иначе фокус в пустом поле поиска сразу терялся бы.
+    /// </summary>
     private bool IsPinnedOpen() =>
+        _inputEnabled ||
         ViewModel.HasQuery ||
         ViewModel.HasResults ||
         ViewModel.QuickSettings.IsOpen ||
@@ -552,6 +608,10 @@ public sealed partial class TopBarWindow : Window
 
     private void OnSearchLostFocus(object sender, RoutedEventArgs e)
     {
+        // Режим без активации возвращается, когда клавиатура панели больше не нужна:
+        // иначе после закрытия поиска окно продолжало бы забирать фокус у приложения.
+        _ = DispatcherQueue.TryEnqueue(RestoreInput);
+
         if (!string.IsNullOrWhiteSpace(ViewModel.SearchText))
         {
             return;
@@ -559,6 +619,43 @@ public sealed partial class TopBarWindow : Window
 
         ViewModel.ClearSearch();
         _collapseAt = DateTimeOffset.UtcNow + CollapseDelay;
+    }
+
+    /// <summary>
+    /// Включает ввод: снимает <c>WS_EX_NOACTIVATE</c>, выводит окно на передний план и
+    /// передаёт ему клавиатуру. Окно показано без активации, а система запрещает фоновому
+    /// процессу менять активное окно — поэтому одного <c>Activate()</c> недостаточно, и
+    /// <see cref="OverlayWindow.ActivateForInput"/> присоединяет очереди ввода.
+    /// </summary>
+    private void EnableInput()
+    {
+        if (_hwnd == 0)
+        {
+            return;
+        }
+
+        _inputEnabled = true;
+        OverlayWindow.SetNonActivating(_hwnd, false);
+        _ = OverlayWindow.ActivateForInput(_hwnd);
+    }
+
+    /// <summary>
+    /// Возвращает окну режим без активации, если ввод больше не используется: строка поиска
+    /// не в фокусе и ни один popover не открыт. Иначе панель оставалась бы активным окном
+    /// поверх чужой программы и забирала бы у неё клавиатуру.
+    /// </summary>
+    private void RestoreInput()
+    {
+        if (_hwnd == 0 ||
+            ViewModel.QuickSettings.IsOpen ||
+            ViewModel.Calendar.IsOpen ||
+            SearchBox is { FocusState: not FocusState.Unfocused })
+        {
+            return;
+        }
+
+        _inputEnabled = false;
+        OverlayWindow.SetNonActivating(_hwnd, true);
     }
 
     /// <summary>
@@ -573,8 +670,7 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
-        OverlayWindow.SetNonActivating(_hwnd, false);
-        Activate();
+        EnableInput();
         ViewModel.ClearSearch();
         ViewModel.ToggleQuickSettings();
         HoldRevealed();
@@ -598,8 +694,7 @@ public sealed partial class TopBarWindow : Window
         }
 
         e.Handled = true;
-        OverlayWindow.SetNonActivating(_hwnd, false);
-        Activate();
+        EnableInput();
         ViewModel.ToggleQuickSettings();
         HoldRevealed();
     }
@@ -610,8 +705,7 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void OnClockClick(object sender, RoutedEventArgs e)
     {
-        OverlayWindow.SetNonActivating(_hwnd, false);
-        Activate();
+        EnableInput();
         ViewModel.ClearSearch();
         ViewModel.ToggleCalendar();
         HoldRevealed();
@@ -714,6 +808,10 @@ public sealed partial class TopBarWindow : Window
             {
                 HoldRevealed();
             }
+            else
+            {
+                _ = DispatcherQueue.TryEnqueue(RestoreInput);
+            }
 
             UpdateOverlayBounds();
         }
@@ -729,6 +827,10 @@ public sealed partial class TopBarWindow : Window
             if (ViewModel.Calendar.IsOpen)
             {
                 HoldRevealed();
+            }
+            else
+            {
+                _ = DispatcherQueue.TryEnqueue(RestoreInput);
             }
 
             UpdateOverlayBounds();

@@ -69,6 +69,46 @@ public static class OverlayWindow
     }
 
     /// <summary>
+    /// Выводит окно на передний план и отдаёт ему фокус ввода, даже если оно показано
+    /// без активации. Фоновому процессу система запрещает менять активное окно, поэтому
+    /// потоки временно присоединяются друг к другу (<c>AttachThreadInput</c>): без этого
+    /// <c>SetForegroundWindow</c> лишь мигает кнопкой на панели задач, а строка поиска
+    /// не получает клавиатуру и символы не набираются.
+    /// </summary>
+    /// <returns><see langword="true"/>, если окно действительно стало активным.</returns>
+    public static bool ActivateForInput(nint hwnd)
+    {
+        if (hwnd == 0)
+        {
+            return false;
+        }
+
+        var foreground = User32.GetForegroundWindow();
+        var currentThread = Kernel32.GetCurrentThreadId();
+        var foregroundThread = foreground == 0
+            ? 0
+            : User32.GetWindowThreadProcessId(foreground, out _);
+
+        var attached = foregroundThread != 0 &&
+                       foregroundThread != currentThread &&
+                       User32.AttachThreadInput(currentThread, foregroundThread, true);
+
+        try
+        {
+            _ = User32.SetForegroundWindow(hwnd);
+            _ = User32.SetFocus(hwnd);
+            return User32.GetForegroundWindow() == hwnd;
+        }
+        finally
+        {
+            if (attached)
+            {
+                _ = User32.AttachThreadInput(currentThread, foregroundThread, false);
+            }
+        }
+    }
+
+    /// <summary>
     /// Включает системное скругление углов окна (Windows 11). На Windows 10 атрибут
     /// игнорируется, и окно остаётся прямоугольным.
     /// </summary>
@@ -81,6 +121,24 @@ public static class OverlayWindow
 
         var preference = Dwmapi.DwmcpRound;
         _ = Dwmapi.DwmSetWindowAttribute(hwnd, Dwmapi.DwmwaWindowCornerPreference, ref preference, sizeof(int));
+    }
+
+    /// <summary>Поднимает окно в верхнюю часть topmost-слоя, не забирая фокус ввода.</summary>
+    public static void RaiseTopMost(nint hwnd)
+    {
+        if (hwnd == 0)
+        {
+            return;
+        }
+
+        _ = User32.SetWindowPos(
+            hwnd,
+            User32.HwndTopmost,
+            0,
+            0,
+            0,
+            0,
+            User32.SwpNoMove | User32.SwpNoSize | User32.SwpNoActivate);
     }
 
     /// <summary>
@@ -187,6 +245,24 @@ public static class OverlayWindow
         y = cursor.Y;
         return true;
     }
+
+    /// <summary>
+    /// Нажата ли клавиша Windows. Состояние читается опросом, а не клавиатурным хуком:
+    /// хук перехватывал бы клавишу у системы и мешал меню «Пуск».
+    /// </summary>
+    public static bool IsWindowsKeyDown() =>
+        (User32.GetAsyncKeyState(User32.VkLeftWindows) & 0x8000) != 0 ||
+        (User32.GetAsyncKeyState(User32.VkRightWindows) & 0x8000) != 0;
+
+    /// <summary>
+    /// Нажата ли левая кнопка мыши. Окно, показанное без активации, не получает нажатий
+    /// в сами элементы, поэтому клик по строке поиска распознаётся по состоянию кнопки.
+    /// </summary>
+    public static bool IsLeftButtonDown() => (User32.GetAsyncKeyState(User32.VkLeftButton) & 0x8000) != 0;
+
+    /// <summary>Окно сейчас активно, то есть получает клавиатурный ввод.</summary>
+    public static bool IsActiveWindow(nint hwnd) =>
+        hwnd != 0 && User32.GetForegroundWindow() == hwnd;
 
     /// <summary>
     /// Придаёт окну форму набора скруглённых прямоугольников (регион окна) в физических

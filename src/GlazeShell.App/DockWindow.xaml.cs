@@ -55,6 +55,15 @@ public sealed partial class DockWindow : Window
 
     private static readonly TimeSpan HoverDuration = TimeSpan.FromMilliseconds(180);
 
+    /// <summary>Сколько dock остаётся раскрытым после клавиши Windows или касания кромки.</summary>
+    private static readonly TimeSpan RevealHold = TimeSpan.FromSeconds(3);
+
+    /// <summary>
+    /// Высота «горячей зоны» у нижней кромки экрана: в чужом приложении dock полностью
+    /// скрыт и вызывается касанием кромки или клавишей Windows.
+    /// </summary>
+    private const int BottomHotZone = 2;
+
     /// <summary>Порог, ниже которого пересчёт визуала пропускается (меньше пиксельного шума).</summary>
     private const double MagnifyScaleEpsilon = 0.002;
     private const double MagnifyLiftEpsilon = 0.05;
@@ -75,6 +84,30 @@ public sealed partial class DockWindow : Window
     private double _windowTop;
     private bool _cursorInside;
     private bool _cursorWatchRunning;
+
+    private readonly int _ownProcessId = Environment.ProcessId;
+
+    /// <summary>Активное окно и признак «чужая программа» — от него зависит видимость док-панели.</summary>
+    private nint _foregroundHwnd;
+    private bool _foreignForeground;
+
+    /// <summary>Активно окно оболочки Windows (рабочий стол, «Пуск», поиск, уведомления).</summary>
+    private bool _shellForeground;
+
+    /// <summary>Клавиша Windows была нажата в прошлом кадре: нужен фронт нажатия.</summary>
+    private bool _windowsKeyDown;
+
+    /// <summary>До какого момента dock остаётся раскрытым по клавише Windows или кромке.</summary>
+    private DateTimeOffset _revealUntil = DateTimeOffset.MinValue;
+
+    /// <summary>Прогресс выезда: 1 — панель у нижнего края, 0 — полностью за ним.</summary>
+    private double _reveal = 1.0;
+
+    private int _dockLeft;
+    private int _dockTop;
+    private int _dockWidth;
+    private int _dockHeight;
+    private RectInt32 _appliedPlacement;
 
     /// <summary>Состав плиток на прошлом проходе: по нему видно, какие плитки появились.</summary>
     private readonly HashSet<string> _knownKeys = new(StringComparer.Ordinal);
@@ -235,10 +268,15 @@ public sealed partial class DockWindow : Window
             top = bounds.Y + bounds.Height - height;
         }
 
-        AppWindow.MoveAndResize(new RectInt32(left, top, width, height));
+        _dockLeft = left;
+        _dockTop = top;
+        _dockWidth = width;
+        _dockHeight = height;
+
+        ApplyDockPlacement();
 
         _windowLeft = left;
-        _windowTop = top;
+        _windowTop = _appliedPlacement.Y;
 
         if (!_cursorWatchRunning)
         {
@@ -253,6 +291,30 @@ public sealed partial class DockWindow : Window
             _hwnd,
             new PixelRect(0, 0, width, height),
             (int)Math.Round(PillRadius * scale));
+    }
+
+    /// <summary>
+    /// Применяет прогресс выезда: при <see cref="_reveal"/> = 1 панель стоит вплотную
+    /// к нижнему краю, при 0 — целиком уходит за него. Положение сравнивается с прошлым,
+    /// поэтому таймер курсора не дёргает окно на каждом кадре.
+    /// </summary>
+    private void ApplyDockPlacement()
+    {
+        if (_hwnd == 0 || _dockWidth <= 0 || _dockHeight <= 0)
+        {
+            return;
+        }
+
+        var offset = (int)Math.Round(_dockHeight * (1.0 - _reveal));
+        var placement = new RectInt32(_dockLeft, _dockTop + offset, _dockWidth, _dockHeight);
+
+        if (placement == _appliedPlacement)
+        {
+            return;
+        }
+
+        AppWindow.MoveAndResize(placement);
+        _appliedPlacement = placement;
     }
 
     private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
@@ -420,13 +482,128 @@ public sealed partial class DockWindow : Window
         SystemBackdrop = _themes.HighContrast ? null : new Microsoft.UI.Xaml.Media.MicaBackdrop();
 
     /// <summary>
+    /// Следит за активным окном: на рабочем столе dock виден всегда, в чужом приложении
+    /// скрывается. Собственный процесс и оболочка Windows (рабочий стол, «Пуск», поиск,
+    /// центр уведомлений) считаются «своими» — иначе панель исчезала бы при открытии «Пуска».
+    /// </summary>
+    private void UpdateForegroundState()
+    {
+        if (!OverlayWindow.TryGetForegroundWindow(out var hwnd, out var processId) ||
+            hwnd == _foregroundHwnd)
+        {
+            return;
+        }
+
+        _foregroundHwnd = hwnd;
+        var shell = processId != _ownProcessId && IsShellProcess(processId);
+        _shellForeground = shell;
+        _foreignForeground = processId != _ownProcessId && !shell;
+    }
+
+    /// <summary>Процесс оболочки Windows: его окна не считаются «чужим приложением».</summary>
+    private static bool IsShellProcess(uint processId)
+    {
+        try
+        {
+            return Process.GetProcessById((int)processId).ProcessName is
+                "explorer" or "StartMenuExperienceHost" or "SearchHost" or
+                "ShellExperienceHost" or "TextInputHost" or "LockApp";
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Видимость панели. На рабочем столе dock виден всегда; в чужом приложении уезжает
+    /// за нижний край и вызывается клавишей Windows или касанием нижней кромки экрана.
+    /// Пока курсор над панелью, она остаётся раскрытой, чтобы не исчезать под рукой.
+    /// </summary>
+    private void UpdateReveal()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var windowsKey = OverlayWindow.IsWindowsKeyDown();
+
+        if (windowsKey && !_windowsKeyDown)
+        {
+            _revealUntil = now + RevealHold;
+        }
+
+        _windowsKeyDown = windowsKey;
+
+        var target = 0.0;
+
+        if (!_foreignForeground)
+        {
+            target = 1.0;
+        }
+        else if (now < _revealUntil || _cursorInside || IsCursorOverBottomHotZone())
+        {
+            _revealUntil = now + RevealHold;
+            target = 1.0;
+        }
+
+        // «Пуск» и панель задач открываются той же клавишей Windows и перекрывают док.
+        // Пока активна оболочка, панель возвращается в верх topmost-слоя — иначе вызов
+        // по клавише Windows прятал бы её под меню.
+        if (_shellForeground && _reveal > 0.01)
+        {
+            OverlayWindow.RaiseTopMost(_hwnd);
+        }
+
+        if (_themes.ReduceMotion)
+        {
+            _reveal = target;
+        }
+        else
+        {
+            _reveal += (target - _reveal) * 0.25;
+
+            if (Math.Abs(target - _reveal) < 0.005)
+            {
+                _reveal = target;
+            }
+        }
+
+        ApplyDockPlacement();
+    }
+
+    /// <summary>
+    /// Курсор у нижней кромки экрана в пределах панели. Зона считается по сохранённому
+    /// положению, а не по окну: у полностью скрытого окна координаты отрицательные.
+    /// </summary>
+    private bool IsCursorOverBottomHotZone()
+    {
+        if (_dockWidth <= 0 || !OverlayWindow.TryGetCursorScreenPosition(out var x, out var y))
+        {
+            return false;
+        }
+
+        var bottom = _dockTop + _dockHeight;
+
+        return x >= _dockLeft &&
+               x < _dockLeft + _dockWidth &&
+               y >= bottom - BottomHotZone &&
+               y <= bottom;
+    }
+
+    /// <summary>
     /// Таймер читает глобальную позицию курсора и, если он над dock, ведёт магнификацию.
     /// Так эффект не зависит от того, доставляет ли WinUI события ввода окну, показанному
     /// без активации. Когда курсор уходит с панели, плитки плавно возвращаются на место.
     /// </summary>
     private void OnCursorWatchTick(object? sender, object e)
     {
-        if (_hwnd == 0 || !OverlayWindow.TryGetCursorPosition(_hwnd, out var clientX, out var clientY))
+        if (_hwnd == 0)
+        {
+            return;
+        }
+
+        UpdateForegroundState();
+        UpdateReveal();
+
+        if (!OverlayWindow.TryGetCursorPosition(_hwnd, out var clientX, out var clientY))
         {
             return;
         }

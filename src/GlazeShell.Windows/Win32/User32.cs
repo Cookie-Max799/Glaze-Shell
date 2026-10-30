@@ -353,6 +353,21 @@ internal static class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetForegroundWindow(nint hwnd);
 
+    /// <summary>Передаёт фокус ввода окну; действует в пределах присоединённой очереди ввода.</summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern nint SetFocus(nint hwnd);
+
+    /// <summary>
+    /// Состояние клавиши: старший бит означает «нажата сейчас». Используется вместо
+    /// клавиатурного хука для клавиши Windows — хук перехватывал бы её у системы.
+    /// </summary>
+    [DllImport("user32.dll", ExactSpelling = true)]
+    internal static extern short GetAsyncKeyState(int virtualKey);
+
+    internal const int VkLeftWindows = 0x5B;
+    internal const int VkRightWindows = 0x5C;
+    internal const int VkLeftButton = 0x01;
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetWindowPos(nint hwnd, nint insertAfter, int x, int y, int width, int height, uint flags);
