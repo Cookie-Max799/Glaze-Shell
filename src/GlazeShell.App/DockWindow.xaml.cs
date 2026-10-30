@@ -55,8 +55,23 @@ public sealed partial class DockWindow : Window
 
     private static readonly TimeSpan HoverDuration = TimeSpan.FromMilliseconds(180);
 
-    /// <summary>Сколько dock остаётся раскрытым после клавиши Windows или касания кромки.</summary>
-    private static readonly TimeSpan RevealHold = TimeSpan.FromSeconds(3);
+    /// <summary>Сколько dock остаётся раскрытым после нажатия клавиши Windows.</summary>
+    private static readonly TimeSpan RevealHold = TimeSpan.FromMilliseconds(1500);
+
+    /// <summary>
+    /// Сколько панель ещё держится после того, как курсор вышел из её контура. Короткая пауза
+    /// нужна только чтобы док не мигал, когда курсор проскакивает кромку насквозь; раньше
+    /// здесь было трёхсекундное ожидание, и панель висела открытой без причины.
+    /// </summary>
+    private static readonly TimeSpan CursorExitDelay = TimeSpan.FromMilliseconds(200);
+
+    /// <summary>
+    /// Длительность выезда и ухода. Обе короткие и предсказуемые: экспоненциальное
+    /// «догоняние» цели растягивало выезд на полсекунды и заканчивалось микрошагами,
+    /// которые читались как дрожание.
+    /// </summary>
+    private static readonly TimeSpan RevealOpenDuration = TimeSpan.FromMilliseconds(260);
+    private static readonly TimeSpan RevealCloseDuration = TimeSpan.FromMilliseconds(200);
 
     /// <summary>
     /// Высота «горячей зоны» у нижней кромки экрана: в чужом приложении dock полностью
@@ -97,11 +112,29 @@ public sealed partial class DockWindow : Window
     /// <summary>Клавиша Windows была нажата в прошлом кадре: нужен фронт нажатия.</summary>
     private bool _windowsKeyDown;
 
-    /// <summary>До какого момента dock остаётся раскрытым по клавише Windows или кромке.</summary>
+    /// <summary>До какого момента dock остаётся раскрытым по клавише Windows.</summary>
     private DateTimeOffset _revealUntil = DateTimeOffset.MinValue;
+
+    /// <summary>До какого момента панель ещё держится после ухода курсора из контура.</summary>
+    private DateTimeOffset _cursorExitUntil = DateTimeOffset.MinValue;
 
     /// <summary>Прогресс выезда: 1 — панель у нижнего края, 0 — полностью за ним.</summary>
     private double _reveal = 1.0;
+
+    /// <summary>Куда движется панель: цель берётся из состояния, а шаг считает анимация.</summary>
+    private double _revealTarget = 1.0;
+
+    /// <summary>Откуда начался текущий выезд/уход и когда он стартовал.</summary>
+    private double _revealFrom = 1.0;
+    private DateTimeOffset _revealStepStart = DateTimeOffset.UtcNow;
+
+    /// <summary>
+    /// Отдельный таймер собственно движения панели (≈60 кадров/с). Он работает только пока
+    /// выезд или уход не завершён, поэтому в покое dock не будит поток интерфейса лишний раз.
+    /// </summary>
+    private readonly DispatcherTimer _revealWatch = new() { Interval = TimeSpan.FromMilliseconds(16) };
+
+    private bool _revealWatchRunning;
 
     private int _dockLeft;
     private int _dockTop;
@@ -159,6 +192,7 @@ public sealed partial class DockWindow : Window
         _displayChanged = events.Subscribe<DisplayChanged>(OnDisplayChanged);
 
         _cursorWatch.Tick += OnCursorWatchTick;
+        _revealWatch.Tick += OnRevealWatchTick;
 
         ConfigureOverlay();
 
@@ -166,6 +200,8 @@ public sealed partial class DockWindow : Window
         {
             _cursorWatch.Stop();
             _cursorWatch.Tick -= OnCursorWatchTick;
+            _revealWatch.Stop();
+            _revealWatch.Tick -= OnRevealWatchTick;
             ViewModel.ActivateRequested -= OnActivateRequested;
             ViewModel.Items.CollectionChanged -= OnItemsChanged;
             Tiles.SizeChanged -= OnTilesSizeChanged;
@@ -519,6 +555,8 @@ public sealed partial class DockWindow : Window
     /// Видимость панели. На рабочем столе dock виден всегда; в чужом приложении уезжает
     /// за нижний край и вызывается клавишей Windows или касанием нижней кромки экрана.
     /// Пока курсор над панелью, она остаётся раскрытой, чтобы не исчезать под рукой.
+    /// Здесь считается только цель: движение выполняет <see cref="OnRevealWatchTick"/>,
+    /// чтобы шаг анимации не зависел от частоты таймера курсора.
     /// </summary>
     private void UpdateReveal()
     {
@@ -532,15 +570,22 @@ public sealed partial class DockWindow : Window
 
         _windowsKeyDown = windowsKey;
 
+        // Пока курсор внутри видимого контура панели или у самой кромки экрана,
+        // она держится открытой. Проверка идёт по реальному положению окна,
+        // поэтому «невидимый» прямоугольник за краем экрана её не удерживает.
+        if (IsCursorOverPanel() || IsCursorOverBottomHotZone())
+        {
+            _cursorExitUntil = now + CursorExitDelay;
+        }
+
         var target = 0.0;
 
         if (!_foreignForeground)
         {
             target = 1.0;
         }
-        else if (now < _revealUntil || _cursorInside || IsCursorOverBottomHotZone())
+        else if (now < _revealUntil || now < _cursorExitUntil)
         {
-            _revealUntil = now + RevealHold;
             target = 1.0;
         }
 
@@ -552,21 +597,142 @@ public sealed partial class DockWindow : Window
             OverlayWindow.RaiseTopMost(_hwnd);
         }
 
+        SetRevealTarget(target);
+    }
+
+    /// <summary>
+    /// Задаёт цель выезда и запускает таймер движения, если он ещё не идёт: в покое панель
+    /// не должна будить поток интерфейса каждые 16 мс.
+    /// </summary>
+    private void SetRevealTarget(double target)
+    {
+        // Доступность (I5): при «уменьшить движение» панель перескакивает к цели сразу,
+        // без кадра анимации и без запуска таймера движения.
+        if (_themes.ReduceMotion)
+        {
+            StopRevealWatch();
+
+            if (_reveal != target)
+            {
+                _reveal = target;
+                ApplyDockPlacement();
+            }
+
+            _revealTarget = target;
+            return;
+        }
+
+        var changed = Math.Abs(_revealTarget - target) > 0.001;
+        _revealTarget = target;
+
+        if (!changed && _revealWatchRunning)
+        {
+            return;
+        }
+
+        if (Math.Abs(_reveal - target) < 0.001)
+        {
+            StopRevealWatch();
+            _reveal = target;
+            return;
+        }
+
+        if (_revealWatchRunning)
+        {
+            // Цель сменилась на полпути (курсор вернулся во время ухода): движение
+            // продолжается от текущего места, а не прыгает к прежнему отсчёту.
+            _revealFrom = _reveal;
+            _revealStepStart = DateTimeOffset.UtcNow;
+            return;
+        }
+
+        _revealWatchRunning = true;
+        _revealFrom = _reveal;
+        _revealStepStart = DateTimeOffset.UtcNow;
+        _revealWatch.Start();
+    }
+
+    private void StopRevealWatch()
+    {
+        if (!_revealWatchRunning)
+        {
+            return;
+        }
+
+        _revealWatch.Stop();
+        _revealWatchRunning = false;
+    }
+
+    /// <summary>
+    /// Шаг анимации выезда: прогресс идёт от стартового значения к цели за фиксированное
+    /// время с мягкой синусоидальной кривой (ease-in-out). Раньше прогресс умножался на
+    /// постоянные 0.25 за кадр таймера курсора (30 кадров/с), из-за чего панель дёргалась:
+    /// первые кадры двигали её на четверть пути, последние — на доли пикселя.
+    /// </summary>
+    private void OnRevealWatchTick(object? sender, object e)
+    {
+        if (_hwnd == 0)
+        {
+            _revealWatch.Stop();
+            _revealWatchRunning = false;
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var target = _revealTarget;
+
+        // Доступность (I5): при «уменьшить движение» панель перескакивает к цели.
         if (_themes.ReduceMotion)
         {
             _reveal = target;
+            ApplyDockPlacement();
+            _revealWatch.Stop();
+            _revealWatchRunning = false;
+            return;
         }
-        else
-        {
-            _reveal += (target - _reveal) * 0.25;
 
-            if (Math.Abs(target - _reveal) < 0.005)
-            {
-                _reveal = target;
-            }
+        var duration = target >= _revealFrom ? RevealOpenDuration : RevealCloseDuration;
+        var progress = duration > TimeSpan.Zero
+            ? Math.Clamp((now - _revealStepStart).TotalMilliseconds / duration.TotalMilliseconds, 0.0, 1.0)
+            : 1.0;
+
+        // Синусоидальный ease-in-out: нулевая скорость на обоих концах, поэтому панель
+        // не стартует рывком и не «щёлкает» об кромку в конце.
+        var eased = 0.5 - (Math.Cos(Math.PI * progress) / 2.0);
+        _reveal = _revealFrom + ((target - _revealFrom) * eased);
+
+        if (progress >= 1.0)
+        {
+            _reveal = target;
         }
 
         ApplyDockPlacement();
+
+        if (progress >= 1.0)
+        {
+            _revealWatch.Stop();
+            _revealWatchRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// Курсор внутри видимого контура панели. Считается по сохранённому положению с учётом
+    /// прогресса выезда: у полностью скрытой панели нет области наведения, иначе невидимый
+    /// прямоугольник за краем экрана удерживал бы её открытой.
+    /// </summary>
+    private bool IsCursorOverPanel()
+    {
+        if (_dockWidth <= 0 || _reveal <= 0.001 || !OverlayWindow.TryGetCursorScreenPosition(out var x, out var y))
+        {
+            return false;
+        }
+
+        var visibleTop = _dockTop + (int)Math.Round(_dockHeight * (1.0 - _reveal));
+
+        return x >= _dockLeft &&
+               x < _dockLeft + _dockWidth &&
+               y >= visibleTop &&
+               y <= _dockTop + _dockHeight;
     }
 
     /// <summary>
