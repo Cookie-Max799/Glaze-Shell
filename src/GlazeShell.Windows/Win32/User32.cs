@@ -158,9 +158,13 @@ internal static class User32
     internal const long GwlExStyle = -20;
 
     internal const long WsThickFrame = 0x0004_0000;
+    internal const long WsCaption = 0x00C0_0000;
     internal const long WsExToolWindow = 0x0000_0080;
     internal const long WsExTopmost = 0x0000_0008;
     internal const long WsExNoActivate = 0x0800_0000;
+    internal const long WsExWindowEdge = 0x0000_0100;
+    internal const long WsExDlgModalFrame = 0x0000_0001;
+    internal const long WsExNoRedirectionBitmap = 0x0020_0000;
 
     internal const nint HwndTopmost = -1;
 

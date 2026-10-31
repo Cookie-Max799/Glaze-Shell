@@ -25,7 +25,8 @@ public static class OverlayWindow
 {
     /// <summary>
     /// Помечает окно как topmost tool-window: оно не появляется в панели задач и в Alt+Tab,
-    /// всегда остаётся поверх остальных и не перекрашивается при переключении.
+    /// всегда остаётся поверх остальных и не перекрашивается при переключении. Убираются флаги,
+    /// которые могут включать DWM shadow.
     /// </summary>
     public static void MakeTopMostToolWindow(nint hwnd)
     {
@@ -35,8 +36,20 @@ public static class OverlayWindow
         }
 
         var style = (nint)User32.GetWindowLongPtr(hwnd, User32.GwlExStyle);
-        style |= (nint)(User32.WsExToolWindow | User32.WsExTopmost);
+        
+        // Убираем флаги, связанные с DWM-рамкой и shadow
+        style &= (nint)~(User32.WsExWindowEdge | User32.WsExDlgModalFrame);
+        
+        // Устанавливаем нужные флаги
+        style |= (nint)(User32.WsExToolWindow | User32.WsExTopmost | User32.WsExNoRedirectionBitmap);
+        
         User32.SetWindowLongPtr(hwnd, User32.GwlExStyle, style);
+
+        // Тень DWM рисуется только у окон с рамкой: без WS_CAPTION/WS_THICKFRAME
+        // окно перестаёт её получать, а регион остаётся единственной видимой формой.
+        var frame = (nint)User32.GetWindowLongPtr(hwnd, User32.GwlStyle);
+        frame &= (nint)~(User32.WsCaption | User32.WsThickFrame);
+        User32.SetWindowLongPtr(hwnd, User32.GwlStyle, frame);
 
         User32.SetWindowPos(
             hwnd,
