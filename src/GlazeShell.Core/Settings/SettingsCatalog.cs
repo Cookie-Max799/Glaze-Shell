@@ -113,6 +113,23 @@ public static class SettingsCatalog
             },
             BuildAccentChoices()),
 
+        new(
+            "baseColorId",
+            AppearancePageId,
+            "Основной цвет",
+            "Цвет фона, панелей и стекла всех окон Glaze Shell.",
+            ["основной", "base", "фон", "поверхность", "поверхности", "цвет"],
+            SettingKind.Choice,
+            settings => settings.BaseColorId ?? string.Empty,
+            (settings, value) =>
+            {
+                var baseColor = value as string;
+                return string.IsNullOrWhiteSpace(baseColor)
+                    ? UserSettingsEditor.With(settings, clearBaseColor: true)
+                    : UserSettingsEditor.With(settings, baseColorId: baseColor);
+            },
+            BuildBaseColorChoices()),
+
         // Dock.
         new(
             "dockEnabled",
@@ -224,6 +241,22 @@ public static class SettingsCatalog
     private static List<SettingChoice> BuildAccentChoices()
     {
         var choices = new List<SettingChoice> { new(string.Empty, "По умолчанию") };
+
+        foreach (var accent in AccentPalette.All)
+        {
+            choices.Add(new SettingChoice(accent.Id, accent.Name));
+        }
+
+        return choices;
+    }
+
+    /// <summary>
+    /// Варианты основного цвета: тот же набор оттенков, что и у акцента, но он красит
+    /// поверхности (фон, панели, стекло), а акцент — выделение, фокус и градиент.
+    /// </summary>
+    private static List<SettingChoice> BuildBaseColorChoices()
+    {
+        var choices = new List<SettingChoice> { new(string.Empty, "Тема по умолчанию") };
 
         foreach (var accent in AccentPalette.All)
         {

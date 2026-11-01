@@ -66,6 +66,13 @@ public sealed class ThemeApplicator
     public string? AccentId { get; private set; }
 
     /// <summary>
+    /// Идентификатор основного цвета или <c>null</c>, если поверхности берут цвет темы.
+    /// Основной цвет тонирует фон, панели и стекло всех окон, акцент — выделение,
+    /// фокус-ринг и брендовый градиент.
+    /// </summary>
+    public string? BaseColorId { get; private set; }
+
+    /// <summary>
     /// Действует ли режим высокой контрастности: стекло отключено, цвета системные.
     /// </summary>
     public bool HighContrast { get; private set; }
@@ -84,20 +91,21 @@ public sealed class ThemeApplicator
             system.HighContrast,
             system.AnimationsEnabled);
 
-        Apply(root, settings.ThemeMode, settings.AccentId ?? settings.BaseColorId, accessibility, system.Palette);
+        Apply(root, settings.ThemeMode, settings.AccentId, settings.BaseColorId, accessibility, system.Palette);
     }
 
     public void Apply(FrameworkElement root, ThemeMode mode, string? accentId)
     {
         ArgumentNullException.ThrowIfNull(root);
 
+        var settings = _settings.GetSettings();
         var system = SystemAccessibilityProvider.GetInfo();
         var accessibility = AccessibilityResolver.Resolve(
-            _settings.GetSettings(),
+            settings,
             system.HighContrast,
             system.AnimationsEnabled);
 
-        Apply(root, mode, accentId, accessibility, system.Palette);
+        Apply(root, mode, accentId, settings.BaseColorId, accessibility, system.Palette);
     }
 
     /// <summary>
@@ -108,11 +116,17 @@ public sealed class ThemeApplicator
         FrameworkElement root,
         ThemeMode mode,
         string? accentId,
+        string? baseColorId,
         AccessibilityState accessibility,
         SystemAccessibilityPalette palette)
     {
         var light = ThemeModeResolver.Resolve(mode, SystemUsesLightTheme()) == ThemeMode.Light;
         var theme = light ? GlazePalette.Light : GlazePalette.Dark;
+
+        // Основной цвет перекрашивает поверхности, поэтому применяется до акцента:
+        // акцент должен читаться на тонированном фоне.
+        theme = GlazePalette.TintWithBase(theme, baseColorId);
+
         var accent = ResolveAccent(accentId, theme);
 
         // В контрастном режиме решение о светлой или тёмной теме принимает система:
@@ -131,10 +145,15 @@ public sealed class ThemeApplicator
         }
 
         ApplyFocusVisual(accessibility.HighContrast ? ToColor(palette.Highlight) : accent);
-        ApplyBrandGradient(accessibility.HighContrast ? ToColor(palette.Highlight) : null);
+
+        // Брендовый градиент — акцентный: он единственный элемент, где акцент виден
+        // сплошной заливкой, поэтому смена акцента заметна и на плитках приложений.
+        var brand = accessibility.HighContrast ? ToColor(palette.Highlight) : accent;
+        ApplyBrandGradient(brand, accessibility.HighContrast ? brand : GlazePalette.Lighten(accent, 0.4));
 
         Mode = mode;
         AccentId = accentId;
+        BaseColorId = baseColorId;
         HighContrast = accessibility.HighContrast;
         ReduceMotion = accessibility.ReduceMotion;
     }
@@ -183,8 +202,8 @@ public sealed class ThemeApplicator
         SetBrush(AccentKey, accent);
         SetBrush(SelectionKey, selection);
 
-        SetBrush(ListViewItemPointerOverKey, theme.Elevated);
-        SetBrush(ListViewItemPressedKey, theme.Elevated);
+        SetBrush(ListViewItemPointerOverKey, GlazePalette.WithAlpha(accent, 0x1F));
+        SetBrush(ListViewItemPressedKey, GlazePalette.WithAlpha(accent, 0x33));
         SetBrush(ListViewItemSelectedKey, selection);
         SetBrush(ListViewItemSelectedPointerOverKey, selection);
         SetBrush(ListViewItemSelectedPressedKey, selection);
@@ -236,24 +255,24 @@ public sealed class ThemeApplicator
     }
 
     /// <summary>
-    /// В контрастном режиме брендовый градиент заменяется сплошным системным выделением:
+    /// Брендовый градиент собирается из акцента: первый стоп — сам акцент, второй — его
+    /// осветлённый оттенок. В контрастном режиме оба стопа равны системному выделению:
     /// плавные переходы между оттенками читаются плохо.
     /// </summary>
-    private static void ApplyBrandGradient(Color? solid)
+    private static void ApplyBrandGradient(Color start, Color end)
     {
-        if (solid is not { } color)
+        if (Microsoft.UI.Xaml.Application.Current is not { } app
+            || !app.Resources.TryGetValue(BrandGradientKey, out var resource)
+            || resource is not LinearGradientBrush gradient)
         {
             return;
         }
 
-        if (Microsoft.UI.Xaml.Application.Current is { } app
-            && app.Resources.TryGetValue(BrandGradientKey, out var resource)
-            && resource is LinearGradientBrush gradient)
+        var index = 0;
+
+        foreach (var stop in gradient.GradientStops)
         {
-            foreach (var stop in gradient.GradientStops)
-            {
-                stop.Color = color;
-            }
+            stop.Color = index++ == 0 ? start : end;
         }
     }
 

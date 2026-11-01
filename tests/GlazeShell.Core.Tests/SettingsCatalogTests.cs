@@ -266,4 +266,31 @@ public sealed class SettingsCatalogTests
         Assert.IsTrue(byTitle.Any(definition => definition.Id == "recoveryHotkeyEnabled"));
         Assert.IsTrue(byKeyword.Any(definition => definition.Id == "safeModeEnabled"));
     }
+
+    [TestMethod]
+    public void BaseColorSettingWritesIntoSettings()
+    {
+        var definition = SettingsCatalog.All.Single(item => item.Id == "baseColorId");
+
+        Assert.AreEqual(SettingsCatalog.AppearancePageId, definition.PageId);
+        Assert.IsGreaterThan(1, definition.Choices.Count, "The base color needs the accent swatches.");
+
+        var written = definition.Write(UserSettings.CreateDefault(), "mint");
+        Assert.AreEqual("mint", written.BaseColorId);
+
+        var cleared = definition.Write(written, string.Empty);
+        Assert.IsNull(cleared.BaseColorId);
+    }
+
+    [TestMethod]
+    public void BaseColorAndAccentAreIndependent()
+    {
+        var settings = UserSettingsEditor.With(
+            UserSettings.CreateDefault(),
+            accentId: "cobalt",
+            baseColorId: "mint");
+
+        Assert.AreEqual("cobalt", settings.AccentId);
+        Assert.AreEqual("mint", settings.BaseColorId);
+    }
 }

@@ -1,3 +1,4 @@
+using GlazeShell.Core.Models;
 using Windows.UI;
 
 namespace GlazeShell.App.Theming;
@@ -47,6 +48,49 @@ internal static class GlazePalette
     public static Color Rgb(byte red, byte green, byte blue) => Color.FromArgb(0xFF, red, green, blue);
 
     public static Color WithAlpha(Color color, byte alpha) => Color.FromArgb(alpha, color.R, color.G, color.B);
+
+    /// <summary>
+    /// Тонирует поверхности темы основным цветом пользователя. Фон и панели получают
+    /// небольшой оттенок, «приподнятые» поверхности — заметнее, а стекло сохраняет свою
+    /// прозрачность: так основной цвет меняет почти весь интерфейс, но текст остаётся
+    /// читаемым на любом оттенке.
+    /// </summary>
+    public static GlazeTheme TintWithBase(GlazeTheme theme, string? baseColorId)
+    {
+        var option = AccentPalette.Find(baseColorId);
+
+        if (option is null)
+        {
+            return theme;
+        }
+
+        var baseColor = ParseHex(option.Hex, theme.DefaultAccent);
+
+        return theme with
+        {
+            Background = Mix(theme.Background, baseColor, 0.18),
+            Surface = Mix(theme.Surface, baseColor, 0.10),
+            Elevated = Mix(theme.Elevated, baseColor, 0.34),
+            Glass = WithAlpha(Mix(theme.Glass, baseColor, 0.30), theme.Glass.A),
+            DefaultAccent = Mix(theme.DefaultAccent, baseColor, 0.55),
+        };
+    }
+
+    /// <summary>Линейное смешение цветов: <paramref name="amount"/> 0 — <paramref name="from"/>, 1 — <paramref name="to"/>.</summary>
+    public static Color Mix(Color from, Color to, double amount)
+    {
+        var t = Math.Clamp(amount, 0, 1);
+
+        return Color.FromArgb(
+            from.A,
+            (byte)Math.Round(from.R + ((to.R - from.R) * t)),
+            (byte)Math.Round(from.G + ((to.G - from.G) * t)),
+            (byte)Math.Round(from.B + ((to.B - from.B) * t)));
+    }
+
+    /// <summary>Осветляет цвет к белому — второй стоп брендового градиента.</summary>
+    public static Color Lighten(Color color, double amount) =>
+        Mix(color, Rgb(0xFF, 0xFF, 0xFF), amount);
 
     /// <summary>
     /// Разбирает цвет вида <c>#RRGGBB</c> или <c>#AARRGGBB</c>. Некорректная строка
