@@ -51,6 +51,17 @@ public static class OverlayWindow
         frame &= (nint)~(User32.WsCaption | User32.WsThickFrame);
         User32.SetWindowLongPtr(hwnd, User32.GwlStyle, frame);
 
+        // Без SWP_FRAMECHANGED система не пересчитывает рамку, и DWM продолжает рисовать
+        // тень вокруг прежнего прямоугольника: она видна как тёмная полоса под окном.
+        User32.SetWindowPos(
+            hwnd,
+            0,
+            0,
+            0,
+            0,
+            0,
+            User32.SwpNoMove | User32.SwpNoSize | User32.SwpNoZOrder | User32.SwpNoActivate | User32.SwpFrameChanged);
+
         User32.SetWindowPos(
             hwnd,
             User32.HwndTopmost,

@@ -361,7 +361,9 @@ public sealed partial class TopBarWindow : Window
         var pinned = IsPinnedOpen();
         var target = 0.0;
 
-        if (pinned || IsCursorOverHotZone())
+        // На рабочем столе и в собственных окнах панель открыта постоянно, как dock:
+        // прятать её есть смысл только когда работает чужая программа.
+        if (pinned || !_foreignForeground || IsCursorOverHotZone())
         {
             _collapseAt = now + CollapseDelay;
             target = 1.0;
@@ -420,7 +422,7 @@ public sealed partial class TopBarWindow : Window
         _foregroundHwnd = hwnd;
         ViewModel.RefreshForeground();
 
-        var foreign = processId != _ownProcessId;
+        var foreign = processId != _ownProcessId && !IsShellProcess(processId);
 
         if (foreign == _foreignForeground)
         {
@@ -438,6 +440,24 @@ public sealed partial class TopBarWindow : Window
         // Высота «кромки» в покое зависит от режима, поэтому положение пересчитывается,
         // даже если прогресс выезда не менялся.
         _lastAppliedReveal = -1;
+    }
+
+    /// <summary>
+    /// Процесс оболочки Windows: рабочий стол, «Пуск», поиск, центр уведомлений. Их окна
+    /// не считаются чужим приложением — панель на рабочем столе остаётся открытой.
+    /// </summary>
+    private static bool IsShellProcess(uint processId)
+    {
+        try
+        {
+            return Process.GetProcessById((int)processId).ProcessName is
+                "explorer" or "StartMenuExperienceHost" or "SearchHost" or
+                "ShellExperienceHost" or "TextInputHost" or "LockApp";
+        }
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
+        {
+            return false;
+        }
     }
 
     /// <summary>
@@ -909,6 +929,12 @@ public sealed partial class TopBarWindow : Window
         _ = DispatcherQueue.TryEnqueue(UpdateOverlayBounds);
     }
 
-    private void ApplyBackdrop() =>
-        SystemBackdrop = _themes.HighContrast ? null : new Microsoft.UI.Xaml.Media.MicaBackdrop();
+    /// <summary>
+    /// Стеклянный фон окна. Системный backdrop сознательно не используется: Mica/Acrylic
+    /// рисуется по всему прямоугольнику окна и не подчиняется региональной маске, поэтому
+    /// при открытом popover окно вырастает и закрашивало стеклом полэкрана. Форму задаёт
+    /// только регион, а «стекло» рисует полупрозрачная кисть <c>GlazeGlassBrush</c>
+    /// на самой полосе и на панелях.
+    /// </summary>
+    private void ApplyBackdrop() => SystemBackdrop = null;
 }
