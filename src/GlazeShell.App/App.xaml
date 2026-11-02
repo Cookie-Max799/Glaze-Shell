@@ -33,6 +33,18 @@
             <SolidColorBrush x:Key="GlazeTextMutedBrush" Color="#7773A8" />
             <SolidColorBrush x:Key="GlazeAccentBrush" Color="#A99BFF" />
             <SolidColorBrush x:Key="GlazeSelectionBrush" Color="#33A99BFF" />
+
+            <!--
+                Акцентные кисти стандартных элементов: ползунок, переключатель, флажок и
+                подсветка списков берут цвет отсюда, поэтому смена акцента видна не только
+                в собственных кистях Glaze Shell. ThemeApplicator перекрашивает их.
+            -->
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#A99BFF" />
+            <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="#A99BFF" />
+            <SolidColorBrush x:Key="SystemControlBackgroundAccentBrush" Color="#A99BFF" />
+            <SolidColorBrush x:Key="SliderTrackValueFill" Color="#A99BFF" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#A99BFF" />
+
             <SolidColorBrush x:Key="GlazeStatusSuccessBrush" Color="#3FCF9B" />
             <SolidColorBrush x:Key="GlazeStatusCriticalBrush" Color="#FF6B81" />
 

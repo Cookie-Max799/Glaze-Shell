@@ -47,9 +47,6 @@ public sealed partial class TopBarWindow : Window
     /// <summary>Ширина popover часов и календаря.</summary>
     private const int CalendarWidth = 380;
 
-    /// <summary>Отступ popover от верхней кромки: столько места занимает полоса панели.</summary>
-    private const int PopoverTopOffset = 56;
-
     /// <summary>Радиус всплывающих панелей.</summary>
     private const int PanelRadius = 32;
 
@@ -275,11 +272,13 @@ public sealed partial class TopBarWindow : Window
         }
         else if (ViewModel.QuickSettings.IsOpen)
         {
-            logicalHeight = PopoverTopOffset + MeasurePanelHeight(QuickSettingsPanel, QuickSettingsWidth);
+            // DesiredSize панели уже включает верхний отступ 56 DIP из разметки:
+            // повторное прибавление отступа делало окно выше панели на пустую полосу.
+            logicalHeight = MeasurePanelHeight(QuickSettingsPanel, QuickSettingsWidth);
         }
         else if (ViewModel.Calendar.IsOpen)
         {
-            logicalHeight = PopoverTopOffset + MeasurePanelHeight(CalendarPanel, CalendarWidth);
+            logicalHeight = MeasurePanelHeight(CalendarPanel, CalendarWidth);
         }
 
         _windowHeightPx = Math.Max(1, (int)Math.Round(logicalHeight * _scale));

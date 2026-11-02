@@ -32,7 +32,12 @@ public sealed partial class SettingsWindow : Window
         Title = "Настройки Glaze Shell";
 
         _themes.ApplyFromSettings(Root);
-        _settingsChanged = events.Subscribe<SettingsChanged>(_ => _themes.ApplyFromSettings(Root));
+        _themes.ApplyTitleBar(this);
+        _settingsChanged = events.Subscribe<SettingsChanged>(_ =>
+        {
+            _themes.ApplyFromSettings(Root);
+            _themes.ApplyTitleBar(this);
+        });
 
         AppWindow.Resize(new SizeInt32(DefaultWidth, DefaultHeight));
         Closed += OnClosed;

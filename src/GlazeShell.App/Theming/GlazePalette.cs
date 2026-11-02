@@ -68,10 +68,10 @@ internal static class GlazePalette
 
         return theme with
         {
-            Background = Mix(theme.Background, baseColor, 0.18),
-            Surface = Mix(theme.Surface, baseColor, 0.10),
-            Elevated = Mix(theme.Elevated, baseColor, 0.34),
-            Glass = WithAlpha(Mix(theme.Glass, baseColor, 0.30), theme.Glass.A),
+            Background = Mix(theme.Background, baseColor, 0.38),
+            Surface = Mix(theme.Surface, baseColor, 0.28),
+            Elevated = Mix(theme.Elevated, baseColor, 0.48),
+            Glass = WithAlpha(Mix(theme.Glass, baseColor, 0.42), theme.Glass.A),
             DefaultAccent = Mix(theme.DefaultAccent, baseColor, 0.55),
         };
     }

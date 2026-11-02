@@ -32,6 +32,11 @@ public sealed class ThemeApplicator
     private const string TextMutedKey = "GlazeTextMutedBrush";
     private const string AccentKey = "GlazeAccentBrush";
     private const string SelectionKey = "GlazeSelectionBrush";
+    private const string AccentFillKey = "AccentFillColorDefaultBrush";
+    private const string HighlightAccentKey = "SystemControlHighlightAccentBrush";
+    private const string BackgroundAccentKey = "SystemControlBackgroundAccentBrush";
+    private const string SliderAccentKey = "SliderTrackValueFill";
+    private const string ToggleAccentKey = "ToggleSwitchFillOn";
     private const string ListViewItemPointerOverKey = "ListViewItemBackgroundPointerOver";
     private const string ListViewItemPressedKey = "ListViewItemBackgroundPressed";
     private const string ListViewItemSelectedKey = "ListViewItemBackgroundSelected";
@@ -92,6 +97,34 @@ public sealed class ThemeApplicator
             system.AnimationsEnabled);
 
         Apply(root, settings.ThemeMode, settings.AccentId, settings.BaseColorId, accessibility, system.Palette);
+    }
+
+    /// <summary>
+    /// Красит системный заголовок окна в цвета действующей темы. Заголовок рисует DWM,
+    /// а не XAML, поэтому <see cref="FrameworkElement.RequestedTheme"/> на него не влияет:
+    /// без этого вызова тёмное окно оставалось со светлой полосой сверху.
+    /// </summary>
+    public void ApplyTitleBar(Window window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        var light = ThemeModeResolver.Resolve(Mode, SystemUsesLightTheme()) == ThemeMode.Light;
+        var theme = GlazePalette.TintWithBase(light ? GlazePalette.Light : GlazePalette.Dark, BaseColorId);
+        var accent = ResolveAccent(AccentId, theme);
+        var titleBar = window.AppWindow.TitleBar;
+
+        titleBar.BackgroundColor = theme.Background;
+        titleBar.ForegroundColor = theme.TextPrimary;
+        titleBar.InactiveBackgroundColor = theme.Background;
+        titleBar.InactiveForegroundColor = theme.TextSecondary;
+        titleBar.ButtonBackgroundColor = theme.Background;
+        titleBar.ButtonForegroundColor = theme.TextPrimary;
+        titleBar.ButtonInactiveBackgroundColor = theme.Background;
+        titleBar.ButtonInactiveForegroundColor = theme.TextSecondary;
+        titleBar.ButtonHoverBackgroundColor = theme.Elevated;
+        titleBar.ButtonHoverForegroundColor = theme.TextPrimary;
+        titleBar.ButtonPressedBackgroundColor = accent;
+        titleBar.ButtonPressedForegroundColor = theme.TextPrimary;
     }
 
     public void Apply(FrameworkElement root, ThemeMode mode, string? accentId)
@@ -192,7 +225,7 @@ public sealed class ThemeApplicator
         SetBrush(BackgroundKey, theme.Background);
         SetBrush(SurfaceKey, theme.Surface);
         SetBrush(ElevatedKey, theme.Elevated);
-        SetBrush(BorderKey, Color.FromArgb(0x00, 0x00, 0x00, 0x00));
+        SetBrush(BorderKey, GlazePalette.WithAlpha(accent, 0x40));
         SetBrush(GlassKey, theme.Glass);
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
@@ -201,6 +234,14 @@ public sealed class ThemeApplicator
         SetBrush(TextMutedKey, theme.TextMuted);
         SetBrush(AccentKey, accent);
         SetBrush(SelectionKey, selection);
+
+        // Стандартные элементы (ползунок, переключатель, флажок, подсветка списков)
+        // берут цвет из системных акцентных кистей: без них акцент менял слишком мало.
+        SetBrush(AccentFillKey, accent);
+        SetBrush(HighlightAccentKey, accent);
+        SetBrush(BackgroundAccentKey, accent);
+        SetBrush(SliderAccentKey, accent);
+        SetBrush(ToggleAccentKey, accent);
 
         SetBrush(ListViewItemPointerOverKey, GlazePalette.WithAlpha(accent, 0x1F));
         SetBrush(ListViewItemPressedKey, GlazePalette.WithAlpha(accent, 0x33));

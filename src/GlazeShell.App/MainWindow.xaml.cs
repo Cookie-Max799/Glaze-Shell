@@ -40,6 +40,7 @@ public sealed partial class MainWindow : Window
         Title = title;
 
         _themes.ApplyFromSettings(Root);
+        _themes.ApplyTitleBar(this);
         ViewModel.ThemeSelectionChanged += OnThemeSelectionChanged;
 
         Root.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(OnRootKeyDown), handledEventsToo: true);
@@ -72,8 +73,11 @@ public sealed partial class MainWindow : Window
     /// </summary>
     public event EventHandler? RecoveryRequested;
 
-    private void OnThemeSelectionChanged(object? sender, ThemeSelectionChangedEventArgs e) =>
+    private void OnThemeSelectionChanged(object? sender, ThemeSelectionChangedEventArgs e)
+    {
         _themes.Apply(Root, e.Mode, e.AccentId);
+        _themes.ApplyTitleBar(this);
+    }
 
     private void OnRecoveryClick(object sender, RoutedEventArgs e) => RecoveryRequested?.Invoke(this, EventArgs.Empty);
 

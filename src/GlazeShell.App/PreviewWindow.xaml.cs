@@ -35,7 +35,9 @@ public sealed partial class PreviewWindow : Window
 
         Title = "Предпросмотр";
 
-        (themes ?? throw new ArgumentNullException(nameof(themes))).ApplyFromSettings(Root);
+        var applicator = themes ?? throw new ArgumentNullException(nameof(themes));
+        applicator.ApplyFromSettings(Root);
+        applicator.ApplyTitleBar(this);
 
         AppWindow.Resize(new SizeInt32(DefaultWidth, DefaultHeight));
 

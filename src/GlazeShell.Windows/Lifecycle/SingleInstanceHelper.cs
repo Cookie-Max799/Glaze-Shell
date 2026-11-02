@@ -109,6 +109,15 @@ public static class SingleInstanceHelper
                 return true;
             }
 
+            // Панели Glaze Shell — topmost tool-окна. При повторном запуске нельзя
+            // поднимать их вместо главного окна: иначе приложение «не открывается»,
+            // хотя панели на экране.
+            var exStyle = (nint)User32.GetWindowLongPtr(hwnd, User32.GwlExStyle);
+            if ((exStyle & (nint)User32.WsExToolWindow) != 0)
+            {
+                return true;
+            }
+
             var threadId = User32.GetWindowThreadProcessId(hwnd, out uint processId);
             if (threadId == 0 || processId == 0 || !IsOwnProcess(processId, ownPath))
             {

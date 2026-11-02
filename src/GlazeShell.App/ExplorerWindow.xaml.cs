@@ -53,7 +53,12 @@ public sealed partial class ExplorerWindow : Window
         Title = "Проводник Glaze Shell";
 
         _themes.ApplyFromSettings(Root);
-        _settingsChanged = events.Subscribe<SettingsChanged>(_ => _themes.ApplyFromSettings(Root));
+        _themes.ApplyTitleBar(this);
+        _settingsChanged = events.Subscribe<SettingsChanged>(_ =>
+        {
+            _themes.ApplyFromSettings(Root);
+            _themes.ApplyTitleBar(this);
+        });
 
         // Значки запрашиваются в пикселях отображения: масштаб известен только после загрузки
         // корневого элемента, когда XamlRoot уже связан с окном.
