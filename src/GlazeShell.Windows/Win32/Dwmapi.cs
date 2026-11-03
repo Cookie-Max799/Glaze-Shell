@@ -4,8 +4,12 @@ namespace GlazeShell.Windows.Win32;
 
 internal static class Dwmapi
 {
+    internal const uint DwmwaNcRenderingPolicy = 2;
     internal const uint DwmwaCloaked = 14;
     internal const uint DwmwaWindowCornerPreference = 33;
+
+    internal const int DwmNcrpUseWindowStyle = 0;
+    internal const int DwmNcrpDisabled = 1;
 
     internal const int DwmcpDefault = 0;
     internal const int DwmcpDoNotRound = 1;

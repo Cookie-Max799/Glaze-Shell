@@ -51,6 +51,16 @@ public static class OverlayWindow
         frame &= (nint)~(User32.WsCaption | User32.WsThickFrame);
         User32.SetWindowLongPtr(hwnd, User32.GwlStyle, frame);
 
+        // Тень рисует DWM по прямоугольнику окна, а не по региональной маске: при
+        // открытом popover она обводила весь выросший прямоугольник на полэкрана.
+        // Отключаем отрисовку неклиентской области — форму задаёт только регион.
+        var ncRendering = Dwmapi.DwmNcrpDisabled;
+        _ = Dwmapi.DwmSetWindowAttribute(
+            hwnd,
+            Dwmapi.DwmwaNcRenderingPolicy,
+            ref ncRendering,
+            sizeof(int));
+
         // Без SWP_FRAMECHANGED система не пересчитывает рамку, и DWM продолжает рисовать
         // тень вокруг прежнего прямоугольника: она видна как тёмная полоса под окном.
         User32.SetWindowPos(
@@ -287,6 +297,32 @@ public static class OverlayWindow
     /// <summary>Окно сейчас активно, то есть получает клавиатурный ввод.</summary>
     public static bool IsActiveWindow(nint hwnd) =>
         hwnd != 0 && User32.GetForegroundWindow() == hwnd;
+
+    /// <summary>
+    /// Окно — инструментальная панель (<c>WS_EX_TOOLWINDOW</c>). По этому признаку
+    /// верхняя панель и dock отличаются от обычных окон приложения: их активация не
+    /// должна считаться возвратом на рабочий стол.
+    /// </summary>
+    public static bool IsToolWindow(nint hwnd)
+    {
+        if (hwnd == 0)
+        {
+            return false;
+        }
+
+        var style = (nint)User32.GetWindowLongPtr(hwnd, User32.GwlExStyle);
+        return (style & (nint)User32.WsExToolWindow) != 0;
+    }
+
+    /// <summary>Возвращает фокус окну, которое было активным до открытия popover.</summary>
+    public static void RestoreForegroundWindow(nint hwnd)
+    {
+        // Окно могло закрыться, пока popover был открыт: тогда фокус возвращать некуда.
+        if (hwnd != 0 && User32.IsWindow(hwnd))
+        {
+            _ = User32.SetForegroundWindow(hwnd);
+        }
+    }
 
     /// <summary>
     /// Придаёт окну форму набора скруглённых прямоугольников (регион окна) в физических

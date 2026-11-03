@@ -28,6 +28,9 @@ public sealed partial class TopBarWindow : Window
 {
     private const int BarHeight = 30;
 
+    /// <summary>Высота строки содержимого полосы: с неё начинается панель результатов.</summary>
+    private const int BarContentHeight = 26;
+
     /// <summary>Сколько пикселей полосы видно над верхним краем экрана в свёрнутом виде.</summary>
     private const int PeekHeight = 22;
 
@@ -77,6 +80,9 @@ public sealed partial class TopBarWindow : Window
 
     /// <summary>Окно сейчас активируемо и может держать клавиатуру (поиск или popover).</summary>
     private bool _inputEnabled;
+
+    /// <summary>Окно, активное до открытия поиска или popover: ему возвращается фокус.</summary>
+    private nint _previousForegroundHwnd;
 
     public TopBarWindow(
         ISettingsManager settings,
@@ -267,12 +273,14 @@ public sealed partial class TopBarWindow : Window
         if (ViewModel.HasResults)
         {
             const int constraint = 440;
-            logicalHeight += 6;
-            logicalHeight += MeasurePanelHeight(ResultsPanel, constraint);
+
+            // Панель живёт во второй строке сетки, а её DesiredSize уже включает
+            // собственное верхнее поле: складываем строку и измерение без лишнего зазора.
+            logicalHeight = BarContentHeight + MeasurePanelHeight(ResultsPanel, constraint);
         }
         else if (ViewModel.QuickSettings.IsOpen)
         {
-            // DesiredSize панели уже включает верхний отступ 56 DIP из разметки:
+            // DesiredSize панели уже включает верхний отступ 30 DIP из разметки:
             // повторное прибавление отступа делало окно выше панели на пустую полосу.
             logicalHeight = MeasurePanelHeight(QuickSettingsPanel, QuickSettingsWidth);
         }
@@ -431,9 +439,17 @@ public sealed partial class TopBarWindow : Window
         _foreignForeground = foreign;
 
         // Уход в другое приложение убирает панель сразу, без 350 мс ожидания.
+        // Заодно снимается ввод: иначе панель оставалась активной и «залипала» открытой.
         if (foreign)
         {
             _collapseAt = DateTimeOffset.UtcNow;
+            _previousForegroundHwnd = 0;
+
+            if (_inputEnabled)
+            {
+                _inputEnabled = false;
+                OverlayWindow.SetNonActivating(_hwnd, true);
+            }
         }
 
         // Высота «кромки» в покое зависит от режима, поэтому положение пересчитывается,
@@ -593,13 +609,21 @@ public sealed partial class TopBarWindow : Window
             var elementBounds = element.TransformToVisual(Root).TransformBounds(
                 new Rect(0, 0, element.ActualWidth, element.ActualHeight));
 
-            regions.Add(new PixelRegion(
-                new PixelRect(
-                    (int)Math.Round(elementBounds.X * scale),
-                    (int)Math.Round(elementBounds.Y * scale),
-                    (int)Math.Round(elementBounds.Width * scale),
-                    (int)Math.Round(elementBounds.Height * scale)),
-                radius));
+            var left = (int)Math.Round(elementBounds.X * scale);
+            var top = (int)Math.Round(elementBounds.Y * scale);
+            var width = (int)Math.Round(elementBounds.Width * scale);
+            var height = (int)Math.Round(elementBounds.Height * scale);
+
+            regions.Add(new PixelRegion(new PixelRect(left, top, width, height), radius));
+
+            // Панель примыкает к полосе верхней стороной: срезаем скругление сверху,
+            // чтобы стекло шло непрерывно от плашки в окно, а не отдельным островом.
+            var bandHeight = Math.Min(radius, height);
+
+            if (bandHeight > 0)
+            {
+                regions.Add(new PixelRegion(new PixelRect(left, top, width, bandHeight), 0));
+            }
         }
     }
 
@@ -653,6 +677,16 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
+        // Запоминаем активное окно до активации панели: после закрытия popover фокус
+        // возвращается ему, иначе foreground остаётся у панели, она считается «своей»
+        // и больше не прячется при работе в другом приложении.
+        if (!_inputEnabled &&
+            OverlayWindow.TryGetForegroundWindow(out var foreground, out _) &&
+            foreground != _hwnd)
+        {
+            _previousForegroundHwnd = foreground;
+        }
+
         _inputEnabled = true;
         OverlayWindow.SetNonActivating(_hwnd, false);
         _ = OverlayWindow.ActivateForInput(_hwnd);
@@ -667,14 +701,34 @@ public sealed partial class TopBarWindow : Window
     {
         if (_hwnd == 0 ||
             ViewModel.QuickSettings.IsOpen ||
-            ViewModel.Calendar.IsOpen ||
-            SearchBox is { FocusState: not FocusState.Unfocused })
+            ViewModel.Calendar.IsOpen)
+        {
+            return;
+        }
+
+        // Пока в поле есть запрос, клавиатура остаётся у панели: иначе набор обрывался
+        // бы на полуслове. Пустое поле ввода не требует, даже если в нём остался фокус
+        // после клика по часам или статусу.
+        if (SearchBox is { FocusState: not FocusState.Unfocused } && ViewModel.HasQuery)
         {
             return;
         }
 
         _inputEnabled = false;
         OverlayWindow.SetNonActivating(_hwnd, true);
+
+        if (SearchBox is { FocusState: not FocusState.Unfocused })
+        {
+            _ = SearchBox.Focus(FocusState.Unfocused);
+        }
+
+        var previous = _previousForegroundHwnd;
+        _previousForegroundHwnd = 0;
+
+        if (previous != 0 && !OverlayWindow.IsActiveWindow(previous))
+        {
+            OverlayWindow.RestoreForegroundWindow(previous);
+        }
     }
 
     /// <summary>

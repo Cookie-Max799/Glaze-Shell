@@ -299,13 +299,13 @@
                 Grid.Row="1"
                 Grid.Column="1"
                 Width="440"
-                Margin="0,6,0,0"
+                Margin="0,4,0,0"
                 Padding="6"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
                 Background="{StaticResource GlazeGlassBrush}"
                 BorderThickness="0"
-                CornerRadius="32"
+                CornerRadius="0,0,32,32"
                 Visibility="{x:Bind ViewModel.HasResults, Mode=OneWay}">
                 <Grid>
                     <ListView
@@ -393,12 +393,12 @@
         <Border
             x:Name="QuickSettingsPanel"
             Width="380"
-            Margin="0,56,0,0"
+            Margin="0,30,0,0"
             Padding="16"
             HorizontalAlignment="Right"
             VerticalAlignment="Top"
             Background="{StaticResource GlazeGlassBrush}"
-            CornerRadius="32"
+            CornerRadius="0,0,32,32"
             Visibility="{x:Bind ViewModel.QuickSettings.IsOpen, Mode=OneWay}">
             <StackPanel Spacing="16">
                 <TextBlock
@@ -522,12 +522,12 @@
         <Border
             x:Name="CalendarPanel"
             Width="380"
-            Margin="0,56,0,0"
+            Margin="0,30,0,0"
             Padding="16"
             HorizontalAlignment="Right"
             VerticalAlignment="Top"
             Background="{StaticResource GlazeGlassBrush}"
-            CornerRadius="32"
+            CornerRadius="0,0,32,32"
             Visibility="{x:Bind ViewModel.Calendar.IsOpen, Mode=OneWay}">
             <StackPanel Spacing="12">
                 <Grid ColumnSpacing="8">

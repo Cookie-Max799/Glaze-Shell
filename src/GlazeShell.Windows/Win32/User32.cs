@@ -166,7 +166,9 @@ internal static class User32
     internal const long WsExDlgModalFrame = 0x0000_0001;
     internal const long WsExNoRedirectionBitmap = 0x0020_0000;
 
+    internal const nint HwndTop = 0;
     internal const nint HwndTopmost = -1;
+    internal const uint AsfwAny = 0xFFFF_FFFF;
 
     internal const int SwShow = 5;
     internal const int SwShowNoActivate = 4;
@@ -357,6 +359,10 @@ internal static class User32
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetForegroundWindow(nint hwnd);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool AllowSetForegroundWindow(uint processId);
 
     /// <summary>Передаёт фокус ввода окну; действует в пределах присоединённой очереди ввода.</summary>
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]

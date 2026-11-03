@@ -533,7 +533,12 @@ public sealed partial class DockWindow : Window
         _foregroundHwnd = hwnd;
         var shell = processId != _ownProcessId && IsShellProcess(processId);
         _shellForeground = shell;
-        _foreignForeground = processId != _ownProcessId && !shell;
+
+        // Собственные панели (верхняя панель, сам dock) — тоже tool-окна. Их активация
+        // при открытии popover не означает возврат на рабочий стол, поэтому dock не
+        // должен выезжать: иначе он открывался вместе с любым окном верхней полоски.
+        var ownOverlay = processId == _ownProcessId && OverlayWindow.IsToolWindow(hwnd);
+        _foreignForeground = (processId != _ownProcessId && !shell) || ownOverlay;
     }
 
     /// <summary>Процесс оболочки Windows: его окна не считаются «чужим приложением».</summary>

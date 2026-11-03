@@ -89,7 +89,45 @@ public static class SingleInstanceHelper
             _ = User32.ShowWindowAsync(hwnd, User32.SwRestore);
         }
 
-        _ = User32.SetForegroundWindow(hwnd);
+        // Второй процесс не может просто вызвать SetForegroundWindow: пока активно
+        // чужое окно, система отклоняет перевод, и приложение выглядит «не открывшимся»
+        // (а Windows при этом издаёт звук ошибки). Сначала разрешаем смену активного
+        // окна всем процессам, затем присоединяем очередь ввода к потоку активного
+        // окна — тот же приём, что у панелей при активации поиска.
+        _ = User32.AllowSetForegroundWindow(User32.AsfwAny);
+
+        // Поднимаем окно в верх обычного слоя: даже если активация не удалась,
+        // главное окно окажется поверх остальных и его можно будет выбрать.
+        _ = User32.SetWindowPos(
+            hwnd,
+            User32.HwndTop,
+            0,
+            0,
+            0,
+            0,
+            User32.SwpNoMove | User32.SwpNoSize | User32.SwpNoActivate | User32.SwpShowWindow);
+
+        var foreground = User32.GetForegroundWindow();
+        var currentThread = Kernel32.GetCurrentThreadId();
+        var foregroundThread = foreground == 0
+            ? 0
+            : User32.GetWindowThreadProcessId(foreground, out _);
+
+        var attached = foregroundThread != 0 &&
+                       foregroundThread != currentThread &&
+                       User32.AttachThreadInput(currentThread, foregroundThread, true);
+
+        try
+        {
+            _ = User32.SetForegroundWindow(hwnd);
+        }
+        finally
+        {
+            if (attached)
+            {
+                _ = User32.AttachThreadInput(currentThread, foregroundThread, false);
+            }
+        }
     }
 
     internal static nint FindOwnVisibleWindow()
@@ -101,6 +139,7 @@ public static class SingleInstanceHelper
         }
 
         nint found = 0;
+        long largestArea = 0;
 
         User32.EnumWindows((hwnd, _) =>
         {
@@ -124,8 +163,19 @@ public static class SingleInstanceHelper
                 return true;
             }
 
-            found = hwnd;
-            return false;
+            // Среди обычных окон процесса (главное, проводник, настройки, предпросмотр)
+            // берём самое большое: это главное окно, а не случайная карточка предпросмотра.
+            if (User32.GetWindowRect(hwnd, out var bounds))
+            {
+                var area = (long)(bounds.Right - bounds.Left) * (bounds.Bottom - bounds.Top);
+                if (area >= largestArea)
+                {
+                    largestArea = area;
+                    found = hwnd;
+                }
+            }
+
+            return true;
         }, 0);
 
         return found;
