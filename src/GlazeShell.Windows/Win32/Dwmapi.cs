@@ -4,12 +4,12 @@ namespace GlazeShell.Windows.Win32;
 
 internal static class Dwmapi
 {
-    internal const uint DwmwaNcRenderingPolicy = 2;
     internal const uint DwmwaCloaked = 14;
     internal const uint DwmwaWindowCornerPreference = 33;
+    internal const uint DwmwaBorderColor = 34;
 
-    internal const int DwmNcrpUseWindowStyle = 0;
-    internal const int DwmNcrpDisabled = 1;
+    /// <summary>Значение <c>DWMWA_COLOR_NONE</c>: рамку вокруг окна не рисовать.</summary>
+    internal const int DwmColorNone = unchecked((int)0xFFFF_FFFE);
 
     internal const int DwmcpDefault = 0;
     internal const int DwmcpDoNotRound = 1;
@@ -21,4 +21,16 @@ internal static class Dwmapi
 
     [DllImport("dwmapi.dll", ExactSpelling = true)]
     internal static extern int DwmSetWindowAttribute(nint hwnd, uint attribute, ref int value, int size);
+
+    [DllImport("dwmapi.dll", ExactSpelling = true)]
+    internal static extern int DwmExtendFrameIntoClientArea(nint hwnd, ref Margins margins);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct Margins
+    {
+        internal int Left;
+        internal int Right;
+        internal int Top;
+        internal int Bottom;
+    }
 }

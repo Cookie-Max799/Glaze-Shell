@@ -307,6 +307,11 @@ public sealed partial class TopBarWindow : Window
 
         ApplyPlacement();
         UpdateWindowRegion();
+
+        // MoveAndResize применяется асинхронно: маска, посчитанная до фактического
+        // изменения размера, может не совпасть с новым прямоугольником окна, и тогда
+        // стекло на мгновение заливает всю его площадь. Повторяем маску после раскладки.
+        _ = DispatcherQueue.TryEnqueue(UpdateWindowRegion);
     }
 
     /// <summary>Применяет текущий прогресс выезда к положению окна.</summary>

@@ -51,14 +51,30 @@ public static class OverlayWindow
         frame &= (nint)~(User32.WsCaption | User32.WsThickFrame);
         User32.SetWindowLongPtr(hwnd, User32.GwlStyle, frame);
 
-        // Тень рисует DWM по прямоугольнику окна, а не по региональной маске: при
-        // открытом popover она обводила весь выросший прямоугольник на полэкрана.
-        // Отключаем отрисовку неклиентской области — форму задаёт только регион.
-        var ncRendering = Dwmapi.DwmNcrpDisabled;
+        // Тень DWM считается по прямоугольнику окна, а не по региональной маске. Пока
+        // открыт popover, окно вырастает по высоте, и его тень ложится тёмной полосой
+        // на всю ширину экрана — видно как линия. Скругление Win11 и тень — одно целое:
+        // отключаем системное скругление, и тень по прямоугольнику исчезает. Форму окна
+        // задаёт регион, поэтому собственные скругления панелей не страдают.
+        var cornerPreference = Dwmapi.DwmcpDoNotRound;
         _ = Dwmapi.DwmSetWindowAttribute(
             hwnd,
-            Dwmapi.DwmwaNcRenderingPolicy,
-            ref ncRendering,
+            Dwmapi.DwmwaWindowCornerPreference,
+            ref cornerPreference,
+            sizeof(int));
+
+        var margins = new Dwmapi.Margins { Left = 0, Right = 0, Top = 0, Bottom = 0 };
+        _ = Dwmapi.DwmExtendFrameIntoClientArea(hwnd, ref margins);
+
+        // Windows 11 обводит активное окно рамкой акцента по всему прямоугольнику. Пока
+        // панель не активирована, рамки нет; при открытии popover окно становится активным
+        // и рамка проступает линией во всю ширину по нижнему краю выросшего окна. Форму
+        // задаёт регион, поэтому системную рамку убираем полностью.
+        var borderColor = Dwmapi.DwmColorNone;
+        _ = Dwmapi.DwmSetWindowAttribute(
+            hwnd,
+            Dwmapi.DwmwaBorderColor,
+            ref borderColor,
             sizeof(int));
 
         // Без SWP_FRAMECHANGED система не пересчитывает рамку, и DWM продолжает рисовать
