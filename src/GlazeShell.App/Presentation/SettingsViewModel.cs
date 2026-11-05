@@ -2,21 +2,32 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
+using GlazeShell.Core.Services;
 using GlazeShell.Core.Settings;
 
 namespace GlazeShell.App.Presentation;
 
 /// <summary>
 /// Одна строка настройки в панели: описание из каталога и текущее значение. Одна модель
-/// обслуживает все виды контролов (переключатель, список, текст), а вид выбирается по
-/// <see cref="SettingKind"/>; при изменении значение сразу записывается через переданный
+/// обслуживает все виды контролов (переключатель, список, текст, ползунок), а вид выбирается
+/// по <see cref="SettingKind"/>; при изменении значение сразу записывается через переданный
 /// обработчик, поэтому настройки применяются вживую.
 /// </summary>
-public sealed class SettingRowViewModel : INotifyPropertyChanged
+/// <remarks>
+/// Ползунок шлёт новое значение на каждый пиксель перетаскивания, а запись настроек — это
+/// файл на диске. Поэтому для <see cref="SettingKind.Range"/> запись объединяется короткой
+/// задержкой: интерфейс обновляется сразу, а на диск попадает последнее значение.
+/// </remarks>
+public sealed class SettingRowViewModel : INotifyPropertyChanged, IDisposable
 {
+    private static readonly TimeSpan RangeApplyDelay = TimeSpan.FromMilliseconds(150);
+
     private readonly SettingDefinition _definition;
     private readonly Func<SettingDefinition, object, bool> _apply;
+    private readonly EventCoalescer? _rangeApply;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueue? _dispatcher;
     private object? _value;
+    private object? _pendingRangeValue;
     private bool _suppress;
 
     public SettingRowViewModel(SettingDefinition definition, object? value, Func<SettingDefinition, object, bool> apply)
@@ -24,6 +35,15 @@ public sealed class SettingRowViewModel : INotifyPropertyChanged
         _definition = definition ?? throw new ArgumentNullException(nameof(definition));
         _apply = apply ?? throw new ArgumentNullException(nameof(apply));
         _value = value;
+        _dispatcher = Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread();
+
+        if (definition.Kind == SettingKind.Range)
+        {
+            _rangeApply = new EventCoalescer(
+                RangeApplyDelay,
+                ApplyPendingRangeOnDispatcher,
+                EventCoalescer.FallbackErrorHandler("Settings"));
+        }
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -53,7 +73,7 @@ public sealed class SettingRowViewModel : INotifyPropertyChanged
     /// <summary>Шаг ползунка (<see cref="SettingKind.Range"/>).</summary>
     public double Step => _definition.Step;
 
-    /// <summary>Значение ползунка. Изменение применяется сразу.</summary>
+    /// <summary>Значение ползунка. Применяется с короткой задержкой, чтобы не писать файл на каждый пиксель.</summary>
     public double RangeValue
     {
         get => _value is double number ? number : 0;
@@ -64,7 +84,17 @@ public sealed class SettingRowViewModel : INotifyPropertyChanged
                 return;
             }
 
-            Set(value);
+            if (_rangeApply is null)
+            {
+                Set(value);
+                return;
+            }
+
+            _pendingRangeValue = value;
+            _value = value;
+            OnPropertyChanged(nameof(RangeValue));
+            OnPropertyChanged(nameof(RangeLabel));
+            _rangeApply.Request();
         }
     }
 
@@ -143,6 +173,16 @@ public sealed class SettingRowViewModel : INotifyPropertyChanged
         _suppress = false;
     }
 
+    /// <summary>
+    /// Останавливает отложенное применение ползунка. Последнее значение записывается сразу:
+    /// закрытие окна не должно терять только что выбранную прозрачность.
+    /// </summary>
+    public void Dispose()
+    {
+        _rangeApply?.Dispose();
+        ApplyPendingRange();
+    }
+
     private void Set(object newValue)
     {
         if (_apply(_definition, newValue))
@@ -154,6 +194,31 @@ public sealed class SettingRowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(RangeValue));
             OnPropertyChanged(nameof(RangeLabel));
         }
+    }
+
+    /// <summary>Записывает последнее значение ползунка после паузы перетаскивания.</summary>
+    private void ApplyPendingRange()
+    {
+        if (_pendingRangeValue is { } value)
+        {
+            _pendingRangeValue = null;
+            _apply(_definition, value);
+        }
+    }
+
+    /// <summary>
+    /// Таймер объединения работает в собственном потоке, а запись настроек публикует
+    /// <c>SettingsChanged</c>, на который подписаны окна. Поэтому применение переносится
+    /// в UI-поток — тот же, где живут кисти и визуальное дерево.
+    /// </summary>
+    private void ApplyPendingRangeOnDispatcher()
+    {
+        if (_dispatcher is null)
+        {
+            return;
+        }
+
+        _ = _dispatcher.TryEnqueue(ApplyPendingRange);
     }
 
     private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
@@ -273,7 +338,15 @@ public sealed class SettingsViewModel : INotifyPropertyChanged, IDisposable
         ReloadFromSettings();
     }
 
-    public void Dispose() => _settingsChanged.Dispose();
+    public void Dispose()
+    {
+        _settingsChanged.Dispose();
+
+        foreach (var row in _allRows)
+        {
+            row.Dispose();
+        }
+    }
 
     /// <summary>
     /// Записывает новое значение настройки. Возвращает <c>true</c>, если значение изменено и
