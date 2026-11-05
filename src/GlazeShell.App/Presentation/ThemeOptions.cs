@@ -64,7 +64,7 @@ internal static class ThemeOptions
 
     private static SolidColorBrush CreatePreview(string hex)
     {
-        var color = GlazePalette.ParseHex(hex, GlazePalette.Light.DefaultAccent);
+        var color = GlazePalette.ParseHex(hex, GlazePalette.ParseHex(AccentPalette.DefaultLightHex, default));
         return new SolidColorBrush(color);
     }
 }

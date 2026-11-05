@@ -246,6 +246,47 @@ public sealed class UserSettingsTests
     }
 
     [TestMethod]
+    public void GlassTransparencyIsModerateByDefault()
+    {
+        var settings = UserSettings.CreateDefault();
+
+        Assert.AreEqual(UserSettings.DefaultGlassTransparency, settings.GlassTransparency);
+        Assert.IsGreaterThan(0, UserSettings.DefaultGlassTransparency);
+        Assert.IsLessThan(UserSettings.MaxGlassTransparency, UserSettings.DefaultGlassTransparency);
+    }
+
+    [TestMethod]
+    public void GlassTransparencyIsClampedToTheAllowedRange()
+    {
+        Assert.AreEqual(UserSettings.MaxGlassTransparency, new UserSettings(glassTransparency: 500).GlassTransparency);
+        Assert.AreEqual(0, new UserSettings(glassTransparency: -1).GlassTransparency);
+        Assert.AreEqual(20, new UserSettings(glassTransparency: 20).GlassTransparency);
+    }
+
+    [TestMethod]
+    public void EditorKeepsGlassTransparencyWhenOtherSettingsChange()
+    {
+        var source = new UserSettings(glassTransparency: 30);
+
+        var updated = UserSettingsEditor.With(source, themeMode: ThemeMode.Dark);
+
+        Assert.AreEqual(30, updated.GlassTransparency);
+    }
+
+    [TestMethod]
+    public void EditorChangesGlassTransparencyWithoutLosingSettings()
+    {
+        var source = new UserSettings(themeMode: ThemeMode.Dark, accentId: "rose", highContrast: true);
+
+        var updated = UserSettingsEditor.With(source, glassTransparency: 10);
+
+        Assert.AreEqual(10, updated.GlassTransparency);
+        Assert.AreEqual(ThemeMode.Dark, updated.ThemeMode);
+        Assert.AreEqual("rose", updated.AccentId);
+        Assert.IsTrue(updated.HighContrast);
+    }
+
+    [TestMethod]
     public void RecoveryHotkeyIsEnabledByDefault()
     {
         var settings = UserSettings.CreateDefault();

@@ -32,7 +32,8 @@ public static class UserSettingsEditor
         ExplorerViewMode? explorerViewMode = null,
         bool? recoveryHotkeyEnabled = null,
         string? recoveryHotkeyId = null,
-        bool? safeModeEnabled = null)
+        bool? safeModeEnabled = null,
+        int? glassTransparency = null)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -57,6 +58,7 @@ public static class UserSettingsEditor
             highContrast: highContrast ?? source.HighContrast,
             recoveryHotkeyEnabled: recoveryHotkeyEnabled ?? source.RecoveryHotkeyEnabled,
             recoveryHotkeyId: recoveryHotkeyId ?? source.RecoveryHotkeyId,
-            safeModeEnabled: safeModeEnabled ?? source.SafeModeEnabled);
+            safeModeEnabled: safeModeEnabled ?? source.SafeModeEnabled,
+            glassTransparency: glassTransparency ?? source.GlassTransparency);
     }
 }

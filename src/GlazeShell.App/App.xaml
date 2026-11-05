@@ -1,7 +1,8 @@
 <Application
     x:Class="GlazeShell.App.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:p="using:GlazeShell.App.Presentation">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -14,11 +15,11 @@
                 поэтому элементы обновляются без перезагрузки XAML. Источник значений —
                 docs/DESIGN.md и docs/design/tokens/tokens.json.
             -->
-            <SolidColorBrush x:Key="GlazeBackgroundBrush" Color="#14122B" />
-            <SolidColorBrush x:Key="GlazeSurfaceBrush" Color="#1E1B3D" />
-            <SolidColorBrush x:Key="GlazeElevatedBrush" Color="#2A2754" />
-            <SolidColorBrush x:Key="GlazeBorderBrush" Color="#3A3670" />
-            <SolidColorBrush x:Key="GlazeGlassBrush" Color="#66221E4A" />
+            <SolidColorBrush x:Key="GlazeBackgroundBrush" Color="#0E0B22" />
+            <SolidColorBrush x:Key="GlazeSurfaceBrush" Color="#171332" />
+            <SolidColorBrush x:Key="GlazeElevatedBrush" Color="#221C48" />
+            <SolidColorBrush x:Key="GlazeBorderBrush" Color="#40B4A4FF" />
+            <SolidColorBrush x:Key="GlazeGlassBrush" Color="#8C211B45" />
             <SolidColorBrush x:Key="GlazeBlackBrush" Color="#000000" />
             <SolidColorBrush x:Key="GlazeWhiteBrush" Color="#FFFFFF" />
 
@@ -28,22 +29,24 @@
                 <GradientStop Offset="0.5" Color="#5E7BFF" />
                 <GradientStop Offset="1" Color="#BF5AF2" />
             </LinearGradientBrush>
-            <SolidColorBrush x:Key="GlazeTextPrimaryBrush" Color="#F4F1FF" />
-            <SolidColorBrush x:Key="GlazeTextSecondaryBrush" Color="#B2AED8" />
-            <SolidColorBrush x:Key="GlazeTextMutedBrush" Color="#7773A8" />
-            <SolidColorBrush x:Key="GlazeAccentBrush" Color="#A99BFF" />
-            <SolidColorBrush x:Key="GlazeSelectionBrush" Color="#33A99BFF" />
+            <SolidColorBrush x:Key="GlazeTextPrimaryBrush" Color="#F8F4FF" />
+            <SolidColorBrush x:Key="GlazeTextSecondaryBrush" Color="#C6C0EC" />
+            <SolidColorBrush x:Key="GlazeTextMutedBrush" Color="#918BBB" />
+            <SolidColorBrush x:Key="GlazeAccentBrush" Color="#C9BEFF" />
+            <SolidColorBrush x:Key="GlazeSelectionBrush" Color="#33B4A4FF" />
+            <SolidColorBrush x:Key="TextOnAccentFillColorPrimaryBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="TextOnAccentFillColorSecondaryBrush" Color="#E6FFFFFF" />
 
             <!--
                 Акцентные кисти стандартных элементов: ползунок, переключатель, флажок и
                 подсветка списков берут цвет отсюда, поэтому смена акцента видна не только
                 в собственных кистях Glaze Shell. ThemeApplicator перекрашивает их.
             -->
-            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#A99BFF" />
-            <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="#A99BFF" />
-            <SolidColorBrush x:Key="SystemControlBackgroundAccentBrush" Color="#A99BFF" />
-            <SolidColorBrush x:Key="SliderTrackValueFill" Color="#A99BFF" />
-            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#A99BFF" />
+            <SolidColorBrush x:Key="AccentFillColorDefaultBrush" Color="#B4A4FF" />
+            <SolidColorBrush x:Key="SystemControlHighlightAccentBrush" Color="#C9BEFF" />
+            <SolidColorBrush x:Key="SystemControlBackgroundAccentBrush" Color="#B4A4FF" />
+            <SolidColorBrush x:Key="SliderTrackValueFill" Color="#B4A4FF" />
+            <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#B4A4FF" />
 
             <SolidColorBrush x:Key="GlazeStatusSuccessBrush" Color="#3FCF9B" />
             <SolidColorBrush x:Key="GlazeStatusCriticalBrush" Color="#FF6B81" />
@@ -53,11 +56,11 @@
                 фоне. Кисти заданы прямо в корневом словаре: он ищется раньше влитых
                 XamlControlsResources, поэтому перекрывает значения темы.
             -->
-            <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#2A2754" />
-            <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#2A2754" />
-            <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#33A99BFF" />
-            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#33A99BFF" />
-            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#33A99BFF" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundPointerOver" Color="#221C48" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundPressed" Color="#221C48" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundSelected" Color="#33B4A4FF" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPointerOver" Color="#33B4A4FF" />
+            <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#33B4A4FF" />
 
             <!--
                 Фокус-ринг (доступность, I5). Встроенный фокус-визуал WinUI рисует заливку
@@ -65,8 +68,10 @@
                 дают требуемый DESIGN §7 ринг — 2 px акцентом с отступом. ThemeApplicator
                 перекрашивает оба цвета при смене темы и в режиме высокой контрастности.
             -->
-            <SolidColorBrush x:Key="FocusVisualPrimaryBrush" Color="#00A99BFF" />
-            <SolidColorBrush x:Key="FocusVisualSecondaryBrush" Color="#A99BFF" />
+            <SolidColorBrush x:Key="FocusVisualPrimaryBrush" Color="#00B4A4FF" />
+            <SolidColorBrush x:Key="FocusVisualSecondaryBrush" Color="#C9BEFF" />
+
+            <p:HexToBrushConverter x:Key="HexToBrushConverter" />
 
             <Style x:Key="ApplicationCardStyle" TargetType="ListViewItem">
                 <Setter Property="Background" Value="{StaticResource GlazeSurfaceBrush}" />

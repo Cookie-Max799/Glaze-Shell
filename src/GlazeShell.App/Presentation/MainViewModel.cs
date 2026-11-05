@@ -1088,7 +1088,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             settings.HighContrast,
             settings.RecoveryHotkeyEnabled,
             settings.RecoveryHotkeyId,
-            settings.SafeModeEnabled));
+            settings.SafeModeEnabled,
+            settings.GlassTransparency));
 
         monitor.SetNames(
             BuildDefaultMonitorNames(Monitors.Select(static item => item.Monitor).ToList()).TryGetValue(monitor.Id, out var fallback)
@@ -1160,7 +1161,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             settings.HighContrast,
             settings.RecoveryHotkeyEnabled,
             settings.RecoveryHotkeyId,
-            settings.SafeModeEnabled));
+            settings.SafeModeEnabled,
+            settings.GlassTransparency));
     }
 
     private static Func<string?, string?> BuildMonitorNameResolver(Dictionary<string, string> displayNames) =>

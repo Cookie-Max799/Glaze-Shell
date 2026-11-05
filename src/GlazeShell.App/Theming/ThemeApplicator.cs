@@ -33,6 +33,8 @@ public sealed class ThemeApplicator
     private const string AccentKey = "GlazeAccentBrush";
     private const string SelectionKey = "GlazeSelectionBrush";
     private const string AccentFillKey = "AccentFillColorDefaultBrush";
+    private const string TextOnAccentPrimaryKey = "TextOnAccentFillColorPrimaryBrush";
+    private const string TextOnAccentSecondaryKey = "TextOnAccentFillColorSecondaryBrush";
     private const string HighlightAccentKey = "SystemControlHighlightAccentBrush";
     private const string BackgroundAccentKey = "SystemControlBackgroundAccentBrush";
     private const string SliderAccentKey = "SliderTrackValueFill";
@@ -78,6 +80,11 @@ public sealed class ThemeApplicator
     public string? BaseColorId { get; private set; }
 
     /// <summary>
+    /// Прозрачность стекла в процентах, действующая сейчас (0–90).
+    /// </summary>
+    public int GlassTransparency { get; private set; } = UserSettings.DefaultGlassTransparency;
+
+    /// <summary>
     /// Действует ли режим высокой контрастности: стекло отключено, цвета системные.
     /// </summary>
     public bool HighContrast { get; private set; }
@@ -96,7 +103,7 @@ public sealed class ThemeApplicator
             system.HighContrast,
             system.AnimationsEnabled);
 
-        Apply(root, settings.ThemeMode, settings.AccentId, settings.BaseColorId, accessibility, system.Palette);
+        Apply(root, settings.ThemeMode, settings.AccentId, settings.BaseColorId, settings.GlassTransparency, accessibility, system.Palette);
     }
 
     /// <summary>
@@ -109,8 +116,7 @@ public sealed class ThemeApplicator
         ArgumentNullException.ThrowIfNull(window);
 
         var light = ThemeModeResolver.Resolve(Mode, SystemUsesLightTheme()) == ThemeMode.Light;
-        var theme = GlazePalette.TintWithBase(light ? GlazePalette.Light : GlazePalette.Dark, BaseColorId);
-        var accent = ResolveAccent(AccentId, theme);
+        var theme = GlazePalette.Create(light, BaseColorId, AccentId, GlassTransparency);
         var titleBar = window.AppWindow.TitleBar;
 
         titleBar.BackgroundColor = theme.Background;
@@ -123,8 +129,8 @@ public sealed class ThemeApplicator
         titleBar.ButtonInactiveForegroundColor = theme.TextSecondary;
         titleBar.ButtonHoverBackgroundColor = theme.Elevated;
         titleBar.ButtonHoverForegroundColor = theme.TextPrimary;
-        titleBar.ButtonPressedBackgroundColor = accent;
-        titleBar.ButtonPressedForegroundColor = theme.TextPrimary;
+        titleBar.ButtonPressedBackgroundColor = theme.DefaultAccent;
+        titleBar.ButtonPressedForegroundColor = GlazePalette.OnAccent(theme.DefaultAccent);
     }
 
     public void Apply(FrameworkElement root, ThemeMode mode, string? accentId)
@@ -138,7 +144,7 @@ public sealed class ThemeApplicator
             system.HighContrast,
             system.AnimationsEnabled);
 
-        Apply(root, mode, accentId, settings.BaseColorId, accessibility, system.Palette);
+        Apply(root, mode, accentId, settings.BaseColorId, settings.GlassTransparency, accessibility, system.Palette);
     }
 
     /// <summary>
@@ -150,17 +156,16 @@ public sealed class ThemeApplicator
         ThemeMode mode,
         string? accentId,
         string? baseColorId,
+        int glassTransparency,
         AccessibilityState accessibility,
         SystemAccessibilityPalette palette)
     {
         var light = ThemeModeResolver.Resolve(mode, SystemUsesLightTheme()) == ThemeMode.Light;
-        var theme = light ? GlazePalette.Light : GlazePalette.Dark;
 
-        // Основной цвет перекрашивает поверхности, поэтому применяется до акцента:
+        // Основной цвет перекрашивает поверхности, поэтому палитра собирается до акцента:
         // акцент должен читаться на тонированном фоне.
-        theme = GlazePalette.TintWithBase(theme, baseColorId);
-
-        var accent = ResolveAccent(accentId, theme);
+        var theme = GlazePalette.Create(light, baseColorId, accentId, glassTransparency);
+        var accent = theme.DefaultAccent;
 
         // В контрастном режиме решение о светлой или тёмной теме принимает система:
         // собственная тема высокой контрастности Windows уже содержит свои цвета.
@@ -174,10 +179,10 @@ public sealed class ThemeApplicator
         }
         else
         {
-            ApplyBrushes(theme, accent);
+            ApplyBrushes(theme);
         }
 
-        ApplyFocusVisual(accessibility.HighContrast ? ToColor(palette.Highlight) : accent);
+        ApplyFocusVisual(accessibility.HighContrast ? ToColor(palette.Highlight) : theme.AccentForeground);
 
         // Брендовый градиент — акцентный: он единственный элемент, где акцент виден
         // сплошной заливкой, поэтому смена акцента заметна и на плитках приложений.
@@ -187,6 +192,7 @@ public sealed class ThemeApplicator
         Mode = mode;
         AccentId = accentId;
         BaseColorId = baseColorId;
+        GlassTransparency = glassTransparency;
         HighContrast = accessibility.HighContrast;
         ReduceMotion = accessibility.ReduceMotion;
     }
@@ -212,36 +218,35 @@ public sealed class ThemeApplicator
         }
     }
 
-    private static Color ResolveAccent(string? accentId, GlazeTheme theme)
+    private static void ApplyBrushes(GlazeTheme theme)
     {
-        var accent = AccentPalette.Find(accentId);
-        return accent is null ? theme.DefaultAccent : GlazePalette.ParseHex(accent.Hex, theme.DefaultAccent);
-    }
-
-    private static void ApplyBrushes(GlazeTheme theme, Color accent)
-    {
+        var accent = theme.DefaultAccent;
+        var accentForeground = theme.AccentForeground;
         var selection = GlazePalette.WithAlpha(accent, SelectionAlpha);
 
         SetBrush(BackgroundKey, theme.Background);
         SetBrush(SurfaceKey, theme.Surface);
         SetBrush(ElevatedKey, theme.Elevated);
-        SetBrush(BorderKey, GlazePalette.WithAlpha(accent, 0x40));
+        SetBrush(BorderKey, theme.Border);
         SetBrush(GlassKey, theme.Glass);
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         SetBrush(TextPrimaryKey, theme.TextPrimary);
         SetBrush(TextSecondaryKey, theme.TextSecondary);
         SetBrush(TextMutedKey, theme.TextMuted);
-        SetBrush(AccentKey, accent);
+        SetBrush(AccentKey, accentForeground);
         SetBrush(SelectionKey, selection);
 
         // Стандартные элементы (ползунок, переключатель, флажок, подсветка списков)
         // берут цвет из системных акцентных кистей: без них акцент менял слишком мало.
+        // Заливки остаются насыщенными, а текст на них выбирается чёрным или белым.
         SetBrush(AccentFillKey, accent);
-        SetBrush(HighlightAccentKey, accent);
+        SetBrush(HighlightAccentKey, accentForeground);
         SetBrush(BackgroundAccentKey, accent);
         SetBrush(SliderAccentKey, accent);
         SetBrush(ToggleAccentKey, accent);
+        SetBrush(TextOnAccentPrimaryKey, GlazePalette.OnAccent(accent));
+        SetBrush(TextOnAccentSecondaryKey, GlazePalette.WithAlpha(GlazePalette.OnAccent(accent), 0xE6));
 
         SetBrush(ListViewItemPointerOverKey, GlazePalette.WithAlpha(accent, 0x1F));
         SetBrush(ListViewItemPressedKey, GlazePalette.WithAlpha(accent, 0x33));
@@ -277,6 +282,8 @@ public sealed class ThemeApplicator
         SetBrush(TextMutedKey, muted);
         SetBrush(AccentKey, highlight);
         SetBrush(SelectionKey, selection);
+        SetBrush(TextOnAccentPrimaryKey, ToColor(palette.HighlightText));
+        SetBrush(TextOnAccentSecondaryKey, ToColor(palette.HighlightText));
 
         SetBrush(ListViewItemPointerOverKey, surface);
         SetBrush(ListViewItemPressedKey, surface);

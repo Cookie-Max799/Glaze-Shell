@@ -402,6 +402,46 @@ public sealed class SettingsDocumentMapperTests
     }
 
     [TestMethod]
+    public void MapsGlassTransparency()
+    {
+        var document = new SettingsDocument { GlassTransparency = 25 };
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+        Assert.AreEqual(25, settings!.GlassTransparency);
+    }
+
+    [TestMethod]
+    public void MissingGlassTransparencyFallsBackToTheDefault()
+    {
+        var document = new SettingsDocument();
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+        Assert.AreEqual(UserSettings.DefaultGlassTransparency, settings!.GlassTransparency);
+    }
+
+    [TestMethod]
+    public void RejectsOutOfRangeGlassTransparency()
+    {
+        var document = new SettingsDocument { GlassTransparency = UserSettings.MaxGlassTransparency + 1 };
+
+        Assert.IsFalse(SettingsDocumentMapper.TryMap(document, out _, out var diagnostics));
+        StringAssert.Contains(diagnostics.Single(), "glass transparency");
+    }
+
+    [TestMethod]
+    public void GlassTransparencySurvivesTheRoundTrip()
+    {
+        var settings = new UserSettings(glassTransparency: 15);
+
+        var document = SettingsDocument.FromSettings(settings);
+
+        Assert.AreEqual(15, document.GlassTransparency);
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var restored, out _));
+        Assert.AreEqual(15, restored!.GlassTransparency);
+    }
+
+    [TestMethod]
     public void MapsAccessibilityPreferences()
     {
         var document = new SettingsDocument { ReduceMotion = true, HighContrast = true };

@@ -1,4 +1,5 @@
 using GlazeShell.Core.Recovery;
+using GlazeShell.Core.Theming;
 
 namespace GlazeShell.Core.Models;
 
@@ -12,6 +13,17 @@ public sealed record UserSettings
 
     /// <summary>Максимальное число избранных папок Explorer (функция E2).</summary>
     public const int MaxExplorerFavorites = 32;
+
+    /// <summary>
+    /// Прозрачность стекла по умолчанию: 45 % (непрозрачность 55 % — значение DESIGN §4).
+    /// </summary>
+    public const int DefaultGlassTransparency = 45;
+
+    /// <summary>
+    /// Предел прозрачности стекла, который пользователь может выставить ползунком.
+    /// Дальше панель почти сливается с фоном, и подписи теряют читаемость.
+    /// </summary>
+    public const int MaxGlassTransparency = 90;
 
     private static readonly IReadOnlyList<string> EmptyDockPinnedApps = Array.Empty<string>();
 
@@ -38,7 +50,8 @@ public sealed record UserSettings
         bool highContrast = false,
         bool recoveryHotkeyEnabled = true,
         string? recoveryHotkeyId = null,
-        bool safeModeEnabled = false)
+        bool safeModeEnabled = false,
+        int glassTransparency = GlazePalette.DefaultGlassTransparency)
     {
         Language = ModelValidation.Required(language, nameof(language));
         ActiveThemeId = ModelValidation.Optional(activeThemeId, nameof(activeThemeId));
@@ -57,6 +70,7 @@ public sealed record UserSettings
         RecoveryHotkeyEnabled = recoveryHotkeyEnabled;
         RecoveryHotkeyId = RecoveryHotkey.ParseOrDefault(recoveryHotkeyId).Id;
         SafeModeEnabled = safeModeEnabled;
+        GlassTransparency = NormalizeGlassTransparency(glassTransparency);
         StartWithWindows = startWithWindows;
         MinimizeToTray = minimizeToTray;
         ShowDesktopOnStartup = showDesktopOnStartup;
@@ -163,12 +177,26 @@ public sealed record UserSettings
     /// </summary>
     public bool SafeModeEnabled { get; }
 
+    /// <summary>
+    /// Прозрачность стекла в процентах (0–90): полупрозрачные панели, dock, popover и
+    /// стеклянные карточки. 0 % — плотная заливка, 45 % — значение по умолчанию.
+    /// </summary>
+    public int GlassTransparency { get; }
+
     public static UserSettings CreateDefault() => new();
 
     private static ExplorerViewMode ValidateExplorerViewMode(ExplorerViewMode mode, string parameterName) =>
         mode is ExplorerViewMode.Icons or ExplorerViewMode.List
             ? mode
             : throw new ArgumentOutOfRangeException(parameterName, mode, "The Explorer view mode is not supported.");
+
+    /// <summary>
+    /// Ограничивает прозрачность стекла безопасным диапазоном. Значение вне диапазона
+    /// не отклоняется, а приводится к ближайшей границе: документ настроек, записанный
+    /// другой версией приложения, не должен считаться повреждённым.
+    /// </summary>
+    private static int NormalizeGlassTransparency(int transparency) =>
+        Math.Clamp(transparency, 0, MaxGlassTransparency);
 
     /// <summary>
     /// Нормализует избранные папки Explorer: отбрасывает пустые и повторяющиеся пути,

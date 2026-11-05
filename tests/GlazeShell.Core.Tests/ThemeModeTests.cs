@@ -54,13 +54,14 @@ public sealed class ThemeModeTests
     [TestMethod]
     public void AccentPaletteFindsKnownAccents()
     {
-        Assert.HasCount(6, AccentPalette.All);
+        Assert.HasCount(20, AccentPalette.All);
 
         var accent = AccentPalette.Find("MINT");
 
         Assert.IsNotNull(accent);
-        Assert.AreEqual("#3FCF9B", accent.Hex);
+        Assert.AreEqual("#16D99A", accent.Hex);
         Assert.IsTrue(AccentPalette.IsKnown("slate"));
+        Assert.IsTrue(AccentPalette.IsKnown("graphite"));
         Assert.IsFalse(AccentPalette.IsKnown("neon"));
         Assert.IsFalse(AccentPalette.IsKnown(null));
         Assert.IsNull(AccentPalette.Find(""));

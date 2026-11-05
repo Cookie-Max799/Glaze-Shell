@@ -194,7 +194,8 @@ public sealed class QuickSettingsViewModel : INotifyPropertyChanged
             settings.HighContrast,
             settings.RecoveryHotkeyEnabled,
             settings.RecoveryHotkeyId,
-            settings.SafeModeEnabled));
+            settings.SafeModeEnabled,
+            settings.GlassTransparency));
     }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

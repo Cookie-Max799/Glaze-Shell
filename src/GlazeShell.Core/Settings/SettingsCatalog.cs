@@ -130,6 +130,21 @@ public static class SettingsCatalog
             },
             BuildBaseColorChoices()),
 
+        new(
+            "glassTransparency",
+            AppearancePageId,
+            "Прозрачность стекла",
+            "Насколько панели, dock, popover и стеклянные карточки пропускают фон. 0 % — плотное стекло.",
+            ["прозрачность", "стекло", "opacity", "glass", "acrylic", "mica", "размытие", "эффект"],
+            SettingKind.Range,
+            settings => (double)settings.GlassTransparency,
+            (settings, value) => UserSettingsEditor.With(
+                settings,
+                glassTransparency: (int)Math.Round(AsDouble(value))),
+            [],
+            Maximum: UserSettings.MaxGlassTransparency,
+            Unit: "%"),
+
         // Dock.
         new(
             "dockEnabled",
@@ -244,7 +259,7 @@ public static class SettingsCatalog
 
         foreach (var accent in AccentPalette.All)
         {
-            choices.Add(new SettingChoice(accent.Id, accent.Name));
+            choices.Add(new SettingChoice(accent.Id, accent.Name, accent.Hex));
         }
 
         return choices;
@@ -260,7 +275,7 @@ public static class SettingsCatalog
 
         foreach (var accent in AccentPalette.All)
         {
-            choices.Add(new SettingChoice(accent.Id, accent.Name));
+            choices.Add(new SettingChoice(accent.Id, accent.Name, accent.Hex));
         }
 
         return choices;
@@ -283,6 +298,15 @@ public static class SettingsCatalog
     }
 
     private static bool AsBool(object value) => value is true;
+
+    private static double AsDouble(object value) => value switch
+    {
+        double number => number,
+        int number => number,
+        float number => number,
+        decimal number => (double)number,
+        _ => 0
+    };
 
     private static ThemeMode ParseThemeMode(object value) =>
         Enum.TryParse<ThemeMode>(value as string, ignoreCase: true, out var mode) ? mode : ThemeMode.System;

@@ -578,7 +578,8 @@ public sealed class ExplorerViewModel : INotifyPropertyChanged
             settings.HighContrast,
             settings.RecoveryHotkeyEnabled,
             settings.RecoveryHotkeyId,
-            settings.SafeModeEnabled));
+            settings.SafeModeEnabled,
+            settings.GlassTransparency));
     }
 
     private string ResolveStartPath(string? requested)

@@ -17,6 +17,10 @@ namespace GlazeShell.Core.Settings;
 /// <param name="Read">Читает текущее значение из настроек.</param>
 /// <param name="Write">Возвращает копию настроек с новым значением.</param>
 /// <param name="Choices">Варианты для <see cref="SettingKind.Choice"/>, иначе пусто.</param>
+/// <param name="Minimum">Минимум ползунка для <see cref="SettingKind.Range"/>.</param>
+/// <param name="Maximum">Максимум ползунка для <see cref="SettingKind.Range"/>.</param>
+/// <param name="Step">Шаг ползунка для <see cref="SettingKind.Range"/>.</param>
+/// <param name="Unit">Подпись единицы измерения после значения (например, <c>%</c>).</param>
 public sealed record SettingDefinition(
     string Id,
     string PageId,
@@ -26,7 +30,11 @@ public sealed record SettingDefinition(
     SettingKind Kind,
     Func<UserSettings, object?> Read,
     Func<UserSettings, object, UserSettings> Write,
-    IReadOnlyList<SettingChoice> Choices)
+    IReadOnlyList<SettingChoice> Choices,
+    double Minimum = 0,
+    double Maximum = 100,
+    double Step = 1,
+    string Unit = "")
 {
     /// <summary>
     /// Совпадает ли настройка с поисковым запросом. Совпадение ищется по имени, пояснению,

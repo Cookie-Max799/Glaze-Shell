@@ -53,6 +53,51 @@ public sealed class SettingsCatalogTests
     }
 
     [TestMethod]
+    public void RangeSettingsExposeASafeRange()
+    {
+        foreach (var definition in SettingsCatalog.All.Where(item => item.Kind == SettingKind.Range))
+        {
+            Assert.IsGreaterThan(definition.Minimum, definition.Maximum, $"Range setting '{definition.Id}' has an empty range.");
+            Assert.IsGreaterThan(0, definition.Step, $"Range setting '{definition.Id}' has no step.");
+        }
+    }
+
+    [TestMethod]
+    public void GlassTransparencySettingIsOnTheAppearancePage()
+    {
+        var definition = SettingsCatalog.ForPage(SettingsCatalog.AppearancePageId)
+            .Single(item => item.Id == "glassTransparency");
+
+        Assert.AreEqual(SettingKind.Range, definition.Kind);
+        Assert.AreEqual(0.0, definition.Minimum);
+        Assert.AreEqual(UserSettings.MaxGlassTransparency, definition.Maximum);
+        Assert.AreEqual("%", definition.Unit);
+        Assert.AreEqual(
+            (double)UserSettings.DefaultGlassTransparency,
+            (double)definition.Read(UserSettings.CreateDefault())!);
+    }
+
+    [TestMethod]
+    public void GlassTransparencySettingWritesIntoSettings()
+    {
+        var definition = SettingsCatalog.All.Single(item => item.Id == "glassTransparency");
+
+        var written = definition.Write(UserSettings.CreateDefault(), 12.0);
+
+        Assert.AreEqual(12, written.GlassTransparency);
+        Assert.AreEqual(12.0, (double)definition.Read(written)!);
+    }
+
+    [TestMethod]
+    public void GlassTransparencyIsFoundBySearch()
+    {
+        Assert.IsTrue(
+            SettingsCatalog.Search("прозрачность").Any(definition => definition.Id == "glassTransparency"));
+        Assert.IsTrue(
+            SettingsCatalog.Search("acrylic").Any(definition => definition.Id == "glassTransparency"));
+    }
+
+    [TestMethod]
     public void EmptyQueryReturnsEverySetting()
     {
         Assert.HasCount(SettingsCatalog.All.Count, SettingsCatalog.Search("   "));

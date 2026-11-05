@@ -42,6 +42,41 @@ public sealed class SettingRowViewModel : INotifyPropertyChanged
 
     public bool IsText => _definition.Kind == SettingKind.Text;
 
+    public bool IsRange => _definition.Kind == SettingKind.Range;
+
+    /// <summary>Минимум ползунка (<see cref="SettingKind.Range"/>).</summary>
+    public double Minimum => _definition.Minimum;
+
+    /// <summary>Максимум ползунка (<see cref="SettingKind.Range"/>).</summary>
+    public double Maximum => _definition.Maximum;
+
+    /// <summary>Шаг ползунка (<see cref="SettingKind.Range"/>).</summary>
+    public double Step => _definition.Step;
+
+    /// <summary>Значение ползунка. Изменение применяется сразу.</summary>
+    public double RangeValue
+    {
+        get => _value is double number ? number : 0;
+        set
+        {
+            if (_value is double number && Math.Abs(number - value) < double.Epsilon)
+            {
+                return;
+            }
+
+            Set(value);
+        }
+    }
+
+    /// <summary>
+    /// Подпись текущего значения ползунка с единицей измерения (например, «45 %»),
+    /// чтобы число читалось без наведения на ползунок.
+    /// </summary>
+    public string RangeLabel => $"{RangeValue:0}{Unit}";
+
+    /// <summary>Единица измерения значения ползунка.</summary>
+    public string Unit => _definition.Unit;
+
     public IReadOnlyList<SettingChoice> Choices => _definition.Choices;
 
     /// <summary>Значение переключателя. Изменение применяется сразу.</summary>
@@ -103,6 +138,8 @@ public sealed class SettingRowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(ToggleValue));
         OnPropertyChanged(nameof(SelectedChoice));
         OnPropertyChanged(nameof(TextValue));
+        OnPropertyChanged(nameof(RangeValue));
+        OnPropertyChanged(nameof(RangeLabel));
         _suppress = false;
     }
 
@@ -114,6 +151,8 @@ public sealed class SettingRowViewModel : INotifyPropertyChanged
             OnPropertyChanged(nameof(ToggleValue));
             OnPropertyChanged(nameof(SelectedChoice));
             OnPropertyChanged(nameof(TextValue));
+            OnPropertyChanged(nameof(RangeValue));
+            OnPropertyChanged(nameof(RangeLabel));
         }
     }
 
