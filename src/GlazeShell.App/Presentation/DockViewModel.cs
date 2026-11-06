@@ -557,7 +557,9 @@ public sealed class DockViewModel : IDisposable
             settings.RecoveryHotkeyEnabled,
             settings.RecoveryHotkeyId,
             settings.SafeModeEnabled,
-            settings.GlassTransparency));
+            settings.TransparencyEnabled,
+            settings.TopBarTransparency,
+            settings.DockTransparency));
     }
 
     private void QueueRebuild() => _ = _dispatcher.TryEnqueue(Rebuild);

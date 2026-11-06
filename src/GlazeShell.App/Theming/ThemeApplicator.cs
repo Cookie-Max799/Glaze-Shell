@@ -80,9 +80,19 @@ public sealed class ThemeApplicator
     public string? BaseColorId { get; private set; }
 
     /// <summary>
-    /// Прозрачность стекла в процентах, действующая сейчас (0–90).
+    /// Включена ли настраиваемая прозрачность панелей.
     /// </summary>
-    public int GlassTransparency { get; private set; } = UserSettings.DefaultGlassTransparency;
+    public bool TransparencyEnabled { get; private set; } = true;
+
+    /// <summary>
+    /// Прозрачность верхней панели в процентах (0–90).
+    /// </summary>
+    public int TopBarTransparency { get; private set; } = UserSettings.DefaultTopBarTransparency;
+
+    /// <summary>
+    /// Прозрачность dock в процентах (0–90).
+    /// </summary>
+    public int DockTransparency { get; private set; } = UserSettings.DefaultDockTransparency;
 
     /// <summary>
     /// Действует ли режим высокой контрастности: стекло отключено, цвета системные.
@@ -103,7 +113,7 @@ public sealed class ThemeApplicator
             system.HighContrast,
             system.AnimationsEnabled);
 
-        Apply(root, settings.ThemeMode, settings.AccentId, settings.BaseColorId, settings.GlassTransparency, accessibility, system.Palette);
+        Apply(root, settings.ThemeMode, settings.AccentId, settings.BaseColorId, settings.TransparencyEnabled, settings.TopBarTransparency, settings.DockTransparency, accessibility, system.Palette);
     }
 
     /// <summary>
@@ -116,7 +126,10 @@ public sealed class ThemeApplicator
         ArgumentNullException.ThrowIfNull(window);
 
         var light = ThemeModeResolver.Resolve(Mode, SystemUsesLightTheme()) == ThemeMode.Light;
-        var theme = GlazePalette.Create(light, BaseColorId, AccentId, GlassTransparency);
+
+        // Заголовок обычного окна не участвует в прозрачности панелей: он всегда плотный,
+        // иначе под ним просвечивал бы рабочий стол и текст кнопок терял читаемость.
+        var theme = GlazePalette.Create(light, BaseColorId, AccentId, 0);
         var titleBar = window.AppWindow.TitleBar;
 
         titleBar.BackgroundColor = theme.Background;
@@ -144,7 +157,7 @@ public sealed class ThemeApplicator
             system.HighContrast,
             system.AnimationsEnabled);
 
-        Apply(root, mode, accentId, settings.BaseColorId, settings.GlassTransparency, accessibility, system.Palette);
+        Apply(root, mode, accentId, settings.BaseColorId, settings.TransparencyEnabled, settings.TopBarTransparency, settings.DockTransparency, accessibility, system.Palette);
     }
 
     /// <summary>
@@ -156,7 +169,9 @@ public sealed class ThemeApplicator
         ThemeMode mode,
         string? accentId,
         string? baseColorId,
-        int glassTransparency,
+        bool transparencyEnabled,
+        int topBarTransparency,
+        int dockTransparency,
         AccessibilityState accessibility,
         SystemAccessibilityPalette palette)
     {
@@ -164,7 +179,8 @@ public sealed class ThemeApplicator
 
         // Основной цвет перекрашивает поверхности, поэтому палитра собирается до акцента:
         // акцент должен читаться на тонированном фоне.
-        var theme = GlazePalette.Create(light, baseColorId, accentId, glassTransparency);
+        // При сборке темы используем TopBarTransparency для универсальных токенов.
+        var theme = GlazePalette.Create(light, baseColorId, accentId, topBarTransparency);
         var accent = theme.DefaultAccent;
 
         // В контрастном режиме решение о светлой или тёмной теме принимает система:
@@ -192,7 +208,9 @@ public sealed class ThemeApplicator
         Mode = mode;
         AccentId = accentId;
         BaseColorId = baseColorId;
-        GlassTransparency = glassTransparency;
+        TransparencyEnabled = transparencyEnabled;
+        TopBarTransparency = topBarTransparency;
+        DockTransparency = dockTransparency;
         HighContrast = accessibility.HighContrast;
         ReduceMotion = accessibility.ReduceMotion;
     }

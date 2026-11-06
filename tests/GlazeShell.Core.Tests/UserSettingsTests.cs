@@ -246,41 +246,59 @@ public sealed class UserSettingsTests
     }
 
     [TestMethod]
-    public void GlassTransparencyIsModerateByDefault()
+    public void TransparencyIsEnabledByDefaultWithModerateSliders()
     {
         var settings = UserSettings.CreateDefault();
 
-        Assert.AreEqual(UserSettings.DefaultGlassTransparency, settings.GlassTransparency);
-        Assert.IsGreaterThan(0, UserSettings.DefaultGlassTransparency);
-        Assert.IsLessThan(UserSettings.MaxGlassTransparency, UserSettings.DefaultGlassTransparency);
+        Assert.IsTrue(settings.TransparencyEnabled);
+        Assert.AreEqual(UserSettings.DefaultTopBarTransparency, settings.TopBarTransparency);
+        Assert.AreEqual(UserSettings.DefaultDockTransparency, settings.DockTransparency);
+        Assert.IsGreaterThan(0, UserSettings.DefaultTopBarTransparency);
+        Assert.IsGreaterThan(0, UserSettings.DefaultDockTransparency);
+        Assert.IsLessThan(UserSettings.MaxTransparency, UserSettings.DefaultTopBarTransparency);
+        Assert.IsLessThan(UserSettings.MaxTransparency, UserSettings.DefaultDockTransparency);
     }
 
     [TestMethod]
-    public void GlassTransparencyIsClampedToTheAllowedRange()
+    public void TransparencyIsClampedToTheAllowedRange()
     {
-        Assert.AreEqual(UserSettings.MaxGlassTransparency, new UserSettings(glassTransparency: 500).GlassTransparency);
-        Assert.AreEqual(0, new UserSettings(glassTransparency: -1).GlassTransparency);
-        Assert.AreEqual(20, new UserSettings(glassTransparency: 20).GlassTransparency);
+        var settings = new UserSettings(topBarTransparency: 500, dockTransparency: -1);
+
+        Assert.AreEqual(UserSettings.MaxTransparency, settings.TopBarTransparency);
+        Assert.AreEqual(0, settings.DockTransparency);
+        Assert.AreEqual(20, new UserSettings(topBarTransparency: 20).TopBarTransparency);
+        Assert.AreEqual(20, new UserSettings(dockTransparency: 20).DockTransparency);
     }
 
     [TestMethod]
-    public void EditorKeepsGlassTransparencyWhenOtherSettingsChange()
+    public void EditorKeepsTransparencyWhenOtherSettingsChange()
     {
-        var source = new UserSettings(glassTransparency: 30);
+        var source = new UserSettings(
+            topBarTransparency: 30,
+            dockTransparency: 50,
+            transparencyEnabled: false);
 
         var updated = UserSettingsEditor.With(source, themeMode: ThemeMode.Dark);
 
-        Assert.AreEqual(30, updated.GlassTransparency);
+        Assert.AreEqual(30, updated.TopBarTransparency);
+        Assert.AreEqual(50, updated.DockTransparency);
+        Assert.IsFalse(updated.TransparencyEnabled);
     }
 
     [TestMethod]
-    public void EditorChangesGlassTransparencyWithoutLosingSettings()
+    public void EditorChangesTransparencyWithoutLosingSettings()
     {
         var source = new UserSettings(themeMode: ThemeMode.Dark, accentId: "rose", highContrast: true);
 
-        var updated = UserSettingsEditor.With(source, glassTransparency: 10);
+        var updated = UserSettingsEditor.With(
+            source,
+            transparencyEnabled: false,
+            topBarTransparency: 10,
+            dockTransparency: 60);
 
-        Assert.AreEqual(10, updated.GlassTransparency);
+        Assert.IsFalse(updated.TransparencyEnabled);
+        Assert.AreEqual(10, updated.TopBarTransparency);
+        Assert.AreEqual(60, updated.DockTransparency);
         Assert.AreEqual(ThemeMode.Dark, updated.ThemeMode);
         Assert.AreEqual("rose", updated.AccentId);
         Assert.IsTrue(updated.HighContrast);

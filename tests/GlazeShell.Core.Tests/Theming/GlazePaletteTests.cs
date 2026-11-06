@@ -93,7 +93,7 @@ public sealed class GlazePaletteTests
 
             Assert.AreEqual(0xFF, opaque.Glass.A, "0 % transparency must be opaque.");
             Assert.AreEqual(
-                GlazePalette.GlassAlphaFor(UserSettings.DefaultGlassTransparency),
+                GlazePalette.GlassAlphaFor(GlazePalette.DefaultTransparency),
                 defaults.Glass.A,
                 "The default transparency must match the DESIGN glass alpha.");
             Assert.IsLessThan(defaults.Glass.A, translucent.Glass.A, "More transparency must lower the alpha.");
@@ -111,7 +111,7 @@ public sealed class GlazePaletteTests
         var negative = GlazePalette.Create(light: true, baseColorId: null, accentId: null, glassTransparency: -40);
 
         Assert.AreEqual(
-            GlazePalette.GlassAlphaFor(GlazePalette.MaxGlassTransparency),
+            GlazePalette.GlassAlphaFor(GlazePalette.MaxTransparency),
             tooTransparent.Glass.A);
         Assert.AreEqual(0xFF, negative.Glass.A);
     }

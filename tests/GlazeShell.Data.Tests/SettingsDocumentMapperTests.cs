@@ -402,43 +402,69 @@ public sealed class SettingsDocumentMapperTests
     }
 
     [TestMethod]
-    public void MapsGlassTransparency()
+    public void MapsPanelTransparency()
     {
-        var document = new SettingsDocument { GlassTransparency = 25 };
+        var document = new SettingsDocument
+        {
+            TransparencyEnabled = false,
+            TopBarTransparency = 25,
+            DockTransparency = 55,
+        };
 
         Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
-        Assert.AreEqual(25, settings!.GlassTransparency);
+        Assert.IsFalse(settings!.TransparencyEnabled);
+        Assert.AreEqual(25, settings.TopBarTransparency);
+        Assert.AreEqual(55, settings.DockTransparency);
     }
 
     [TestMethod]
-    public void MissingGlassTransparencyFallsBackToTheDefault()
+    public void MissingTransparencyFallsBackToTheDefaults()
     {
         var document = new SettingsDocument();
 
         Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
-        Assert.AreEqual(UserSettings.DefaultGlassTransparency, settings!.GlassTransparency);
+        Assert.IsTrue(settings!.TransparencyEnabled);
+        Assert.AreEqual(UserSettings.DefaultTopBarTransparency, settings.TopBarTransparency);
+        Assert.AreEqual(UserSettings.DefaultDockTransparency, settings.DockTransparency);
     }
 
     [TestMethod]
-    public void RejectsOutOfRangeGlassTransparency()
+    public void LegacyGlassTransparencyMigratesIntoBothSliders()
     {
-        var document = new SettingsDocument { GlassTransparency = UserSettings.MaxGlassTransparency + 1 };
+        var document = new SettingsDocument { GlassTransparency = 30 };
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
+        Assert.AreEqual(30, settings!.TopBarTransparency);
+        Assert.AreEqual(30, settings.DockTransparency);
+    }
+
+    [TestMethod]
+    public void RejectsOutOfRangePanelTransparency()
+    {
+        var document = new SettingsDocument { TopBarTransparency = UserSettings.MaxTransparency + 1 };
 
         Assert.IsFalse(SettingsDocumentMapper.TryMap(document, out _, out var diagnostics));
-        StringAssert.Contains(diagnostics.Single(), "glass transparency");
+        StringAssert.Contains(diagnostics.Single(), "top bar transparency");
     }
 
     [TestMethod]
-    public void GlassTransparencySurvivesTheRoundTrip()
+    public void PanelTransparencySurvivesTheRoundTrip()
     {
-        var settings = new UserSettings(glassTransparency: 15);
+        var settings = new UserSettings(
+            topBarTransparency: 15,
+            dockTransparency: 65,
+            transparencyEnabled: false);
 
         var document = SettingsDocument.FromSettings(settings);
 
-        Assert.AreEqual(15, document.GlassTransparency);
+        Assert.AreEqual(15, document.TopBarTransparency);
+        Assert.AreEqual(65, document.DockTransparency);
+        Assert.IsFalse(document.TransparencyEnabled);
 
         Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var restored, out _));
-        Assert.AreEqual(15, restored!.GlassTransparency);
+        Assert.AreEqual(15, restored!.TopBarTransparency);
+        Assert.AreEqual(65, restored.DockTransparency);
+        Assert.IsFalse(restored.TransparencyEnabled);
     }
 
     [TestMethod]

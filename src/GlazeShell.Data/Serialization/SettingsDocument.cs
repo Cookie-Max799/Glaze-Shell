@@ -61,8 +61,20 @@ public sealed class SettingsDocument
     public bool SafeModeEnabled { get; set; }
 
     /// <summary>
-    /// Прозрачность стекла в процентах (0–90). Отсутствие значения в старом документе
-    /// означает значение по умолчанию, поэтому поле объявлено nullable.
+    /// Включена ли настраиваемая прозрачность панелей. Отсутствие значения в старом
+    /// документе означает значение по умолчанию.
+    /// </summary>
+    public bool? TransparencyEnabled { get; set; }
+
+    /// <summary>Прозрачность верхней панели в процентах (0–90).</summary>
+    public int? TopBarTransparency { get; set; }
+
+    /// <summary>Прозрачность dock в процентах (0–90).</summary>
+    public int? DockTransparency { get; set; }
+
+    /// <summary>
+    /// Старое общее значение прозрачности стекла (0–90). Сохранено для чтения документов
+    /// предыдущих версий: если новые поля отсутствуют, значение переносится в оба ползунка.
     /// </summary>
     public int? GlassTransparency { get; set; }
 
@@ -99,7 +111,9 @@ public sealed class SettingsDocument
             RecoveryHotkeyEnabled = settings.RecoveryHotkeyEnabled,
             RecoveryHotkeyId = settings.RecoveryHotkeyId,
             SafeModeEnabled = settings.SafeModeEnabled,
-            GlassTransparency = settings.GlassTransparency,
+            TransparencyEnabled = settings.TransparencyEnabled,
+            TopBarTransparency = settings.TopBarTransparency,
+            DockTransparency = settings.DockTransparency,
             MonitorNames = settings.MonitorNames.Count == 0
                 ? null
                 : new Dictionary<string, string>(settings.MonitorNames, StringComparer.OrdinalIgnoreCase)
@@ -159,11 +173,23 @@ public static class SettingsDocumentMapper
         var monitorNames = MapMonitorNames(document.MonitorNames, messages);
         var dockPinnedApps = MapDockPinnedApps(document.DockPinnedApps, messages);
         var explorerFavorites = MapExplorerFavorites(document.ExplorerFavorites, messages);
-        var glassTransparency = document.GlassTransparency ?? UserSettings.DefaultGlassTransparency;
+        // Старый документ хранил одну общую прозрачность стекла. Переносим её в оба
+        // ползунка, чтобы после обновления панели не стали внезапно непрозрачными.
+        var topBarTransparency = document.TopBarTransparency
+            ?? document.GlassTransparency
+            ?? UserSettings.DefaultTopBarTransparency;
+        var dockTransparency = document.DockTransparency
+            ?? document.GlassTransparency
+            ?? UserSettings.DefaultDockTransparency;
 
-        if (glassTransparency < 0 || glassTransparency > UserSettings.MaxGlassTransparency)
+        if (topBarTransparency < 0 || topBarTransparency > UserSettings.MaxTransparency)
         {
-            messages.Add($"The glass transparency '{glassTransparency}' is not valid.");
+            messages.Add($"The top bar transparency '{topBarTransparency}' is not valid.");
+        }
+
+        if (dockTransparency < 0 || dockTransparency > UserSettings.MaxTransparency)
+        {
+            messages.Add($"The dock transparency '{dockTransparency}' is not valid.");
         }
 
         if (messages.Count > 0)
@@ -195,7 +221,9 @@ public static class SettingsDocumentMapper
             document.RecoveryHotkeyEnabled,
             document.RecoveryHotkeyId,
             document.SafeModeEnabled,
-            glassTransparency);
+            document.TransparencyEnabled ?? true,
+            topBarTransparency,
+            dockTransparency);
         diagnostics = Array.Empty<string>();
         return true;
     }

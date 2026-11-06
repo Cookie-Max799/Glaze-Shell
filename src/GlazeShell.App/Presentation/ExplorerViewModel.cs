@@ -579,7 +579,9 @@ public sealed class ExplorerViewModel : INotifyPropertyChanged
             settings.RecoveryHotkeyEnabled,
             settings.RecoveryHotkeyId,
             settings.SafeModeEnabled,
-            settings.GlassTransparency));
+            settings.TransparencyEnabled,
+            settings.TopBarTransparency,
+            settings.DockTransparency));
     }
 
     private string ResolveStartPath(string? requested)

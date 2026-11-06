@@ -21,6 +21,10 @@ namespace GlazeShell.Core.Settings;
 /// <param name="Maximum">Максимум ползунка для <see cref="SettingKind.Range"/>.</param>
 /// <param name="Step">Шаг ползунка для <see cref="SettingKind.Range"/>.</param>
 /// <param name="Unit">Подпись единицы измерения после значения (например, <c>%</c>).</param>
+/// <param name="IsEnabledBy">
+/// Идентификатор настройки-переключателя, от которого зависит доступность этой строки.
+/// Например, ползунки прозрачности неактивны, пока прозрачность выключена.
+/// </param>
 public sealed record SettingDefinition(
     string Id,
     string PageId,
@@ -34,7 +38,8 @@ public sealed record SettingDefinition(
     double Minimum = 0,
     double Maximum = 100,
     double Step = 1,
-    string Unit = "")
+    string Unit = "",
+    string? IsEnabledBy = null)
 {
     /// <summary>
     /// Совпадает ли настройка с поисковым запросом. Совпадение ищется по имени, пояснению,

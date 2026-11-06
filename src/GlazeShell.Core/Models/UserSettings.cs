@@ -15,15 +15,22 @@ public sealed record UserSettings
     public const int MaxExplorerFavorites = 32;
 
     /// <summary>
-    /// Прозрачность стекла по умолчанию: 45 % (непрозрачность 55 % — значение DESIGN §4).
+    /// Прозрачность верхней панели по умолчанию: 35 %. При 0 % панель непрозрачная,
+    /// при 90 % почти растворяется в рабочем столе.
     /// </summary>
-    public const int DefaultGlassTransparency = 45;
+    public const int DefaultTopBarTransparency = 35;
 
     /// <summary>
-    /// Предел прозрачности стекла, который пользователь может выставить ползунком.
-    /// Дальше панель почти сливается с фоном, и подписи теряют читаемость.
+    /// Прозрачность dock по умолчанию: 45 % — чуть заметнее, чем у верхней панели,
+    /// потому что dock стоит у нижней кромки экрана.
     /// </summary>
-    public const int MaxGlassTransparency = 90;
+    public const int DefaultDockTransparency = 45;
+
+    /// <summary>
+    /// Предел прозрачности, который пользователь может выставить ползунком. Дальше панель
+    /// почти сливается с фоном, и подписи теряют читаемость.
+    /// </summary>
+    public const int MaxTransparency = 90;
 
     private static readonly IReadOnlyList<string> EmptyDockPinnedApps = Array.Empty<string>();
 
@@ -51,7 +58,9 @@ public sealed record UserSettings
         bool recoveryHotkeyEnabled = true,
         string? recoveryHotkeyId = null,
         bool safeModeEnabled = false,
-        int glassTransparency = GlazePalette.DefaultGlassTransparency)
+        bool transparencyEnabled = true,
+        int topBarTransparency = DefaultTopBarTransparency,
+        int dockTransparency = DefaultDockTransparency)
     {
         Language = ModelValidation.Required(language, nameof(language));
         ActiveThemeId = ModelValidation.Optional(activeThemeId, nameof(activeThemeId));
@@ -70,7 +79,9 @@ public sealed record UserSettings
         RecoveryHotkeyEnabled = recoveryHotkeyEnabled;
         RecoveryHotkeyId = RecoveryHotkey.ParseOrDefault(recoveryHotkeyId).Id;
         SafeModeEnabled = safeModeEnabled;
-        GlassTransparency = NormalizeGlassTransparency(glassTransparency);
+        TransparencyEnabled = transparencyEnabled;
+        TopBarTransparency = NormalizeTransparency(topBarTransparency);
+        DockTransparency = NormalizeTransparency(dockTransparency);
         StartWithWindows = startWithWindows;
         MinimizeToTray = minimizeToTray;
         ShowDesktopOnStartup = showDesktopOnStartup;
@@ -178,10 +189,21 @@ public sealed record UserSettings
     public bool SafeModeEnabled { get; }
 
     /// <summary>
-    /// Прозрачность стекла в процентах (0–90): полупрозрачные панели, dock, popover и
-    /// стеклянные карточки. 0 % — плотная заливка, 45 % — значение по умолчанию.
+    /// Включена ли настраиваемая прозрачность панелей. Когда выключена, верхняя панель и
+    /// dock рисуются непрозрачными, а ползунки прозрачности на них не влияют.
     /// </summary>
-    public int GlassTransparency { get; }
+    public bool TransparencyEnabled { get; }
+
+    /// <summary>
+    /// Прозрачность верхней панели в процентах (0–90): 0 % — плотная заливка,
+    /// 90 % — панель почти полностью пропускает рабочий стол.
+    /// </summary>
+    public int TopBarTransparency { get; }
+
+    /// <summary>
+    /// Прозрачность dock в процентах (0–90): настраивается отдельно от верхней панели.
+    /// </summary>
+    public int DockTransparency { get; }
 
     public static UserSettings CreateDefault() => new();
 
@@ -191,12 +213,12 @@ public sealed record UserSettings
             : throw new ArgumentOutOfRangeException(parameterName, mode, "The Explorer view mode is not supported.");
 
     /// <summary>
-    /// Ограничивает прозрачность стекла безопасным диапазоном. Значение вне диапазона
+    /// Ограничивает прозрачность панелей безопасным диапазоном. Значение вне диапазона
     /// не отклоняется, а приводится к ближайшей границе: документ настроек, записанный
     /// другой версией приложения, не должен считаться повреждённым.
     /// </summary>
-    private static int NormalizeGlassTransparency(int transparency) =>
-        Math.Clamp(transparency, 0, MaxGlassTransparency);
+    private static int NormalizeTransparency(int transparency) =>
+        Math.Clamp(transparency, 0, MaxTransparency);
 
     /// <summary>
     /// Нормализует избранные папки Explorer: отбрасывает пустые и повторяющиеся пути,

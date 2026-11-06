@@ -14,15 +14,16 @@ namespace GlazeShell.Core.Theming;
 public static class GlazePalette
 {
     /// <summary>
-    /// Прозрачность стекла по умолчанию: 45 % (непрозрачность 55 % — значение DESIGN §4).
+    /// Прозрачность панелей по умолчанию: 35 % для верхней панели (значение DESIGN §4,
+    /// обновлённое после перехода на настоящий прозрачный backdrop).
     /// </summary>
-    public const int DefaultGlassTransparency = UserSettings.DefaultGlassTransparency;
+    public const int DefaultTransparency = UserSettings.DefaultTopBarTransparency;
 
     /// <summary>
-    /// Предел прозрачности стекла, который пользователь может выставить ползунком.
-    /// Дальше панель почти сливается с фоном, и подписи теряют читаемость.
+    /// Предел прозрачности, который пользователь может выставить ползунком. Дальше панель
+    /// почти сливается с фоном, и подписи теряют читаемость.
     /// </summary>
-    public const int MaxGlassTransparency = UserSettings.MaxGlassTransparency;
+    public const int MaxTransparency = UserSettings.MaxTransparency;
 
     /// <summary>Прозрачность акцентной рамки поверхностей.</summary>
     public const byte BorderAlpha = 0x40;
@@ -68,13 +69,13 @@ public static class GlazePalette
     /// <param name="accentId">Идентификатор акцента или <c>null</c>.</param>
     /// <param name="glassTransparency">
     /// Прозрачность стекла в процентах: 0 — плотное стекло, 100 — почти прозрачное.
-    /// Значение ограничивается <see cref="MaxGlassTransparency"/>.
+    /// Значение ограничивается <see cref="MaxTransparency"/>.
     /// </param>
     public static GlazeTheme Create(
         bool light,
         string? baseColorId,
         string? accentId,
-        int glassTransparency = DefaultGlassTransparency)
+        int glassTransparency = DefaultTransparency)
     {
         var theme = TintWithBase(light ? Light : Dark, baseColorId);
         theme = EnsureReadable(theme);
@@ -98,13 +99,25 @@ public static class GlazePalette
     /// <summary>
     /// Переводит прозрачность в процентах в альфа-канал стекла. Прозрачность 0 % даёт
     /// непрозрачную заливку, 100 % — полностью прозрачную, но ползунок ограничен
-    /// <see cref="MaxGlassTransparency"/>, чтобы панель не растворялась целиком.
+    /// <see cref="MaxTransparency"/>, чтобы панель не растворялась целиком.
     /// </summary>
     public static byte GlassAlphaFor(int transparency)
     {
-        var limited = Math.Clamp(transparency, 0, MaxGlassTransparency);
+        var limited = Math.Clamp(transparency, 0, MaxTransparency);
 
         return (byte)Math.Round(255 * (1 - (limited / 100.0)));
+    }
+
+    /// <summary>
+    /// Альфа-канал для поверхностей внутри панели (pill, popover-карточки, разделители).
+    /// Чуть плотнее стекла, чтобы кнопки оставались различимыми, но тоже следовали
+    /// ползунку прозрачности.
+    /// </summary>
+    public static byte SurfaceAlphaFor(int transparency)
+    {
+        var limited = Math.Clamp(transparency, 0, MaxTransparency);
+
+        return (byte)Math.Round(255 * (1 - (0.9 * limited / 100.0)));
     }
 
     /// <summary>

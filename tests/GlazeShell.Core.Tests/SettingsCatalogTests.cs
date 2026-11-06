@@ -63,38 +63,62 @@ public sealed class SettingsCatalogTests
     }
 
     [TestMethod]
-    public void GlassTransparencySettingIsOnTheAppearancePage()
+    public void TransparencySettingsLiveOnTheTransparencyPage()
     {
-        var definition = SettingsCatalog.ForPage(SettingsCatalog.AppearancePageId)
-            .Single(item => item.Id == "glassTransparency");
+        var page = SettingsCatalog.ForPage(SettingsCatalog.TransparencyPageId).ToArray();
 
-        Assert.AreEqual(SettingKind.Range, definition.Kind);
-        Assert.AreEqual(0.0, definition.Minimum);
-        Assert.AreEqual(UserSettings.MaxGlassTransparency, definition.Maximum);
-        Assert.AreEqual("%", definition.Unit);
+        var toggle = page.Single(item => item.Id == "transparencyEnabled");
+        Assert.AreEqual(SettingKind.Toggle, toggle.Kind);
+        Assert.IsTrue((bool)toggle.Read(UserSettings.CreateDefault())!);
+
+        var topBar = page.Single(item => item.Id == "topBarTransparency");
+        Assert.AreEqual(SettingKind.Range, topBar.Kind);
+        Assert.AreEqual(0.0, topBar.Minimum);
+        Assert.AreEqual(UserSettings.MaxTransparency, topBar.Maximum);
+        Assert.AreEqual("%", topBar.Unit);
+        Assert.AreEqual("transparencyEnabled", topBar.IsEnabledBy);
         Assert.AreEqual(
-            (double)UserSettings.DefaultGlassTransparency,
-            (double)definition.Read(UserSettings.CreateDefault())!);
+            (double)UserSettings.DefaultTopBarTransparency,
+            (double)topBar.Read(UserSettings.CreateDefault())!);
+
+        var dock = page.Single(item => item.Id == "dockTransparency");
+        Assert.AreEqual(SettingKind.Range, dock.Kind);
+        Assert.AreEqual(0.0, dock.Minimum);
+        Assert.AreEqual(UserSettings.MaxTransparency, dock.Maximum);
+        Assert.AreEqual("%", dock.Unit);
+        Assert.AreEqual("transparencyEnabled", dock.IsEnabledBy);
+        Assert.AreEqual(
+            (double)UserSettings.DefaultDockTransparency,
+            (double)dock.Read(UserSettings.CreateDefault())!);
     }
 
     [TestMethod]
-    public void GlassTransparencySettingWritesIntoSettings()
+    public void TransparencySettingsWriteIntoSettings()
     {
-        var definition = SettingsCatalog.All.Single(item => item.Id == "glassTransparency");
+        var topBar = SettingsCatalog.All.Single(item => item.Id == "topBarTransparency");
+        var dock = SettingsCatalog.All.Single(item => item.Id == "dockTransparency");
+        var toggle = SettingsCatalog.All.Single(item => item.Id == "transparencyEnabled");
 
-        var written = definition.Write(UserSettings.CreateDefault(), 12.0);
+        var written = topBar.Write(UserSettings.CreateDefault(), 12.0);
+        written = dock.Write(written, 34.0);
+        written = toggle.Write(written, false);
 
-        Assert.AreEqual(12, written.GlassTransparency);
-        Assert.AreEqual(12.0, (double)definition.Read(written)!);
+        Assert.AreEqual(12, written.TopBarTransparency);
+        Assert.AreEqual(34, written.DockTransparency);
+        Assert.IsFalse(written.TransparencyEnabled);
+        Assert.AreEqual(12.0, (double)topBar.Read(written)!);
+        Assert.AreEqual(34.0, (double)dock.Read(written)!);
     }
 
     [TestMethod]
-    public void GlassTransparencyIsFoundBySearch()
+    public void TransparencySettingsAreFoundBySearch()
     {
         Assert.IsTrue(
-            SettingsCatalog.Search("прозрачность").Any(definition => definition.Id == "glassTransparency"));
+            SettingsCatalog.Search("прозрачность").Any(definition => definition.Id == "topBarTransparency"));
         Assert.IsTrue(
-            SettingsCatalog.Search("acrylic").Any(definition => definition.Id == "glassTransparency"));
+            SettingsCatalog.Search("стекло").Any(definition => definition.Id == "dockTransparency"));
+        Assert.IsTrue(
+            SettingsCatalog.Search("transparency").Any(definition => definition.Id == "transparencyEnabled"));
     }
 
     [TestMethod]

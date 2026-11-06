@@ -14,6 +14,9 @@ public static class SettingsCatalog
     /// <summary>Идентификатор страницы «Оформление».</summary>
     public const string AppearancePageId = "appearance";
 
+    /// <summary>Идентификатор страницы «Прозрачность».</summary>
+    public const string TransparencyPageId = "transparency";
+
     /// <summary>Идентификатор страницы «Dock».</summary>
     public const string DockPageId = "dock";
 
@@ -35,6 +38,7 @@ public static class SettingsCatalog
     public static IReadOnlyList<SettingsPage> Pages { get; } =
     [
         new(AppearancePageId, "Оформление", "\uE790", "Основные"),
+        new(TransparencyPageId, "Прозрачность", "\uE8A7", "Основные"),
         new(DockPageId, "Dock", "\uE8FC", "Интерфейс"),
         new(TopBarPageId, "Верхняя панель", "\uE7C4", "Интерфейс"),
         new(ExplorerPageId, "Проводник", "\uE8B7", "Интерфейс"),
@@ -130,20 +134,50 @@ public static class SettingsCatalog
             },
             BuildBaseColorChoices()),
 
+        // Прозрачность панелей: отдельная страница, потому что это независимые ползунки
+        // для верхней панели и dock, а не один общий параметр стекла.
         new(
-            "glassTransparency",
-            AppearancePageId,
-            "Прозрачность стекла",
-            "Насколько панели, dock, popover и стеклянные карточки пропускают фон. 0 % — плотное стекло.",
-            ["прозрачность", "стекло", "opacity", "glass", "acrylic", "mica", "размытие", "эффект"],
+            "transparencyEnabled",
+            TransparencyPageId,
+            "Включить прозрачность",
+            "Верхняя панель и dock пропускают рабочий стол. Когда выключено, панели остаются непрозрачными.",
+            ["прозрачность", "transparency", "прозрачный", "стекло", "glass", "панели", "эффект"],
+            SettingKind.Toggle,
+            settings => settings.TransparencyEnabled,
+            (settings, value) => UserSettingsEditor.With(settings, transparencyEnabled: AsBool(value)),
+            []),
+
+        new(
+            "topBarTransparency",
+            TransparencyPageId,
+            "Прозрачность верхней панели",
+            "0 % — плотная заливка, 90 % — панель почти растворяется в рабочем столе.",
+            ["прозрачность", "верхняя панель", "top bar", "transparency", "стекло", "фон"],
             SettingKind.Range,
-            settings => (double)settings.GlassTransparency,
+            settings => (double)settings.TopBarTransparency,
             (settings, value) => UserSettingsEditor.With(
                 settings,
-                glassTransparency: (int)Math.Round(AsDouble(value))),
+                topBarTransparency: (int)Math.Round(AsDouble(value))),
             [],
-            Maximum: UserSettings.MaxGlassTransparency,
-            Unit: "%"),
+            Maximum: UserSettings.MaxTransparency,
+            Unit: "%",
+            IsEnabledBy: "transparencyEnabled"),
+
+        new(
+            "dockTransparency",
+            TransparencyPageId,
+            "Прозрачность нижней панели",
+            "0 % — плотная капсула, 90 % — dock почти сливается с рабочим столом.",
+            ["прозрачность", "нижняя панель", "док", "dock", "transparency", "стекло", "фон"],
+            SettingKind.Range,
+            settings => (double)settings.DockTransparency,
+            (settings, value) => UserSettingsEditor.With(
+                settings,
+                dockTransparency: (int)Math.Round(AsDouble(value))),
+            [],
+            Maximum: UserSettings.MaxTransparency,
+            Unit: "%",
+            IsEnabledBy: "transparencyEnabled"),
 
         // Dock.
         new(
