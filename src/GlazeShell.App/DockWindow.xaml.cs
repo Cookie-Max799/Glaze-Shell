@@ -510,12 +510,11 @@ public sealed partial class DockWindow : Window
     }
 
     /// <summary>
-    /// Включает или отключает стеклянный фон окна. В режиме высокой контрастности стекло
-    /// убирается: полупрозрачный фон поверх произвольного рабочего стола нечитаем, а
-    /// непрозрачный цвет берётся из системной палитры.
+    /// Включает или отключает стеклянный фон окна. В режиме высокой контрастности и при
+    /// выключенной прозрачности backdrop убирается: полупрозрачный фон поверх произвольного
+    /// рабочего стола нечитаем, а непрозрачный цвет берётся из темы.
     /// </summary>
-    private void ApplyBackdrop() =>
-        SystemBackdrop = _themes.HighContrast ? null : new Microsoft.UI.Xaml.Media.MicaBackdrop();
+    private void ApplyBackdrop() => SystemBackdrop = _themes.CreatePanelBackdrop(isDock: true);
 
     /// <summary>
     /// Следит за активным окном: на рабочем столе dock виден всегда, в чужом приложении

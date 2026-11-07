@@ -29,6 +29,7 @@ public sealed class SettingRowViewModel : INotifyPropertyChanged, IDisposable
     private object? _value;
     private object? _pendingRangeValue;
     private bool _suppress;
+    private bool _isEnabled = true;
 
     public SettingRowViewModel(SettingDefinition definition, object? value, Func<SettingDefinition, object, bool> apply)
     {
@@ -63,6 +64,28 @@ public sealed class SettingRowViewModel : INotifyPropertyChanged, IDisposable
     public bool IsText => _definition.Kind == SettingKind.Text;
 
     public bool IsRange => _definition.Kind == SettingKind.Range;
+
+    /// <summary>
+    /// Доступна ли строка. Зависимые ползунки (например, прозрачность) блокируются, пока
+    /// выключен управляющий переключатель.
+    /// </summary>
+    public bool IsEnabled
+    {
+        get => _isEnabled;
+        internal set
+        {
+            if (_isEnabled == value)
+            {
+                return;
+            }
+
+            _isEnabled = value;
+            OnPropertyChanged(nameof(IsEnabled));
+        }
+    }
+
+    /// <summary>Идентификатор настройки-переключателя, от которой зависит доступность строки.</summary>
+    public string? IsEnabledBy => _definition.IsEnabledBy;
 
     /// <summary>Минимум ползунка (<see cref="SettingKind.Range"/>).</summary>
     public double Minimum => _definition.Minimum;
@@ -279,6 +302,7 @@ public sealed class SettingsViewModel : INotifyPropertyChanged, IDisposable
 
         _selectedPage = Pages.FirstOrDefault();
         ApplyFilter();
+        RefreshEnabledStates();
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -367,7 +391,31 @@ public sealed class SettingsViewModel : INotifyPropertyChanged, IDisposable
         }
 
         _settings.SetSettings(updated);
+        RefreshEnabledStates();
         return true;
+    }
+
+    /// <summary>
+    /// Обновляет доступность строк: ползунки, привязанные к переключателю
+    /// (<see cref="SettingDefinition.IsEnabledBy"/>), блокируются, пока он выключен.
+    /// </summary>
+    private void RefreshEnabledStates()
+    {
+        var settings = _settings.GetSettings();
+
+        foreach (var row in _allRows)
+        {
+            var controllerId = row.IsEnabledBy;
+
+            if (controllerId is null)
+            {
+                row.IsEnabled = true;
+                continue;
+            }
+
+            var controller = SettingsCatalog.All.FirstOrDefault(item => item.Id == controllerId);
+            row.IsEnabled = controller?.Read(settings) is not false;
+        }
     }
 
     private void ReloadFromSettings()
@@ -379,6 +427,8 @@ public sealed class SettingsViewModel : INotifyPropertyChanged, IDisposable
             var definition = SettingsCatalog.All.First(item => item.Id == row.Id);
             row.Refresh(definition.Read(settings));
         }
+
+        RefreshEnabledStates();
     }
 
     /// <summary>

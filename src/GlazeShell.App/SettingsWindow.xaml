@@ -152,6 +152,7 @@
                                             <ToggleSwitch
                                                 AutomationProperties.AutomationId="{x:Bind Id, Mode=OneWay}"
                                                 AutomationProperties.Name="{x:Bind Title, Mode=OneWay}"
+                                                IsEnabled="{x:Bind IsEnabled, Mode=OneWay}"
                                                 IsOn="{x:Bind ToggleValue, Mode=TwoWay}"
                                                 OffContent=""
                                                 OnContent=""
@@ -161,6 +162,7 @@
                                                 MinWidth="170"
                                                 AutomationProperties.AutomationId="{x:Bind Id, Mode=OneWay}"
                                                 AutomationProperties.Name="{x:Bind Title, Mode=OneWay}"
+                                                IsEnabled="{x:Bind IsEnabled, Mode=OneWay}"
                                                 ItemsSource="{x:Bind Choices}"
                                                 SelectedItem="{x:Bind SelectedChoice, Mode=TwoWay}"
                                                 Visibility="{x:Bind IsChoice}">
@@ -183,6 +185,7 @@
                                                 MinWidth="170"
                                                 AutomationProperties.AutomationId="{x:Bind Id, Mode=OneWay}"
                                                 AutomationProperties.Name="{x:Bind Title, Mode=OneWay}"
+                                                IsEnabled="{x:Bind IsEnabled, Mode=OneWay}"
                                                 Text="{x:Bind TextValue, Mode=TwoWay}"
                                                 Visibility="{x:Bind IsText}" />
 
@@ -194,6 +197,7 @@
                                                     Width="170"
                                                     AutomationProperties.AutomationId="{x:Bind Id, Mode=OneWay}"
                                                     AutomationProperties.Name="{x:Bind Title, Mode=OneWay}"
+                                                    IsEnabled="{x:Bind IsEnabled, Mode=OneWay}"
                                                     Maximum="{x:Bind Maximum}"
                                                     Minimum="{x:Bind Minimum}"
                                                     StepFrequency="{x:Bind Step}"

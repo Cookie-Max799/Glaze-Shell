@@ -54,7 +54,7 @@ public sealed class ThemeModeTests
     [TestMethod]
     public void AccentPaletteFindsKnownAccents()
     {
-        Assert.HasCount(20, AccentPalette.All);
+        Assert.HasCount(40, AccentPalette.All);
 
         var accent = AccentPalette.Find("MINT");
 

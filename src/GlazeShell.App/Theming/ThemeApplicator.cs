@@ -25,6 +25,8 @@ public sealed class ThemeApplicator
     private const string ElevatedKey = "GlazeElevatedBrush";
     private const string BorderKey = "GlazeBorderBrush";
     private const string GlassKey = "GlazeGlassBrush";
+    private const string TopBarGlassKey = "GlazeTopBarGlassBrush";
+    private const string DockGlassKey = "GlazeDockGlassBrush";
     private const string BlackKey = "GlazeBlackBrush";
     private const string WhiteKey = "GlazeWhiteBrush";
     private const string TextPrimaryKey = "GlazeTextPrimaryBrush";
@@ -195,7 +197,17 @@ public sealed class ThemeApplicator
         }
         else
         {
-            ApplyBrushes(theme);
+            // Без backdrop полупрозрачная кисть показывала бы чёрное окно: если прозрачность
+            // выключена или система не умеет Acrylic, панели остаются плотными.
+            var backdropAvailable = transparencyEnabled && PanelBackdrop.IsSupported();
+            var topBarAlpha = backdropAvailable
+                ? GlazePalette.GlassAlphaFor(topBarTransparency)
+                : (byte)0xFF;
+            var dockAlpha = backdropAvailable
+                ? GlazePalette.GlassAlphaFor(dockTransparency)
+                : (byte)0xFF;
+
+            ApplyBrushes(theme, topBarAlpha, dockAlpha);
         }
 
         ApplyFocusVisual(accessibility.HighContrast ? ToColor(palette.Highlight) : theme.AccentForeground);
@@ -213,6 +225,35 @@ public sealed class ThemeApplicator
         DockTransparency = dockTransparency;
         HighContrast = accessibility.HighContrast;
         ReduceMotion = accessibility.ReduceMotion;
+    }
+
+    /// <summary>
+    /// Создаёт Acrylic-backdrop для панели под текущую тему и её ползунок прозрачности.
+    /// Возвращает <c>null</c>, когда прозрачность выключена, включён режим высокой
+    /// контрастности или система не поддерживает Acrylic: тогда панель остаётся плотной.
+    /// </summary>
+    /// <param name="isDock"><c>true</c> для dock, <c>false</c> для верхней панели.</param>
+    public SystemBackdrop? CreatePanelBackdrop(bool isDock)
+    {
+        if (HighContrast || !TransparencyEnabled || !PanelBackdrop.IsSupported())
+        {
+            return null;
+        }
+
+        var light = ThemeModeResolver.Resolve(Mode, SystemUsesLightTheme()) == ThemeMode.Light;
+        var transparency = Math.Clamp(
+            isDock ? DockTransparency : TopBarTransparency,
+            0,
+            UserSettings.MaxTransparency);
+
+        // Плотность тонирования обратна ползунку: 0 % — плотная панель, 90 % — почти
+        // только размытие. Цвет берём непрозрачным: прозрачность задаёт контроллер,
+        // а не альфа-канал краски.
+        var theme = GlazePalette.Create(light, BaseColorId, AccentId, 0);
+        var tint = theme.Glass;
+        var opacity = 1 - (transparency / 100.0);
+
+        return new PanelBackdrop(Color.FromArgb(0xFF, tint.R, tint.G, tint.B), opacity);
     }
 
     /// <summary>
@@ -236,7 +277,7 @@ public sealed class ThemeApplicator
         }
     }
 
-    private static void ApplyBrushes(GlazeTheme theme)
+    private static void ApplyBrushes(GlazeTheme theme, byte topBarAlpha, byte dockAlpha)
     {
         var accent = theme.DefaultAccent;
         var accentForeground = theme.AccentForeground;
@@ -246,7 +287,9 @@ public sealed class ThemeApplicator
         SetBrush(SurfaceKey, theme.Surface);
         SetBrush(ElevatedKey, theme.Elevated);
         SetBrush(BorderKey, theme.Border);
-        SetBrush(GlassKey, theme.Glass);
+        SetBrush(GlassKey, GlazePalette.WithAlpha(theme.Glass, topBarAlpha));
+        SetBrush(TopBarGlassKey, GlazePalette.WithAlpha(theme.Glass, topBarAlpha));
+        SetBrush(DockGlassKey, GlazePalette.WithAlpha(theme.Glass, dockAlpha));
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         SetBrush(TextPrimaryKey, theme.TextPrimary);
@@ -293,6 +336,8 @@ public sealed class ThemeApplicator
         SetBrush(ElevatedKey, surface);
         SetBrush(BorderKey, foreground);
         SetBrush(GlassKey, background);
+        SetBrush(TopBarGlassKey, background);
+        SetBrush(DockGlassKey, background);
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         SetBrush(TextPrimaryKey, foreground);

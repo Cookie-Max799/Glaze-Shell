@@ -46,7 +46,31 @@ public static class AccentPalette
         new("sky", "Sky", "#1FA8FF"),
         new("azure", "Azure", "#2F7BFF"),
         new("slate", "Slate", "#6F86C9"),
-        new("graphite", "Graphite", "#64748B")
+        new("graphite", "Graphite", "#64748B"),
+
+        // Вторая половина набора: более глубокие и «природные» оттенки, чтобы подобрать
+        // цвет под обои и настроение. Идентификаторы не пересекаются со старыми, поэтому
+        // сохранённые настройки остаются совместимыми.
+        new("sapphire", "Sapphire", "#2A5BD7"),
+        new("ice", "Ice", "#6FD3FF"),
+        new("periwinkle", "Periwinkle", "#7B8CFF"),
+        new("lavender", "Lavender", "#A78BFA"),
+        new("fuchsia", "Fuchsia", "#E23BFF"),
+        new("plum", "Plum", "#C026A3"),
+        new("strawberry", "Strawberry", "#FF3B6B"),
+        new("salmon", "Salmon", "#FF7F7F"),
+        new("apricot", "Apricot", "#FFB37A"),
+        new("tangerine", "Tangerine", "#FF7A18"),
+        new("gold", "Gold", "#F2B705"),
+        new("lemon", "Lemon", "#E8E337"),
+        new("olive", "Olive", "#9AA62B"),
+        new("forest", "Forest", "#1E9E4A"),
+        new("jade", "Jade", "#00B36B"),
+        new("turquoise", "Turquoise", "#26D0CE"),
+        new("steel", "Steel", "#5282A8"),
+        new("stone", "Stone", "#8A8F98"),
+        new("sand", "Sand", "#C2A878"),
+        new("cocoa", "Cocoa", "#A9745B")
     };
 
     public static bool IsKnown(string? id)

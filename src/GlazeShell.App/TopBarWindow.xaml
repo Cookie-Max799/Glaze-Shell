@@ -21,7 +21,7 @@
             Height="30"
             HorizontalAlignment="Stretch"
             VerticalAlignment="Top"
-            Background="{StaticResource GlazeGlassBrush}"
+            Background="{StaticResource GlazeTopBarGlassBrush}"
             BorderThickness="0"
             CornerRadius="0,0,24,24"
             IsHitTestVisible="False" />

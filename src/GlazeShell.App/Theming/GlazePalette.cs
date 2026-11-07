@@ -34,6 +34,8 @@ internal static class GlazePalette
 
     public static Color WithAlpha(Color color, byte alpha) => ToColor(ToCore(color).WithAlpha(alpha));
 
+    public static byte GlassAlphaFor(int transparency) => CorePalette.GlassAlphaFor(transparency);
+
     public static Color Lighten(Color color, double amount) => ToColor(GlazeColor.Lighten(ToCore(color), amount));
 
     public static Color OnAccent(Color accent) => ToColor(GlazeColor.OnAccent(ToCore(accent)));
