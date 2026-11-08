@@ -43,7 +43,7 @@
             Контур не рисуется — форму задаёт региональная маска окна.
         -->
         <Border
-            Background="{StaticResource GlazeGlassBrush}"
+            Background="{StaticResource GlazeDockGlassBrush}"
             BorderThickness="0"
             CornerRadius="22,22,0,0"
             IsHitTestVisible="False" />
