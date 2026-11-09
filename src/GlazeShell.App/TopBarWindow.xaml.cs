@@ -84,6 +84,9 @@ public sealed partial class TopBarWindow : Window
     /// <summary>Окно, активное до открытия поиска или popover: ему возвращается фокус.</summary>
     private nint _previousForegroundHwnd;
 
+    /// <summary>Текущий Acrylic-backdrop полосы: нужен для восстановления после ресайза.</summary>
+    private PanelBackdrop? _backdrop;
+
     public TopBarWindow(
         ISettingsManager settings,
         IApplicationManager applications,
@@ -269,6 +272,7 @@ public sealed partial class TopBarWindow : Window
         ViewModel.SetIconScale(_scale);
 
         var logicalHeight = (double)BarHeight;
+        var previousHeight = _windowHeightPx;
 
         if (ViewModel.HasResults)
         {
@@ -312,6 +316,15 @@ public sealed partial class TopBarWindow : Window
         // изменения размера, может не совпасть с новым прямоугольником окна, и тогда
         // стекло на мгновение заливает всю его площадь. Повторяем маску после раскладки.
         _ = DispatcherQueue.TryEnqueue(UpdateWindowRegion);
+
+        // После уменьшения высоты Acrylic иногда перестаёт рисоваться: при закрытии
+        // popover окно становится ниже, и полоса до следующего ресайза остаётся без
+        // размытия (визуально прозрачность «слетает»). Пересоздание backdrop возвращает
+        // стекло сразу, не дожидаясь следующего изменения размера.
+        if (_windowHeightPx < previousHeight)
+        {
+            _ = DispatcherQueue.TryEnqueue(ApplyBackdrop);
+        }
     }
 
     /// <summary>Применяет текущий прогресс выезда к положению окна.</summary>
@@ -992,5 +1005,11 @@ public sealed partial class TopBarWindow : Window
     /// внутри полосы и раскрытых панелей, а не по всему прямоугольнику окна. Плотность
     /// тонирования берётся из ползунка прозрачности верхней панели.
     /// </summary>
-    private void ApplyBackdrop() => SystemBackdrop = _themes.CreatePanelBackdrop(isDock: false);
+    private void ApplyBackdrop()
+    {
+        var previous = _backdrop;
+        _backdrop = _themes.CreatePanelBackdrop(isDock: false) as PanelBackdrop;
+        SystemBackdrop = _backdrop;
+        previous?.Dispose();
+    }
 }

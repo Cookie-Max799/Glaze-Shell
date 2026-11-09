@@ -116,6 +116,25 @@ public sealed class GlazePaletteTests
         Assert.AreEqual(0xFF, negative.Glass.A);
     }
 
+    /// <summary>
+    /// Всплывающие панели верхней полосы следуют за ползунком, но не становятся
+    /// прозрачнее 70 %: иначе их содержимое теряется на пёстром рабочем столе.
+    /// </summary>
+    [TestMethod]
+    public void OverlayAlphaFollowsTheBarButStopsAtTheSeventyPercentLimit()
+    {
+        Assert.AreEqual(0xFF, GlazePalette.OverlayAlphaFor(0));
+        Assert.AreEqual(
+            GlazePalette.GlassAlphaFor(40),
+            GlazePalette.OverlayAlphaFor(40));
+        Assert.AreEqual(
+            GlazePalette.GlassAlphaFor(GlazePalette.OverlayMaxTransparency),
+            GlazePalette.OverlayAlphaFor(GlazePalette.OverlayMaxTransparency));
+        Assert.AreEqual(
+            GlazePalette.GlassAlphaFor(GlazePalette.OverlayMaxTransparency),
+            GlazePalette.OverlayAlphaFor(GlazePalette.MaxTransparency));
+    }
+
     [TestMethod]
     public void SurfacesKeepThemeLightness()    {
         foreach (var baseColor in AccentPalette.All)

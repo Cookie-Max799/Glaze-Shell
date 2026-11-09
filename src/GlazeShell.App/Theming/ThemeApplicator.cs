@@ -27,6 +27,7 @@ public sealed class ThemeApplicator
     private const string GlassKey = "GlazeGlassBrush";
     private const string TopBarGlassKey = "GlazeTopBarGlassBrush";
     private const string DockGlassKey = "GlazeDockGlassBrush";
+    private const string PillKey = "GlazeTopBarPillBrush";
     private const string BlackKey = "GlazeBlackBrush";
     private const string WhiteKey = "GlazeWhiteBrush";
     private const string TextPrimaryKey = "GlazeTextPrimaryBrush";
@@ -51,6 +52,13 @@ public sealed class ThemeApplicator
     private const string BrandGradientKey = "GlazeBrandGradientBrush";
 
     private const byte SelectionAlpha = 0x33;
+
+    /// <summary>
+    /// Высота перехода от плотности полосы к плотности всплывающей панели (DIP). Верхний
+    /// край панели примыкает к полосе, поэтому первые пиксели совпадают с ней по цвету и
+    /// дальше плавно уплотняются: граница перестаёт читаться как отдельный прямоугольник.
+    /// </summary>
+    private const double OverlayFadeHeight = 48;
 
     /// <summary>
     /// Прозрачность выделения в контрастном режиме. Выделение остаётся заметным, но текст
@@ -207,7 +215,7 @@ public sealed class ThemeApplicator
                 ? GlazePalette.GlassAlphaFor(dockTransparency)
                 : (byte)0xFF;
 
-            ApplyBrushes(theme, topBarAlpha, dockAlpha);
+            ApplyBrushes(theme, topBarTransparency, topBarAlpha, dockAlpha);
         }
 
         ApplyFocusVisual(accessibility.HighContrast ? ToColor(palette.Highlight) : theme.AccentForeground);
@@ -277,19 +285,32 @@ public sealed class ThemeApplicator
         }
     }
 
-    private static void ApplyBrushes(GlazeTheme theme, byte topBarAlpha, byte dockAlpha)
+    private static void ApplyBrushes(GlazeTheme theme, int topBarTransparency, byte topBarAlpha, byte dockAlpha)
     {
         var accent = theme.DefaultAccent;
         var accentForeground = theme.AccentForeground;
         var selection = GlazePalette.WithAlpha(accent, SelectionAlpha);
 
+        // Popover, результаты Glance и стеклянные карточки следуют за ползунком, но не
+        // становятся прозрачнее предела: на пёстром рабочем столе их содержимое должно
+        // оставаться читаемым. Верхний стоп градиента совпадает с плотностью полосы,
+        // поэтому панель переливается в неё без резкой границы.
+        var overlayAlpha = Math.Max(topBarAlpha, GlazePalette.OverlayAlphaFor(topBarTransparency));
+
+        // Плашки панели следуют её прозрачности: на плотной полосе это заметная подложка,
+        // на предельно прозрачной — лёгкая примесь, которая не отделяет pill от полосы.
+        var pillAlpha = GlazePalette.SurfaceAlphaFor(topBarTransparency);
+
         SetBrush(BackgroundKey, theme.Background);
         SetBrush(SurfaceKey, theme.Surface);
         SetBrush(ElevatedKey, theme.Elevated);
         SetBrush(BorderKey, theme.Border);
-        SetBrush(GlassKey, GlazePalette.WithAlpha(theme.Glass, topBarAlpha));
+        SetOverlayGlass(
+            GlazePalette.WithAlpha(theme.Glass, topBarAlpha),
+            GlazePalette.WithAlpha(theme.Glass, overlayAlpha));
         SetBrush(TopBarGlassKey, GlazePalette.WithAlpha(theme.Glass, topBarAlpha));
         SetBrush(DockGlassKey, GlazePalette.WithAlpha(theme.Glass, dockAlpha));
+        SetBrush(PillKey, GlazePalette.WithAlpha(theme.Elevated, pillAlpha));
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         SetBrush(TextPrimaryKey, theme.TextPrimary);
@@ -335,9 +356,10 @@ public sealed class ThemeApplicator
         SetBrush(SurfaceKey, surface);
         SetBrush(ElevatedKey, surface);
         SetBrush(BorderKey, foreground);
-        SetBrush(GlassKey, background);
+        SetOverlayGlass(background, background);
         SetBrush(TopBarGlassKey, background);
         SetBrush(DockGlassKey, background);
+        SetBrush(PillKey, surface);
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         SetBrush(TextPrimaryKey, foreground);
@@ -397,5 +419,26 @@ public sealed class ThemeApplicator
         {
             brush.Color = color;
         }
+    }
+
+    /// <summary>
+    /// Перекрашивает оба стопа градиента всплывающих панелей: верхний совпадает с полосой,
+    /// нижний задаёт плотность самой панели. Фиксированная высота перехода делает стык
+    /// мягким при любой разнице прозрачностей.
+    /// </summary>
+    private static void SetOverlayGlass(Color top, Color bottom)
+    {
+        if (Microsoft.UI.Xaml.Application.Current is not { } app
+            || !app.Resources.TryGetValue(GlassKey, out var resource)
+            || resource is not LinearGradientBrush brush
+            || brush.GradientStops.Count < 2)
+        {
+            return;
+        }
+
+        brush.StartPoint = new global::Windows.Foundation.Point(0.5, 0);
+        brush.EndPoint = new global::Windows.Foundation.Point(0.5, OverlayFadeHeight);
+        brush.GradientStops[0].Color = top;
+        brush.GradientStops[1].Color = bottom;
     }
 }

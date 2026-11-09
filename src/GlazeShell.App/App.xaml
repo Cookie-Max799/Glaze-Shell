@@ -19,10 +19,25 @@
             <SolidColorBrush x:Key="GlazeSurfaceBrush" Color="#171332" />
             <SolidColorBrush x:Key="GlazeElevatedBrush" Color="#221C48" />
             <SolidColorBrush x:Key="GlazeBorderBrush" Color="#40B4A4FF" />
-            <SolidColorBrush x:Key="GlazeGlassBrush" Color="#8C211B45" />
+            <!--
+                Стекло всплывающих панелей верхней полосы. Верхний стоп совпадает с
+                плотностью полосы, нижний — с прозрачностью панели (не выше 70 %):
+                так на границе нет резкого перехода, панель «переливается» в полосу.
+                Оба стопа перекрашивает ThemeApplicator.
+            -->
+            <LinearGradientBrush
+                x:Key="GlazeGlassBrush"
+                MappingMode="Absolute"
+                StartPoint="0.5,0"
+                EndPoint="0.5,48">
+                <GradientStop Offset="0" Color="#1A211B45" />
+                <GradientStop Offset="1" Color="#4D211B45" />
+            </LinearGradientBrush>
             <!--  Стекло панелей: у верхней панели и dock свои ползунки прозрачности.  -->
             <SolidColorBrush x:Key="GlazeTopBarGlassBrush" Color="#8C211B45" />
             <SolidColorBrush x:Key="GlazeDockGlassBrush" Color="#8C211B45" />
+            <!--  Плашки верхней панели: следуют её прозрачности и растворяются в полосе.  -->
+            <SolidColorBrush x:Key="GlazeTopBarPillBrush" Color="#33221C48" />
             <SolidColorBrush x:Key="GlazeBlackBrush" Color="#000000" />
             <SolidColorBrush x:Key="GlazeWhiteBrush" Color="#FFFFFF" />
 
