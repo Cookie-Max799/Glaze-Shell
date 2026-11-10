@@ -14,7 +14,7 @@
         чуть выезжает из-за верхнего края, а при наведении раскрывается полностью.
         Панель результатов Glance и popover живут в этом же окне.
     -->
-    <Grid x:Name="Root" Background="Transparent">
+    <Grid x:Name="Root" Background="Transparent" UseLayoutRounding="True">
         <!-- Полноширинная стеклянная полоса с нижним скруглением -->
         <Border
             x:Name="BarBackground"

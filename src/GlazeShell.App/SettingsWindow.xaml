@@ -15,7 +15,10 @@
         (GlazeShell.Core.Settings.SettingsCatalog), поэтому добавление настройки не требует
         правок этой разметки.
     -->
-    <Grid x:Name="Root" Background="{StaticResource GlazeBackgroundBrush}">
+    <Grid
+        x:Name="Root"
+        Background="{StaticResource GlazeBackgroundBrush}"
+        UseLayoutRounding="True">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="260" />
             <ColumnDefinition Width="*" />

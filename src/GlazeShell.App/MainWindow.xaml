@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Window
     x:Class="GlazeShell.App.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -8,96 +8,130 @@
     xmlns:p="using:GlazeShell.App.Presentation"
     mc:Ignorable="d">
 
-    <Grid x:Name="Root" Background="{StaticResource GlazeBackgroundBrush}">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="360" />
-        </Grid.ColumnDefinitions>
+    <!--
+        Компактная раскладка главного окна (этап 3): тонкая шапка с иконочными
+        действиями, строка поиска с переключателем панели мониторов, список приложений
+        и постоянная полоса действий внизу. UseLayoutRounding убирает полупиксельные
+        швы, из-за которых скругления выглядели «пиксельными» при масштабе 125 %.
+    -->
+    <Grid
+        x:Name="Root"
+        Background="{StaticResource GlazeBackgroundBrush}"
+        UseLayoutRounding="True">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
 
-        <!--  Левая колонка: шапка, список приложений, подвал.  -->
-        <Grid Grid.Column="0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
+        <!--  Шапка: название, состояние загрузки и действия над приложением.  -->
+        <Border
+            Grid.Row="0"
+            Padding="20,10"
+            Background="{StaticResource GlazeSurfaceBrush}"
+            BorderBrush="{StaticResource GlazeBorderBrush}"
+            BorderThickness="0,0,0,1">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-            <Border
-                Grid.Row="0"
-                Padding="36,30,36,22"
-                Background="{StaticResource GlazeSurfaceBrush}">
-                <Grid ColumnSpacing="16">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel Spacing="8">
+                <StackPanel
+                    Orientation="Horizontal"
+                    Spacing="10"
+                    VerticalAlignment="Center">
+                    <Border
+                        Width="28"
+                        Height="28"
+                        Background="{StaticResource GlazeBrandGradientBrush}"
+                        CornerRadius="8">
+                        <FontIcon
+                            FontSize="14"
+                            Foreground="{StaticResource GlazeWhiteBrush}"
+                            Glyph="&#xE7F4;" />
+                    </Border>
+                    <StackPanel Spacing="1" VerticalAlignment="Center">
                         <TextBlock
-                            FontSize="30"
+                            FontSize="16"
                             FontWeight="SemiBold"
                             Foreground="{StaticResource GlazeTextPrimaryBrush}"
                             Text="Glaze Shell" />
                         <TextBlock
-                            FontSize="14"
-                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                            Text="Запуск установленных приложений: меню «Пуск» и пакеты MSIX."
-                            TextWrapping="Wrap" />
+                            FontSize="11"
+                            Foreground="{StaticResource GlazeTextMutedBrush}"
+                            Text="Управление приложениями и рабочим столом" />
                     </StackPanel>
+                </StackPanel>
 
-                    <StackPanel
-                        Grid.Column="1"
-                        HorizontalAlignment="Right"
-                        Spacing="10">
-                        <ProgressRing
-                            Width="26"
-                            Height="26"
-                            HorizontalAlignment="Right"
-                            Foreground="{StaticResource GlazeAccentBrush}"
-                            IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
+                <StackPanel
+                    Grid.Column="2"
+                    Orientation="Horizontal"
+                    Spacing="4"
+                    VerticalAlignment="Center">
+                    <ProgressRing
+                        Width="16"
+                        Height="16"
+                        Margin="4,0"
+                        Foreground="{StaticResource GlazeAccentBrush}"
+                        IsActive="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
 
-                        <Button
-                            HorizontalAlignment="Right"
-                            Click="OnRecoveryClick"
-                            ToolTipService.ToolTip="Восстановить интерфейс Windows (I2)">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon FontSize="15" Glyph="&#xE90F;" />
-                                <TextBlock Text="Восстановить UI" />
-                            </StackPanel>
-                        </Button>
+                    <Button
+                        Style="{StaticResource GlazeIconButtonStyle}"
+                        Click="OnRefreshClick"
+                        IsEnabled="{x:Bind ViewModel.IsIdle, Mode=OneWay}"
+                        ToolTipService.ToolTip="Обновить список приложений (F5)">
+                        <FontIcon FontSize="14" Glyph="&#xE72C;" />
+                    </Button>
 
-                        <Button
-                            HorizontalAlignment="Right"
-                            Click="OnExplorerClick"
-                            ToolTipService.ToolTip="Проводник Glaze Shell (E1/E2)">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon FontSize="15" Glyph="&#xE8B7;" />
-                                <TextBlock Text="Проводник" />
-                            </StackPanel>
-                        </Button>
+                    <Button
+                        Style="{StaticResource GlazeToolbarButtonStyle}"
+                        Click="OnExplorerClick"
+                        ToolTipService.ToolTip="Проводник Glaze Shell (E1/E2)">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="14" Glyph="&#xE8B7;" />
+                            <TextBlock FontSize="12" Text="Проводник" />
+                        </StackPanel>
+                    </Button>
 
-                        <Button
-                            HorizontalAlignment="Right"
-                            Click="OnSettingsClick"
-                            ToolTipService.ToolTip="Настройки Glaze Shell (I1)">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon FontSize="15" Glyph="&#xE713;" />
-                                <TextBlock Text="Настройки" />
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
-                </Grid>
-            </Border>
+                    <Button
+                        Style="{StaticResource GlazeToolbarButtonStyle}"
+                        Click="OnRecoveryClick"
+                        ToolTipService.ToolTip="Восстановить интерфейс Windows (I2)">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="14" Glyph="&#xE90F;" />
+                            <TextBlock FontSize="12" Text="Восстановить UI" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button
+                        Style="{StaticResource GlazeIconButtonStyle}"
+                        Click="OnSettingsClick"
+                        ToolTipService.ToolTip="Настройки Glaze Shell (I1)">
+                        <FontIcon FontSize="15" Glyph="&#xE713;" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!--  Тело: список приложений и сворачиваемая панель мониторов.  -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="MonitorsColumn" Width="320" />
+            </Grid.ColumnDefinitions>
 
             <Grid
-                Grid.Row="1"
-                Padding="36,18,36,12">
+                Grid.Column="0"
+                Padding="20,14,20,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
-                <Grid ColumnSpacing="12">
+                <!--  Поиск и счётчик найденного.  -->
+                <Grid ColumnSpacing="10">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="Auto" />
@@ -110,15 +144,39 @@
                         QueryIcon="Find"
                         Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
 
-                    <Button
+                    <StackPanel
                         Grid.Column="1"
-                        MinWidth="120"
-                        Click="OnRefreshClick"
-                        Content="Обновить"
-                        IsEnabled="{x:Bind ViewModel.IsIdle, Mode=OneWay}" />
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        VerticalAlignment="Center">
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{StaticResource GlazeTextMutedBrush}"
+                            Text="{x:Bind ViewModel.Items.Count, Mode=OneWay}" />
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{StaticResource GlazeTextMutedBrush}"
+                            Text="приложений" />
+                        <ToggleButton
+                            x:Name="MonitorsToggle"
+                            Width="32"
+                            Height="32"
+                            Padding="0"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="MonitorsToggle"
+                            AutomationProperties.Name="Показать или скрыть панель мониторов"
+                            Click="OnMonitorsToggleClick"
+                            CornerRadius="8"
+                            IsChecked="True"
+                            ToolTipService.ToolTip="Показать или скрыть панель мониторов">
+                            <FontIcon FontSize="14" Glyph="&#xE7F4;" />
+                        </ToggleButton>
+                    </StackPanel>
                 </Grid>
 
-                <Grid Grid.Row="1">
+                <Grid Grid.Row="1" Margin="0,10,0,0">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
                         <RowDefinition Height="Auto" />
@@ -136,7 +194,7 @@
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="p:ApplicationListViewModel">
                                 <Grid AutomationProperties.Name="{x:Bind Name, Mode=OneWay}">
-                                    <Grid Padding="20,16" ColumnSpacing="14">
+                                    <Grid Padding="14,12" ColumnSpacing="12">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="Auto" />
                                             <ColumnDefinition Width="*" />
@@ -144,54 +202,39 @@
                                         </Grid.ColumnDefinitions>
 
                                         <Grid
-                                            Width="22"
-                                            Height="22"
-                                            VerticalAlignment="Center">
+                                            Width="20"
+                                            Height="20"
+                                            Margin="0,2,0,0"
+                                            VerticalAlignment="Top">
                                             <TextBlock
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
-                                                FontSize="18"
+                                                FontSize="16"
                                                 Foreground="{StaticResource GlazeTextMutedBrush}"
                                                 Text="{x:Bind RunningGlyph, Mode=OneWay}"
                                                 Visibility="{x:Bind IsNotLaunching, Mode=OneWay}" />
                                             <ProgressRing
-                                                Width="20"
-                                                Height="20"
+                                                Width="18"
+                                                Height="18"
                                                 Foreground="{StaticResource GlazeAccentBrush}"
                                                 IsActive="{x:Bind IsLaunching, Mode=OneWay}"
                                                 Visibility="{x:Bind IsLaunching, Mode=OneWay}" />
                                         </Grid>
 
                                         <StackPanel Grid.Column="1" Spacing="8">
-                                            <StackPanel Spacing="3">
+                                            <StackPanel Spacing="2">
                                                 <TextBlock
-                                                    FontSize="15"
+                                                    FontSize="14"
                                                     FontWeight="SemiBold"
                                                     Foreground="{StaticResource GlazeTextPrimaryBrush}"
                                                     Text="{x:Bind Name, Mode=OneWay}"
                                                     TextTrimming="CharacterEllipsis" />
-                                                <Grid ColumnSpacing="8">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="Auto" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock
-                                                        FontSize="12"
-                                                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                                                        Text="{x:Bind Description, Mode=OneWay}"
-                                                        TextTrimming="CharacterEllipsis"
-                                                        ToolTipService.ToolTip="{x:Bind Path, Mode=OneWay}" />
-                                                    <Button
-                                                        Grid.Column="1"
-                                                        MinWidth="0"
-                                                        Padding="6,2"
-                                                        AutomationProperties.Name="Копировать путь в буфер обмена"
-                                                        Click="OnCopyPathClick"
-                                                        ToolTipService.ToolTip="Копировать путь в буфер обмена"
-                                                        Visibility="{x:Bind HasPath, Mode=OneWay}">
-                                                        <FontIcon FontSize="12" Glyph="&#xE8C8;" />
-                                                    </Button>
-                                                </Grid>
+                                                <TextBlock
+                                                    FontSize="11.5"
+                                                    Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                                    Text="{x:Bind Description, Mode=OneWay}"
+                                                    TextTrimming="CharacterEllipsis"
+                                                    ToolTipService.ToolTip="{x:Bind Path, Mode=OneWay}" />
                                             </StackPanel>
 
                                             <ItemsControl
@@ -201,7 +244,7 @@
                                                     <DataTemplate x:DataType="p:WindowListItemViewModel">
                                                         <Border
                                                             Margin="0,2,0,0"
-                                                            Padding="10,6"
+                                                            Padding="10,5"
                                                             Background="{StaticResource GlazeElevatedBrush}"
                                                             CornerRadius="6">
                                                             <Grid ColumnSpacing="8">
@@ -213,60 +256,70 @@
 
                                                                 <TextBlock
                                                                     VerticalAlignment="Center"
-                                                                    FontSize="14"
+                                                                    FontSize="13"
                                                                     Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
                                                                     Text="{x:Bind ActiveGlyph, Mode=OneWay}" />
 
-                                                                <StackPanel Grid.Column="1" Spacing="2">
+                                                                <StackPanel Grid.Column="1" Spacing="1">
                                                                     <TextBlock
-                                                                        FontSize="12.5"
+                                                                        FontSize="12"
                                                                         FontWeight="SemiBold"
                                                                         Foreground="{StaticResource GlazeTextPrimaryBrush}"
                                                                         Text="{x:Bind Title, Mode=OneWay}"
                                                                         TextTrimming="CharacterEllipsis" />
                                                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                                                         <TextBlock
-                                                                            FontSize="11"
+                                                                            FontSize="10.5"
                                                                             Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
                                                                             Text="{x:Bind StateText, Mode=OneWay}" />
                                                                         <TextBlock
-                                                                            FontSize="11"
+                                                                            FontSize="10.5"
                                                                             Foreground="{StaticResource GlazeTextMutedBrush}"
                                                                             Text="{x:Bind MonitorLabel, Mode=OneWay}"
                                                                             Visibility="{x:Bind HasMonitor, Mode=OneWay}" />
                                                                     </StackPanel>
                                                                 </StackPanel>
 
-                                                                <StackPanel
+                                                                <Button
                                                                     Grid.Column="2"
-                                                                    Orientation="Horizontal"
-                                                                    Spacing="6"
-                                                                    VerticalAlignment="Center">
-                                                                    <Button
-                                                                        MinWidth="64"
-                                                                        Padding="10,4"
-                                                                        FontSize="11"
-                                                                        Command="{x:Bind FocusCommand}"
-                                                                        Content="Фокус" />
-                                                                    <Button
-                                                                        MinWidth="68"
-                                                                        Padding="10,4"
-                                                                        FontSize="11"
-                                                                        Command="{x:Bind MinimizeCommand}"
-                                                                        Content="Свернуть" />
-                                                                    <Button
-                                                                        MinWidth="76"
-                                                                        Padding="10,4"
-                                                                        FontSize="11"
-                                                                        Command="{x:Bind MaximizeCommand}"
-                                                                        Content="Развернуть" />
-                                                                    <Button
-                                                                        MinWidth="64"
-                                                                        Padding="10,4"
-                                                                        FontSize="11"
-                                                                        Command="{x:Bind CloseCommand}"
-                                                                        Content="Закрыть" />
-                                                                </StackPanel>
+                                                                    Style="{StaticResource GlazeSmallIconButtonStyle}"
+                                                                    AutomationProperties.Name="Действия с окном"
+                                                                    ToolTipService.ToolTip="Действия с окном">
+                                                                    <FontIcon FontSize="12" Glyph="&#xE712;" />
+                                                                    <Button.Flyout>
+                                                                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                                                                            <MenuFlyoutItem
+                                                                                Command="{x:Bind FocusCommand}"
+                                                                                Text="Фокус">
+                                                                                <MenuFlyoutItem.Icon>
+                                                                                    <FontIcon Glyph="&#xE7C9;" />
+                                                                                </MenuFlyoutItem.Icon>
+                                                                            </MenuFlyoutItem>
+                                                                            <MenuFlyoutItem
+                                                                                Command="{x:Bind MinimizeCommand}"
+                                                                                Text="Свернуть">
+                                                                                <MenuFlyoutItem.Icon>
+                                                                                    <FontIcon Glyph="&#xE921;" />
+                                                                                </MenuFlyoutItem.Icon>
+                                                                            </MenuFlyoutItem>
+                                                                            <MenuFlyoutItem
+                                                                                Command="{x:Bind MaximizeCommand}"
+                                                                                Text="Развернуть">
+                                                                                <MenuFlyoutItem.Icon>
+                                                                                    <FontIcon Glyph="&#xE922;" />
+                                                                                </MenuFlyoutItem.Icon>
+                                                                            </MenuFlyoutItem>
+                                                                            <MenuFlyoutSeparator />
+                                                                            <MenuFlyoutItem
+                                                                                Command="{x:Bind CloseCommand}"
+                                                                                Text="Закрыть">
+                                                                                <MenuFlyoutItem.Icon>
+                                                                                    <FontIcon Glyph="&#xE711;" />
+                                                                                </MenuFlyoutItem.Icon>
+                                                                            </MenuFlyoutItem>
+                                                                        </MenuFlyout>
+                                                                    </Button.Flyout>
+                                                                </Button>
                                                             </Grid>
                                                         </Border>
                                                     </DataTemplate>
@@ -274,24 +327,39 @@
                                             </ItemsControl>
                                         </StackPanel>
 
-                                        <Border
+                                        <StackPanel
                                             Grid.Column="2"
-                                            Padding="10,3"
-                                            VerticalAlignment="Center"
-                                            Background="{StaticResource GlazeElevatedBrush}"
-                                            CornerRadius="6">
-                                            <TextBlock
-                                                FontSize="11"
-                                                Foreground="{StaticResource GlazeTextMutedBrush}"
-                                                Text="{x:Bind TypeBadge, Mode=OneWay}" />
-                                        </Border>
+                                            Orientation="Horizontal"
+                                            Spacing="4"
+                                            VerticalAlignment="Top">
+                                            <Button
+                                                MinWidth="0"
+                                                Padding="4,2"
+                                                AutomationProperties.Name="Копировать путь в буфер обмена"
+                                                Click="OnCopyPathClick"
+                                                Style="{StaticResource GlazeSmallIconButtonStyle}"
+                                                ToolTipService.ToolTip="Копировать путь в буфер обмена"
+                                                Visibility="{x:Bind HasPath, Mode=OneWay}">
+                                                <FontIcon FontSize="11" Glyph="&#xE8C8;" />
+                                            </Button>
+                                            <Border
+                                                Padding="8,2"
+                                                VerticalAlignment="Center"
+                                                Background="{StaticResource GlazeElevatedBrush}"
+                                                CornerRadius="6">
+                                                <TextBlock
+                                                    FontSize="10.5"
+                                                    Foreground="{StaticResource GlazeTextMutedBrush}"
+                                                    Text="{x:Bind TypeBadge, Mode=OneWay}" />
+                                            </Border>
+                                        </StackPanel>
                                     </Grid>
 
                                     <Border
-                                        Width="4"
+                                        Width="3"
                                         HorizontalAlignment="Left"
                                         Background="{StaticResource GlazeAccentBrush}"
-                                        CornerRadius="12,0,0,12"
+                                        CornerRadius="2,0,0,2"
                                         Visibility="{x:Bind IsSelected, Mode=OneWay}" />
                                 </Grid>
                             </DataTemplate>
@@ -301,7 +369,8 @@
                     <TextBlock
                         Margin="0,40,0,0"
                         HorizontalAlignment="Center"
-                        FontSize="14"
+                        VerticalAlignment="Top"
+                        FontSize="13"
                         Foreground="{StaticResource GlazeTextMutedBrush}"
                         Text="Приложения не найдены"
                         Visibility="{x:Bind ViewModel.IsEmpty, Mode=OneWay}" />
@@ -311,185 +380,203 @@
                         Padding="0,8,0,0"
                         IsIndeterminate="True"
                         Visibility="{x:Bind ViewModel.IsBusy, Mode=OneWay}" />
-
-                    <StackPanel
-                        Grid.Row="1"
-                        Padding="0,14,0,0"
-                        HorizontalAlignment="Right"
-                        Orientation="Horizontal"
-                        Spacing="10">
-                        <Button
-                            MinWidth="100"
-                            Click="OnLaunchClick"
-                            Content="Запустить" />
-                        <Button
-                            MinWidth="100"
-                            Click="OnCloseClick"
-                            Content="Закрыть" />
-                        <Button
-                            MinWidth="100"
-                            Click="OnRestartClick"
-                            Content="Перезапустить" />
-                        <Button
-                            MinWidth="150"
-                            Click="OnTerminateClick"
-                            Content="Завершить принудительно" />
-                    </StackPanel>
                 </Grid>
             </Grid>
 
+            <!--  Панель мониторов: сворачивается кнопкой в строке поиска.  -->
             <Border
-                Grid.Row="2"
-                Padding="36,14,36,20"
-                Background="{StaticResource GlazeSurfaceBrush}">
-                <StackPanel Spacing="8">
+                x:Name="MonitorsPanel"
+                Grid.Column="1"
+                Padding="16,14"
+                Background="{StaticResource GlazeSurfaceBrush}"
+                BorderBrush="{StaticResource GlazeBorderBrush}"
+                BorderThickness="1,0,0,0">
+                <Grid RowSpacing="10">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                        Text="МОНИТОРЫ" />
+                    <TextBlock
+                        Grid.Row="1"
+                        FontSize="13"
+                        FontWeight="SemiBold"
+                        Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                        Text="{x:Bind ViewModel.MonitorSummary, Mode=OneWay}"
+                        TextWrapping="Wrap" />
+
+                    <ScrollViewer
+                        Grid.Row="2"
+                        HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{x:Bind ViewModel.Monitors, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="p:MonitorListItemViewModel">
+                                    <Border
+                                        Margin="0,0,0,8"
+                                        Padding="12"
+                                        Background="{StaticResource GlazeElevatedBrush}"
+                                        CornerRadius="8">
+                                        <StackPanel Spacing="6">
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <FontIcon
+                                                    VerticalAlignment="Center"
+                                                    FontSize="15"
+                                                    Foreground="{StaticResource GlazeAccentBrush}"
+                                                    Glyph="&#xE7F4;" />
+                                                <StackPanel Grid.Column="1" Spacing="2">
+                                                    <TextBlock
+                                                        FontSize="14"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                                                        Text="{x:Bind DisplayName, Mode=OneWay}"
+                                                        TextTrimming="CharacterEllipsis"
+                                                        ToolTipService.ToolTip="{x:Bind DeviceName, Mode=OneWay}" />
+                                                    <TextBlock
+                                                        FontSize="11.5"
+                                                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                                        Text="{x:Bind Label, Mode=OneWay}"
+                                                        TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock
+                                                        FontSize="11.5"
+                                                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                                                        Text="{x:Bind Summary, Mode=OneWay}" />
+                                                </StackPanel>
+                                                <StackPanel
+                                                    Grid.Column="2"
+                                                    Spacing="6"
+                                                    VerticalAlignment="Center">
+                                                    <Border
+                                                        Padding="8,2"
+                                                        HorizontalAlignment="Right"
+                                                        Background="{StaticResource GlazeSurfaceBrush}"
+                                                        CornerRadius="4">
+                                                        <TextBlock
+                                                            FontSize="10.5"
+                                                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                                            Text="{x:Bind Badge, Mode=OneWay}" />
+                                                    </Border>
+                                                    <Button
+                                                        MinWidth="0"
+                                                        Padding="8,2"
+                                                        HorizontalAlignment="Right"
+                                                        Click="OnRenameMonitorClick"
+                                                        Content="Имя"
+                                                        FontSize="11"
+                                                        ToolTipService.ToolTip="Переименовать дисплей" />
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <TextBlock
+                                                FontSize="10.5"
+                                                Foreground="{StaticResource GlazeTextMutedBrush}"
+                                                Text="{x:Bind WindowCountText, Mode=OneWay}" />
+
+                                            <ItemsControl ItemsSource="{x:Bind Windows, Mode=OneWay}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate x:DataType="p:WindowListItemViewModel">
+                                                        <Grid Margin="4,0,0,0" ColumnSpacing="6">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock
+                                                                FontSize="10.5"
+                                                                Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
+                                                                Text="{x:Bind ActiveGlyph, Mode=OneWay}" />
+                                                            <TextBlock
+                                                                Grid.Column="1"
+                                                                FontSize="10.5"
+                                                                Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                                                                Text="{x:Bind Title, Mode=OneWay}"
+                                                                TextTrimming="CharacterEllipsis" />
+                                                            <TextBlock
+                                                                Grid.Column="2"
+                                                                FontSize="10.5"
+                                                                Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
+                                                                Text="{x:Bind StateText, Mode=OneWay}" />
+                                                        </Grid>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!--  Полоса действий: всегда на месте, кнопки гаснут без выбранного приложения.  -->
+        <Border
+            Grid.Row="2"
+            Padding="20,10"
+            Background="{StaticResource GlazeSurfaceBrush}"
+            BorderBrush="{StaticResource GlazeBorderBrush}"
+            BorderThickness="0,1,0,0">
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel
+                    Spacing="1"
+                    VerticalAlignment="Center"
+                    ToolTipService.ToolTip="Логи и данные: %LOCALAPPDATA%\GlazeShell">
                     <TextBlock
                         FontSize="12"
                         Foreground="{StaticResource GlazeTextSecondaryBrush}"
                         Text="{x:Bind ViewModel.StatusText, Mode=OneWay}"
                         TextTrimming="CharacterEllipsis" />
                     <TextBlock
-                        FontSize="12"
+                        FontSize="10.5"
                         Foreground="{StaticResource GlazeTextMutedBrush}"
-                        Text="Логи и данные: %LOCALAPPDATA%\GlazeShell" />
+                        Text="Логи и данные: %LOCALAPPDATA%\GlazeShell"
+                        TextTrimming="CharacterEllipsis" />
                 </StackPanel>
-            </Border>
-        </Grid>
 
-        <!--  Правая колонка: панель мониторов на всю высоту окна.  -->
-        <Border
-            Grid.Column="1"
-            Padding="20,24,20,20"
-            Background="{StaticResource GlazeSurfaceBrush}"
-            BorderBrush="{StaticResource GlazeBorderBrush}"
-            BorderThickness="1,0,0,0">
-            <Grid RowSpacing="10">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-
-                <TextBlock
-                    FontSize="12"
-                    FontWeight="SemiBold"
-                    Foreground="{StaticResource GlazeTextPrimaryBrush}"
-                    Text="МОНИТОРЫ" />
-                <TextBlock
-                    Grid.Row="1"
-                    FontSize="14"
-                    FontWeight="SemiBold"
-                    Foreground="{StaticResource GlazeTextPrimaryBrush}"
-                    Text="{x:Bind ViewModel.MonitorSummary, Mode=OneWay}"
-                    TextWrapping="Wrap" />
-
-                <ScrollViewer
-                    Grid.Row="2"
-                    HorizontalScrollBarVisibility="Disabled"
-                    VerticalScrollBarVisibility="Auto">
-                    <ItemsControl ItemsSource="{x:Bind ViewModel.Monitors, Mode=OneWay}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate x:DataType="p:MonitorListItemViewModel">
-                                <Border
-                                    Margin="0,0,0,10"
-                                    Padding="12"
-                                    Background="{StaticResource GlazeElevatedBrush}"
-                                    CornerRadius="8">
-                                    <StackPanel Spacing="6">
-                                        <Grid ColumnSpacing="12">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto" />
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="Auto" />
-                                            </Grid.ColumnDefinitions>
-
-                                            <FontIcon
-                                                VerticalAlignment="Center"
-                                                FontSize="15"
-                                                Foreground="{StaticResource GlazeAccentBrush}"
-                                                Glyph="&#xE7F4;" />
-                                            <StackPanel Grid.Column="1" Spacing="2">
-                                                <TextBlock
-                                                    FontSize="15"
-                                                    FontWeight="SemiBold"
-                                                    Foreground="{StaticResource GlazeTextPrimaryBrush}"
-                                                    Text="{x:Bind DisplayName, Mode=OneWay}"
-                                                    TextTrimming="CharacterEllipsis"
-                                                    ToolTipService.ToolTip="{x:Bind DeviceName, Mode=OneWay}" />
-                                                <TextBlock
-                                                    FontSize="12"
-                                                    Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                                                    Text="{x:Bind Label, Mode=OneWay}"
-                                                    TextTrimming="CharacterEllipsis" />
-                                                <TextBlock
-                                                    FontSize="12"
-                                                    Foreground="{StaticResource GlazeTextMutedBrush}"
-                                                    Text="{x:Bind Summary, Mode=OneWay}" />
-                                            </StackPanel>
-                                            <StackPanel
-                                                Grid.Column="2"
-                                                Spacing="6"
-                                                VerticalAlignment="Center">
-                                                <Border
-                                                    Padding="8,2"
-                                                    HorizontalAlignment="Right"
-                                                    Background="{StaticResource GlazeSurfaceBrush}"
-                                                    CornerRadius="4">
-                                                    <TextBlock
-                                                        FontSize="11"
-                                                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                                                        Text="{x:Bind Badge, Mode=OneWay}" />
-                                                </Border>
-                                                <Button
-                                                    MinWidth="0"
-                                                    Padding="8,2"
-                                                    HorizontalAlignment="Right"
-                                                    Click="OnRenameMonitorClick"
-                                                    Content="Имя"
-                                                    FontSize="11"
-                                                    ToolTipService.ToolTip="Переименовать дисплей" />
-                                            </StackPanel>
-                                        </Grid>
-
-                                        <TextBlock
-                                            FontSize="11"
-                                            Foreground="{StaticResource GlazeTextMutedBrush}"
-                                            Text="{x:Bind WindowCountText, Mode=OneWay}" />
-
-                                        <ItemsControl ItemsSource="{x:Bind Windows, Mode=OneWay}">
-                                            <ItemsControl.ItemTemplate>
-                                                <DataTemplate x:DataType="p:WindowListItemViewModel">
-                                                    <Grid Margin="4,0,0,0" ColumnSpacing="6">
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="*" />
-                                                            <ColumnDefinition Width="Auto" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <TextBlock
-                                                            FontSize="11"
-                                                            Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
-                                                            Text="{x:Bind ActiveGlyph, Mode=OneWay}" />
-                                                        <TextBlock
-                                                            Grid.Column="1"
-                                                            FontSize="11"
-                                                            Foreground="{StaticResource GlazeTextPrimaryBrush}"
-                                                            Text="{x:Bind Title, Mode=OneWay}"
-                                                            TextTrimming="CharacterEllipsis" />
-                                                        <TextBlock
-                                                            Grid.Column="2"
-                                                            FontSize="11"
-                                                            Foreground="{x:Bind ActiveBrush, Mode=OneWay}"
-                                                            Text="{x:Bind StateText, Mode=OneWay}" />
-                                                    </Grid>
-                                                </DataTemplate>
-                                            </ItemsControl.ItemTemplate>
-                                        </ItemsControl>
-                                    </StackPanel>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
+                <StackPanel
+                    Grid.Column="1"
+                    Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+                    <Button
+                        MinWidth="104"
+                        Click="OnLaunchClick"
+                        Content="Запустить"
+                        IsEnabled="{x:Bind ViewModel.HasSelection, Mode=OneWay}" />
+                    <Button
+                        MinWidth="104"
+                        Click="OnRestartClick"
+                        Content="Перезапустить"
+                        IsEnabled="{x:Bind ViewModel.HasSelection, Mode=OneWay}" />
+                    <Button
+                        MinWidth="96"
+                        Click="OnCloseClick"
+                        Content="Закрыть"
+                        IsEnabled="{x:Bind ViewModel.HasSelection, Mode=OneWay}" />
+                    <Button
+                        MinWidth="140"
+                        Click="OnTerminateClick"
+                        Content="Завершить принудительно"
+                        IsEnabled="{x:Bind ViewModel.HasSelection, Mode=OneWay}" />
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>

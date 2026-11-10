@@ -81,6 +81,22 @@
             <SolidColorBrush x:Key="ListViewItemBackgroundSelectedPressed" Color="#33B4A4FF" />
 
             <!--
+                Состояние «включено» у ToggleButton по умолчанию заливается системным
+                акцентом (AccentFillColorDefaultBrush). Он приходит из системных ресурсов
+                Windows, поэтому не перекрашивается темой Glaze Shell: на проверке кнопка
+                панели мониторов рисовалась светло-серой #D8D8D8 при любом акценте.
+                Здесь состояние привязано к собственным кистям, и оно следует за темой.
+            -->
+            <StaticResource x:Key="ToggleButtonBackgroundChecked" ResourceKey="GlazeSelectionBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundCheckedPointerOver" ResourceKey="GlazeSelectionBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundCheckedPressed" ResourceKey="GlazeSelectionBrush" />
+            <StaticResource x:Key="ToggleButtonForegroundChecked" ResourceKey="GlazeAccentBrush" />
+            <StaticResource x:Key="ToggleButtonForegroundCheckedPointerOver" ResourceKey="GlazeAccentBrush" />
+            <StaticResource x:Key="ToggleButtonForegroundCheckedPressed" ResourceKey="GlazeAccentBrush" />
+            <StaticResource x:Key="ToggleButtonBorderBrushChecked" ResourceKey="GlazeBorderBrush" />
+            <StaticResource x:Key="ToggleButtonBorderBrushCheckedPointerOver" ResourceKey="GlazeBorderBrush" />
+
+            <!--
                 Фокус-ринг (доступность, I5). Встроенный фокус-визуал WinUI рисует заливку
                 первым цветом и обводку вторым, поэтому прозрачная заливка и акцентная обводка
                 дают требуемый DESIGN §7 ринг — 2 px акцентом с отступом. ThemeApplicator
@@ -91,10 +107,45 @@
 
             <p:HexToBrushConverter x:Key="HexToBrushConverter" />
 
+            <!--
+                Компактные кнопки панелей: прозрачный фон сливается с поверхностью шапки,
+                а радиус 8 совпадает с радиусом плашек, поэтому ряд кнопок выглядит ровным.
+                Иконочные варианты используются там, где подпись заменяет подсказка.
+            -->
+            <Style x:Key="GlazeToolbarButtonStyle" TargetType="Button">
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="Padding" Value="10,4" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="CornerRadius" Value="8" />
+                <Setter Property="FontSize" Value="12" />
+            </Style>
+
+            <Style
+                x:Key="GlazeIconButtonStyle"
+                TargetType="Button"
+                BasedOn="{StaticResource GlazeToolbarButtonStyle}">
+                <Setter Property="Width" Value="32" />
+                <Setter Property="Height" Value="32" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+            </Style>
+
+            <Style
+                x:Key="GlazeSmallIconButtonStyle"
+                TargetType="Button"
+                BasedOn="{StaticResource GlazeIconButtonStyle}">
+                <Setter Property="Width" Value="24" />
+                <Setter Property="Height" Value="24" />
+                <Setter Property="CornerRadius" Value="6" />
+            </Style>
+
             <Style x:Key="ApplicationCardStyle" TargetType="ListViewItem">
                 <Setter Property="Background" Value="{StaticResource GlazeSurfaceBrush}" />
-                <Setter Property="CornerRadius" Value="16" />
-                <Setter Property="Margin" Value="0,0,0,8" />
+                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="Margin" Value="0,0,0,6" />
                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                 <Setter Property="Padding" Value="0" />
                 <Setter Property="UseSystemFocusVisuals" Value="True" />

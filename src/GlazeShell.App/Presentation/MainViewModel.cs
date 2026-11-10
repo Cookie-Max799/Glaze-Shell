@@ -459,6 +459,9 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     public bool IsEmpty => Items.Count == 0;
 
+    /// <summary>Есть ли выбранное приложение: от этого зависит доступность полосы действий.</summary>
+    public bool HasSelection => _selected is not null;
+
     public void Initialize()
     {
         RefreshCommand.RaiseCanExecuteChanged();
@@ -467,6 +470,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void RaiseActionState()
     {
+        OnPropertyChanged(nameof(HasSelection));
         LaunchCommand.RaiseCanExecuteChanged();
         CloseCommand.RaiseCanExecuteChanged();
         RestartCommand.RaiseCanExecuteChanged();

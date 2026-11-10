@@ -8,7 +8,10 @@
     xmlns:p="using:GlazeShell.App.Presentation"
     mc:Ignorable="d">
 
-    <Grid x:Name="Root" Background="{StaticResource GlazeBackgroundBrush}">
+    <Grid
+        x:Name="Root"
+        Background="{StaticResource GlazeBackgroundBrush}"
+        UseLayoutRounding="True">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />

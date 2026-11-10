@@ -16,7 +16,7 @@
         папка «Загрузки», корзина. Курсор отслеживается на всём окне: магнификация
         считается по расстоянию до него.
     -->
-    <Grid x:Name="Root" Background="Transparent">
+    <Grid x:Name="Root" Background="Transparent" UseLayoutRounding="True">
         <Grid.Resources>
             <!--  Подпись плитки: компактная «pill» над значком, как в dock macOS (DESIGN §7.5).  -->
             <Style TargetType="ToolTip">
@@ -40,17 +40,19 @@
         <!--
             Заливка стекла: сам Acrylic даёт преломление фона, а лёгкая тонированная
             подложка делает панель читаемой как стекло, а не как серый прямоугольник.
-            Контур не рисуется — форму задаёт региональная маска окна.
+            Тонкая внутренняя кромка сглаживает восприятие ступеньки региональной маски:
+            она рисуется XAML с антиалиасингом поверх жёсткого края окна.
         -->
         <Border
             Background="{StaticResource GlazeDockGlassBrush}"
-            BorderThickness="0"
+            BorderBrush="{StaticResource GlazeBorderBrush}"
+            BorderThickness="1,1,0,0"
             CornerRadius="22,22,0,0"
             IsHitTestVisible="False" />
 
         <ItemsControl
             x:Name="Tiles"
-            Padding="28,20,28,8"
+            Padding="28,32,28,8"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             ItemsSource="{x:Bind ViewModel.Items}">
@@ -110,10 +112,10 @@
                                     </Grid>
                                 </Border>
 
-                                <!--  Настоящий значок оболочки Windows.  -->
+                                <!--  Настоящий значок оболочки Windows: 32 DIP запрашиваются ровно под device-пиксели.  -->
                                 <Image
-                                    Width="30"
-                                    Height="30"
+                                    Width="32"
+                                    Height="32"
                                     Source="{x:Bind Icon, Mode=OneWay}"
                                     Stretch="Uniform"
                                     Visibility="{x:Bind HasIcon, Mode=OneWay}" />

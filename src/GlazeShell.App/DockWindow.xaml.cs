@@ -30,7 +30,7 @@ public sealed partial class DockWindow : Window
     private const int Gap = 5;
     private const int SeparatorWidth = 2;
     private const int PaddingHorizontal = 28;
-    private const int PaddingTop = 20;
+    private const int PaddingTop = 32;
     private const int PaddingBottom = 8;
 
     /// <summary>Радиус капсулы dock (DESIGN §7.5: радиус 22).</summary>
@@ -38,9 +38,9 @@ public sealed partial class DockWindow : Window
 
     /// <summary>
     /// Максимальный подъём и масштаб плитки под курсором (DESIGN §7.5: 12 px / 1.2).
-    /// Верхний отступ окна (20 px) подобран так, чтобы увеличенная плитка не выходила
-    /// за границы капсулы: 8 px прироста (плитка 40 → 48 растёт от нижней кромки) плюс
-    /// 12 px подъёма = 20 px.
+    /// Верхний отступ окна (32 px) оставляет запас: плитка вырастает на 8 px (40 → 48)
+    /// и поднимается на 12 px, то есть её верхняя кромка остаётся в 12 px от края капсулы
+    /// и не выходит за стекло.
     /// </summary>
     private const double HoverLift = 12;
     private const double HoverScale = 1.2;
@@ -154,6 +154,12 @@ public sealed partial class DockWindow : Window
     private double[] _tileHalfWidths = [];
     private double[] _lastScale = [];
     private double[] _lastLift = [];
+    private double[] _lastOffset = [];
+    private double[] _spreadOffsets = [];
+    private double[] _slotLefts = [];
+    private double[] _slotWidths = [];
+    private double[] _targetScales = [];
+    private double[] _targetLifts = [];
     private bool _centersDirty = true;
     private int _glowIndex = -1;
 
@@ -260,8 +266,8 @@ public sealed partial class DockWindow : Window
         var target = _monitorTarget.Target;
         var scale = target?.ScaleFactor ?? OverlayWindow.GetScaleFactor(_hwnd);
 
-        // Значки просятся в пикселях отображения: при 125 % плитка 40 DIP с увеличением
-        // до 1.2 требует 60 пикселей, иначе значок растягивается и мылится.
+        // Значки просятся ровно под device-пиксели плитки: 32 DIP в покое, увеличение
+        // до 1.2 идёт уже по готовому изображению, поэтому в покое значок не мылится.
         ViewModel.SetIconScale(scale);
 
         var tiles = 0;
@@ -412,6 +418,7 @@ public sealed partial class DockWindow : Window
         {
             scaleTransform.ScaleX = 1;
             scaleTransform.ScaleY = 1;
+            translateTransform.X = 0;
             translateTransform.Y = 0;
             _enteringKeys.Remove(key);
             return;
@@ -453,6 +460,7 @@ public sealed partial class DockWindow : Window
         {
             scaleTransform.ScaleX = 1;
             scaleTransform.ScaleY = 1;
+            translateTransform.X = 0;
             translateTransform.Y = 0;
             _enteringKeys.Remove(key);
             _centersDirty = true;
@@ -827,18 +835,16 @@ public sealed partial class DockWindow : Window
 
         var maxDelta = HoverScale - 1.0;
         var sigma = MagnifySigma;
+        var count = ViewModel.Items.Count;
         var hovered = -1;
 
-        for (var index = 0; index < ViewModel.Items.Count; index++)
+        for (var index = 0; index < count; index++)
         {
-            if (ViewModel.Items[index].IsSeparator)
-            {
-                continue;
-            }
-
+            _targetScales[index] = 1.0;
+            _targetLifts[index] = 0.0;
             var center = _tileCenters[index];
 
-            if (double.IsNaN(center) || TileAt(index) is not { } tile)
+            if (double.IsNaN(center) || ViewModel.Items[index].IsSeparator)
             {
                 continue;
             }
@@ -846,20 +852,38 @@ public sealed partial class DockWindow : Window
             var distance = Math.Abs(pointerX - center);
             var normalized = distance / sigma;
             var influence = Math.Exp(-(normalized * normalized));
-            var scale = 1.0 + (maxDelta * influence);
-            var lift = HoverLift * influence;
-
-            if (Math.Abs(scale - _lastScale[index]) > MagnifyScaleEpsilon ||
-                Math.Abs(lift - _lastLift[index]) > MagnifyLiftEpsilon)
-            {
-                _lastScale[index] = scale;
-                _lastLift[index] = lift;
-                Animate(tile, lift, scale);
-            }
+            _targetScales[index] = 1.0 + (maxDelta * influence);
+            _targetLifts[index] = HoverLift * influence;
 
             if (distance <= _tileHalfWidths[index])
             {
                 hovered = index;
+            }
+        }
+
+        // Сначала раздвигаем соседей, потом анимируем: масштаб и сдвиг должны применяться
+        // одним кадром, иначе увеличенная плитка на мгновение наезжает на соседнюю.
+        ComputeSpread(_targetScales);
+
+        for (var index = 0; index < count; index++)
+        {
+            if (ViewModel.Items[index].IsSeparator || TileAt(index) is not { } tile)
+            {
+                continue;
+            }
+
+            var scale = _targetScales[index];
+            var lift = _targetLifts[index];
+            var offset = _spreadOffsets[index];
+
+            if (Math.Abs(scale - _lastScale[index]) > MagnifyScaleEpsilon ||
+                Math.Abs(lift - _lastLift[index]) > MagnifyLiftEpsilon ||
+                Math.Abs(offset - _lastOffset[index]) > MagnifyLiftEpsilon)
+            {
+                _lastScale[index] = scale;
+                _lastLift[index] = lift;
+                _lastOffset[index] = offset;
+                Animate(tile, lift, scale, offset);
             }
         }
 
@@ -868,6 +892,40 @@ public sealed partial class DockWindow : Window
             SetGlow(TileAt(_glowIndex), false);
             SetGlow(TileAt(hovered), true);
             _glowIndex = hovered;
+        }
+    }
+
+    /// <summary>
+    /// Раздвигает плитки на время магнификации. Слота плитки (40 px) с запасом 5 px мало
+    /// для увеличенной до 1.2 плитки (48 px), поэтому соседи получают сдвиг по X ровно
+    /// настолько, чтобы между ними остался штатный зазор. Суммарный прирост ленты
+    /// компенсируется симметрично, и «горб» остаётся на месте курсора, а не уезжает вправо.
+    /// </summary>
+    private void ComputeSpread(double[] scales)
+    {
+        var count = _spreadOffsets.Length;
+        var previousRight = double.NegativeInfinity;
+        var originalRight = 0.0;
+
+        for (var index = 0; index < count; index++)
+        {
+            var left = _slotLefts[index];
+            var width = _slotWidths[index];
+            var center = left + (width / 2);
+            var half = (width / 2) * scales[index];
+            var desiredLeft = center - half;
+            var actualLeft = Math.Max(desiredLeft, previousRight + Gap);
+
+            _spreadOffsets[index] = actualLeft - left;
+            previousRight = actualLeft + (half * 2);
+            originalRight = left + width;
+        }
+
+        var growth = Math.Max(0, previousRight - originalRight);
+
+        for (var index = 0; index < count; index++)
+        {
+            _spreadOffsets[index] -= growth / 2;
         }
     }
 
@@ -891,11 +949,26 @@ public sealed partial class DockWindow : Window
         _tileHalfWidths = new double[count];
         _lastScale = new double[count];
         _lastLift = new double[count];
+        _lastOffset = new double[count];
+        _spreadOffsets = new double[count];
+        _slotLefts = new double[count];
+        _slotWidths = new double[count];
+        _targetScales = new double[count];
+        _targetLifts = new double[count];
 
         for (var index = 0; index < count; index++)
         {
             _lastScale[index] = 1.0;
             _tileCenters[index] = double.NaN;
+
+            // Слот нужен и для разделителя: у него нет плитки, но место в ленте он занимает,
+            // и сдвиг соседей должен это учитывать.
+            if (Tiles.ContainerFromIndex(index) is FrameworkElement container)
+            {
+                var slotOrigin = container.TransformToVisual(Tiles).TransformPoint(new Point(0, 0));
+                _slotLefts[index] = slotOrigin.X;
+                _slotWidths[index] = container.ActualWidth;
+            }
 
             if (TileAt(index) is not { } tile)
             {
@@ -905,6 +978,13 @@ public sealed partial class DockWindow : Window
             var origin = tile.TransformToVisual(Tiles).TransformPoint(new Point(0, 0));
             _tileCenters[index] = origin.X + (tile.ActualWidth / 2);
             _tileHalfWidths[index] = tile.ActualWidth / 2;
+
+            if (_slotWidths[index] <= 0)
+            {
+                // Контейнер ещё не создан: слот восстанавливается по самой плитке.
+                _slotLefts[index] = origin.X;
+                _slotWidths[index] = tile.ActualWidth;
+            }
         }
 
         _centersDirty = false;
@@ -1131,7 +1211,7 @@ public sealed partial class DockWindow : Window
         for (var index = 0; index < ViewModel.Items.Count; index++)
         {
             var tile = TileAt(index);
-            Animate(tile, 0, 1.0);
+            Animate(tile, 0, 1.0, 0);
             SetGlow(tile, false);
         }
 
@@ -1139,19 +1219,20 @@ public sealed partial class DockWindow : Window
         {
             _lastScale[index] = 1.0;
             _lastLift[index] = 0.0;
+            _lastOffset[index] = 0.0;
         }
 
         _glowIndex = -1;
     }
 
     /// <summary>
-    /// Подъём и масштаб выполняются визуальным слоем: масштаб — Composition-анимацией
-    /// <see cref="Visual.Scale"/>, а подъём — свойством <see cref="UIElement.Translation"/>,
-    /// которое учитывает раскладка. Анимировать <see cref="Visual.Offset"/> напрямую нельзя:
-    /// раскладка перезаписывает его на каждом проходе, и подъём пропадает. Оба свойства
-    /// анимируются одной длительностью, поэтому плитка реагирует плавно и предсказуемо.
+    /// Подъём, масштаб и горизонтальный сдвиг выполняются визуальным слоем: масштаб —
+    /// <see cref="ScaleTransform"/>, подъём и раздвижение — <see cref="TranslateTransform"/>.
+    /// Сдвиг по X нужен, чтобы увеличенная плитка не наезжала на соседнюю: обычная раскладка
+    /// StackPanel об этом не знает. Все три свойства анимируются одной длительностью, поэтому
+    /// плитка реагирует плавно и предсказуемо.
     /// </summary>
-    private void Animate(Border? tile, double lift, double scale)
+    private void Animate(Border? tile, double lift, double scale, double offsetX)
     {
         if (tile is null)
         {
@@ -1167,6 +1248,7 @@ public sealed partial class DockWindow : Window
             scaleTransform.ScaleX = scale;
             scaleTransform.ScaleY = scale;
             translateTransform.Y = -lift;
+            translateTransform.X = offsetX;
             return;
         }
 
@@ -1200,10 +1282,20 @@ public sealed partial class DockWindow : Window
         Storyboard.SetTarget(liftAnimation, translateTransform);
         Storyboard.SetTargetProperty(liftAnimation, nameof(TranslateTransform.Y));
 
+        var spreadAnimation = new DoubleAnimation
+        {
+            To = offsetX,
+            Duration = duration,
+            EasingFunction = easing,
+        };
+        Storyboard.SetTarget(spreadAnimation, translateTransform);
+        Storyboard.SetTargetProperty(spreadAnimation, nameof(TranslateTransform.X));
+
         var storyboard = new Storyboard();
         storyboard.Children.Add(scaleAnimationX);
         storyboard.Children.Add(scaleAnimationY);
         storyboard.Children.Add(liftAnimation);
+        storyboard.Children.Add(spreadAnimation);
         storyboard.Begin();
     }
 

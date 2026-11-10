@@ -15,10 +15,16 @@ namespace GlazeShell.App;
 
 public sealed partial class MainWindow : Window
 {
+    // Размеры главного окна заданы в DIP: половина рабочей области и границы ниже
+    // переводятся в пиксели по масштабу монитора, иначе при 125 % окно открывалось бы
+    // уже своего же минимума и список сжимался бы сильнее задуманного.
     private const int DefaultWidth = 1280;
     private const int DefaultHeight = 760;
     private const int MinWidth = 960;
     private const int MinHeight = 520;
+
+    /// <summary>Ширина панели мониторов в DIP: совпадает с шириной колонки в разметке.</summary>
+    private const int MonitorsWidth = 320;
 
     private readonly ThemeApplicator _themes;
 
@@ -47,7 +53,7 @@ public sealed partial class MainWindow : Window
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
 
         ApplyWindowIcon();
-        ApplyInitialSizeAndPosition();
+        ApplyInitialSizeAndPosition(monitors.GetPrimaryMonitor()?.ScaleFactor ?? 1.0);
         Activate();
 
         ViewModel.Initialize();
@@ -87,6 +93,18 @@ public sealed partial class MainWindow : Window
 
     private void OnRefreshClick(object sender, RoutedEventArgs e) =>
         ViewModel.RefreshCommand.Execute(null);
+
+    /// <summary>
+    /// Сворачивает и разворачивает панель мониторов: колонка получает нулевую ширину,
+    /// чтобы список приложений занимал всё окно, а не оставлял пустую полосу.
+    /// </summary>
+    private void OnMonitorsToggleClick(object sender, RoutedEventArgs e)
+    {
+        var visible = MonitorsToggle.IsChecked == true;
+
+        MonitorsColumn.Width = new GridLength(visible ? MonitorsWidth : 0);
+        MonitorsPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     private void OnLaunchClick(object sender, RoutedEventArgs e) =>
         ViewModel.LaunchCommand.Execute(null);
@@ -200,13 +218,18 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private void ApplyInitialSizeAndPosition()
+    private void ApplyInitialSizeAndPosition(double scale)
     {
         var appWindow = ResolveAppWindow();
         var workArea = DisplayArea.GetFromWindowId(appWindow.Id, DisplayAreaFallback.Primary).WorkArea;
 
-        var width = Math.Clamp(workArea.Width / 2, MinWidth, DefaultWidth);
-        var height = Math.Clamp(workArea.Height / 2, MinHeight, DefaultHeight);
+        if (scale <= 0)
+        {
+            scale = 1.0;
+        }
+
+        var width = (int)Math.Round(Math.Clamp(workArea.Width / 2.0 / scale, MinWidth, DefaultWidth) * scale);
+        var height = (int)Math.Round(Math.Clamp(workArea.Height / 2.0 / scale, MinHeight, DefaultHeight) * scale);
         var size = new global::Windows.Graphics.SizeInt32(width, height);
 
         appWindow.Resize(size);

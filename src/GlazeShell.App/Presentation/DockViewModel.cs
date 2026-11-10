@@ -224,10 +224,11 @@ public sealed class DockViewModel : IDisposable
     private static readonly TimeSpan RunningRefreshDelay = TimeSpan.FromMilliseconds(250);
 
     /// <summary>
-    /// Логический размер значка плитки: плитка 40 DIP увеличивается под курсором до 1.2,
-    /// поэтому значок просится под 48 DIP, чтобы увеличение не растягивало пиксели.
+    /// Логический размер значка плитки: 32 DIP — ровно столько, сколько занимает значок
+    /// в 40-пиксельной плитке. Запрос в device-пикселях (32 × масштаб монитора) даёт
+    /// чёткое изображение в покое без лишнего ресемплинга.
     /// </summary>
-    private const double IconDips = 48;
+    private const double IconDips = 32;
 
     /// <summary>Верхняя граница запроса значка: защита от неверного масштаба монитора.</summary>
     private const int MaxIconPixels = 256;
