@@ -5,6 +5,7 @@ using GlazeShell.App.Theming;
 using GlazeShell.Core.Display;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
+using GlazeShell.Windows.Shell;
 using GlazeShell.Windows.WindowManagement;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -106,6 +107,12 @@ public sealed partial class DockWindow : Window
     private nint _foregroundHwnd;
     private bool _foreignForeground;
 
+    /// <summary>Активно окно Glaze Shell: при включённой настройке dock убирается.</summary>
+    private bool _ownForeground;
+
+    /// <summary>Скрывать ли dock, пока активно окно Glaze Shell (настройка этапа 4).</summary>
+    private bool _hideInOwnProcess;
+
     /// <summary>Активно окно оболочки Windows (рабочий стол, «Пуск», поиск, уведомления).</summary>
     private bool _shellForeground;
 
@@ -179,6 +186,7 @@ public sealed partial class DockWindow : Window
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
         _themes = themes ?? throw new ArgumentNullException(nameof(themes));
         _monitorTarget = new ShellMonitorTarget(monitors);
+        _hideInOwnProcess = settings.GetSettings().HidePanelsInGlazeShell;
 
         ViewModel = new DockViewModel(applications, launcher, windows, settings, events, DispatcherQueue);
 
@@ -482,7 +490,14 @@ public sealed partial class DockWindow : Window
                 presenter.Restore();
             }
 
-            _owner.Activate();
+            if (_owner is MainWindow mainWindow)
+            {
+                mainWindow.ShowFromTray();
+            }
+            else
+            {
+                _owner.Activate();
+            }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {
@@ -499,6 +514,7 @@ public sealed partial class DockWindow : Window
     {
         _themes.ApplyFromSettings(Root);
         ApplyBackdrop();
+        _hideInOwnProcess = changed.Settings.HidePanelsInGlazeShell;
 
         if (_themes.ReduceMotion)
         {
@@ -526,46 +542,51 @@ public sealed partial class DockWindow : Window
 
     /// <summary>
     /// Следит за активным окном: на рабочем столе dock виден всегда, в чужом приложении
-    /// скрывается. Собственный процесс и оболочка Windows (рабочий стол, «Пуск», поиск,
-    /// центр уведомлений) считаются «своими» — иначе панель исчезала бы при открытии «Пуска».
+    /// скрывается. Собственный процесс не меняет режим, чтобы открытие настроек не прятало
+    /// dock. При включённой настройке этапа 4 активное окно Glaze Shell тоже убирает панель.
     /// </summary>
     private void UpdateForegroundState()
     {
-        if (!OverlayWindow.TryGetForegroundWindow(out var hwnd, out var processId) ||
-            hwnd == _foregroundHwnd)
+        if (!OverlayWindow.TryGetForegroundWindow(out var hwnd, out var processId))
+        {
+            _foregroundHwnd = 0;
+            // Нет активного окна (свайп, Task View): dock убирается, иначе висит над списком.
+            ApplyForegroundState(own: false, foreign: true);
+            return;
+        }
+
+        if (hwnd == _foregroundHwnd)
         {
             return;
         }
 
         _foregroundHwnd = hwnd;
 
-        // Любое собственное окно (панели, popover, главное окно, настройки) не меняет
-        // «домашний» режим: dock остаётся в том состоянии, в котором был. Иначе клик по
-        // окну верхней панели в чужом приложении заставлял dock выезжать, а открытие
-        // настроек прятало его на рабочем столе.
-        if (processId == _ownProcessId)
+        var own = processId == _ownProcessId;
+        var foreign = !own && !ShellForeground.IsDesktopOrShellUi(hwnd, processId);
+
+        ApplyForegroundState(own, foreign);
+    }
+
+    /// <summary>
+    /// Применяет классификацию активного окна. Уход в чужое приложение убирает dock сразу,
+    /// без ожидания, чтобы панель не висела над окном браузера.
+    /// </summary>
+    private void ApplyForegroundState(bool own, bool foreign)
+    {
+        if (own == _ownForeground && foreign == _foreignForeground)
         {
-            _shellForeground = false;
             return;
         }
 
-        var shell = IsShellProcess(processId);
-        _shellForeground = shell;
-        _foreignForeground = !shell;
-    }
+        _ownForeground = own;
+        _foreignForeground = foreign;
+        _shellForeground = !own && !foreign;
 
-    /// <summary>Процесс оболочки Windows: его окна не считаются «чужим приложением».</summary>
-    private static bool IsShellProcess(uint processId)
-    {
-        try
+        if (foreign)
         {
-            return Process.GetProcessById((int)processId).ProcessName is
-                "explorer" or "StartMenuExperienceHost" or "SearchHost" or
-                "ShellExperienceHost" or "TextInputHost" or "LockApp";
-        }
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
-        {
-            return false;
+            _revealUntil = DateTimeOffset.MinValue;
+            _cursorExitUntil = DateTimeOffset.MinValue;
         }
     }
 
@@ -598,7 +619,14 @@ public sealed partial class DockWindow : Window
 
         var target = 0.0;
 
-        if (!_foreignForeground)
+        // На рабочем столе и в окнах оболочки dock открыт всегда. В чужом приложении или
+        // при потере фокуса (Task View, свайп) прячется. Собственное окно (настройка этапа 4)
+        // либо оставляет панель видимой, либо убирает её — зависит от HidePanelsInGlazeShell.
+        if (_ownForeground && _hideInOwnProcess)
+        {
+            target = now < _revealUntil || now < _cursorExitUntil ? 1.0 : 0.0;
+        }
+        else if (!_foreignForeground)
         {
             target = 1.0;
         }

@@ -197,7 +197,8 @@ public sealed class QuickSettingsViewModel : INotifyPropertyChanged
             settings.SafeModeEnabled,
             settings.TransparencyEnabled,
             settings.TopBarTransparency,
-            settings.DockTransparency));
+            settings.DockTransparency,
+            settings.HidePanelsInGlazeShell));
     }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

@@ -35,7 +35,8 @@ public static class UserSettingsEditor
         bool? safeModeEnabled = null,
         bool? transparencyEnabled = null,
         int? topBarTransparency = null,
-        int? dockTransparency = null)
+        int? dockTransparency = null,
+        bool? hidePanelsInGlazeShell = null)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -63,6 +64,7 @@ public static class UserSettingsEditor
             safeModeEnabled: safeModeEnabled ?? source.SafeModeEnabled,
             transparencyEnabled: transparencyEnabled ?? source.TransparencyEnabled,
             topBarTransparency: topBarTransparency ?? source.TopBarTransparency,
-            dockTransparency: dockTransparency ?? source.DockTransparency);
+            dockTransparency: dockTransparency ?? source.DockTransparency,
+            hidePanelsInGlazeShell: hidePanelsInGlazeShell ?? source.HidePanelsInGlazeShell);
     }
 }

@@ -38,13 +38,96 @@
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <!--  Левая плитка: активное приложение (DESIGN §7.1) — значок, имя и заголовок окна.  -->
-            <Border
-                x:Name="AppPill"
+            <!--  Левая группа: быстрые действия и плитка активного приложения (DESIGN §7.1).  -->
+            <StackPanel
                 Grid.Row="0"
                 Grid.Column="0"
-                Margin="0,3"
-                Padding="4,0,10,0"
+                Orientation="Horizontal"
+                Spacing="6"
+                VerticalAlignment="Center">
+                <!--
+                    Быстрые действия слева (этап 4): поиск Glance, проводник, показать рабочий
+                    стол и рабочие столы. Отдельная pill, чтобы подписи-подсказки не растягивали
+                    плитку активного приложения и ряд выглядел ровно.
+                -->
+                <Border
+                    x:Name="LauncherPill"
+                    Margin="0,3"
+                    Padding="3,0"
+                    VerticalAlignment="Center"
+                    Background="{StaticResource GlazeTopBarPillBrush}"
+                    CornerRadius="10">
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="1"
+                        VerticalAlignment="Center">
+                        <Button
+                            Width="20"
+                            Height="20"
+                            Padding="0"
+                            AutomationProperties.Name="Поиск Glance"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="OnGlanceClick"
+                            CornerRadius="6"
+                            ToolTipService.ToolTip="Поиск Glance (Ctrl K)">
+                            <FontIcon
+                                FontSize="11"
+                                Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                Glyph="&#xE721;" />
+                        </Button>
+                        <Button
+                            Width="20"
+                            Height="20"
+                            Padding="0"
+                            AutomationProperties.Name="Проводник Glaze Shell"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="OnLauncherExplorerClick"
+                            CornerRadius="6"
+                            ToolTipService.ToolTip="Проводник Glaze Shell">
+                            <FontIcon
+                                FontSize="11"
+                                Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                Glyph="&#xE8B7;" />
+                        </Button>
+                        <Button
+                            Width="20"
+                            Height="20"
+                            Padding="0"
+                            AutomationProperties.Name="Показать рабочий стол"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="OnShowDesktopClick"
+                            CornerRadius="6"
+                            ToolTipService.ToolTip="Показать рабочий стол">
+                            <FontIcon
+                                FontSize="11"
+                                Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                Glyph="&#xE7F4;" />
+                        </Button>
+                        <Button
+                            Width="20"
+                            Height="20"
+                            Padding="0"
+                            AutomationProperties.Name="Рабочие столы"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="OnTaskViewClick"
+                            CornerRadius="6"
+                            ToolTipService.ToolTip="Рабочие столы (представление задач)">
+                            <FontIcon
+                                FontSize="11"
+                                Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                Glyph="&#xE7C4;" />
+                        </Button>
+                    </StackPanel>
+                </Border>
+
+                <Border
+                    x:Name="AppPill"
+                    Margin="0,3"
+                    Padding="4,0,10,0"
                 VerticalAlignment="Center"
                 AutomationProperties.Name="Активное приложение"
                 Background="{StaticResource GlazeTopBarPillBrush}"
@@ -101,6 +184,7 @@
                         Visibility="{x:Bind ViewModel.HasLocation, Mode=OneWay}" />
                 </StackPanel>
             </Border>
+            </StackPanel>
 
             <!--  Центральная плитка: поиск. Поле живёт в самой панели, а не в popup:
                   иначе клик по нему не доходит до окна, показанного без активации.  -->
@@ -516,6 +600,32 @@
                             Content="Звук"
                             CornerRadius="16" />
                     </Grid>
+                </StackPanel>
+
+                <StackPanel Spacing="8">
+                    <TextBlock
+                        FontSize="11.5"
+                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                        Text="ПРИЛОЖЕНИЕ" />
+                    <Button
+                        HorizontalAlignment="Stretch"
+                        AutomationProperties.Name="Закрыть Glaze Shell и оставить в трее"
+                        Click="OnHideToTrayClick"
+                        CornerRadius="16"
+                        ToolTipService.ToolTip="Окно скроется, панели и оформление продолжат работать">
+                        <StackPanel
+                            Orientation="Horizontal"
+                            Spacing="8"
+                            HorizontalAlignment="Center">
+                            <FontIcon FontSize="13" Glyph="&#xE711;" />
+                            <TextBlock FontSize="12" Text="Закрыть Glaze Shell" />
+                        </StackPanel>
+                    </Button>
+                    <TextBlock
+                        FontSize="11"
+                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                        Text="Окно скроется в трей, панели и оформление продолжат работать. Выход — через значок Glaze Shell в трее."
+                        TextWrapping="Wrap" />
                 </StackPanel>
             </StackPanel>
         </Border>

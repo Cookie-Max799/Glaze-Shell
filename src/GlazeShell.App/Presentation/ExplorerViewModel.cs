@@ -581,7 +581,8 @@ public sealed class ExplorerViewModel : INotifyPropertyChanged
             settings.SafeModeEnabled,
             settings.TransparencyEnabled,
             settings.TopBarTransparency,
-            settings.DockTransparency));
+            settings.DockTransparency,
+            settings.HidePanelsInGlazeShell));
     }
 
     private string ResolveStartPath(string? requested)

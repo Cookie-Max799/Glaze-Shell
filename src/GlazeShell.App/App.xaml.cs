@@ -97,6 +97,12 @@ public partial class App : Application
     private IDisposable? _settingsChangedSubscription;
 
     /// <summary>
+    /// Значок Glaze Shell в области уведомлений (трей). Если система не позволила создать
+    /// значок, остаётся <c>null</c>: закрытие крестиком завершит процесс как раньше.
+    /// </summary>
+    private TrayIcon? _trayIcon;
+
+    /// <summary>
     /// Активная тема хранится в поле, а не в локальной переменной: менеджер должен
     /// пережить создание окна, иначе выбор темы потерял бы подписчиков и состояние.
     /// </summary>
@@ -260,6 +266,16 @@ public partial class App : Application
                 // Команда open-explorer приходит сюда из панели: окном Explorer владеет
                 // приложение, поэтому панель только пересылает запрос.
                 _topBar.ExplorerRequested += (_, path) => OpenExplorer(path);
+
+                // Кнопка «Закрыть Glaze Shell» в «Центре управления» скрывает главное окно
+                // в трей, если трей создан. Панели и оформление продолжают работать.
+                _topBar.HideRequested += (_, _) =>
+                {
+                    if (_trayIcon is not null)
+                    {
+                        window.HideToTray();
+                    }
+                };
             }
             else if (!enabled)
             {
@@ -383,6 +399,31 @@ public partial class App : Application
         }
 
         window.Closed += (_, _) => Shutdown(layoutWriter, eventSources, performance, eventLatency);
+
+        // Значок в трее (этап 4) создаётся после главного окна: если создать не удалось,
+        // приложение продолжит работать, но закрытие в трей будет недоступно — крестик завершит
+        // процесс как раньше. События приходят с потока значка, поэтому переключаем на поток UI.
+        _trayIcon = TrayIcon.TryCreate(exception =>
+        {
+            _logger.Write(GlazeLogLevel.Error, "Tray", "Tray icon event handler threw an exception.", exception);
+        });
+
+        if (_trayIcon is not null)
+        {
+            window.TrayAvailable = true;
+            _trayIcon.OpenRequested += (_, _) => window.ShowFromTray();
+            _trayIcon.SettingsRequested += (_, _) => window.DispatcherQueue.TryEnqueue(OpenSettings);
+            _trayIcon.ExitRequested += (_, _) => window.CloseForExit();
+
+            _logger.Write(GlazeLogLevel.Information, "Tray", "The tray icon was successfully created.");
+        }
+        else
+        {
+            _logger.Write(
+                GlazeLogLevel.Warning,
+                "Tray",
+                "The tray icon could not be created; the main window will close the app as usual.");
+        }
 
         window.Activate();
 
@@ -661,6 +702,12 @@ public partial class App : Application
         {
             _hotkey?.Dispose();
             _hotkey = null;
+        });
+
+        TryShutdownStep("tray", () =>
+        {
+            _trayIcon?.Dispose();
+            _trayIcon = null;
         });
 
         // Клавиша восстановления снимается по той же причине: нажатие не должно прийти

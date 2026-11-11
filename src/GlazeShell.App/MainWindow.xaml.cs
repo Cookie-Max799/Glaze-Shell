@@ -53,6 +53,8 @@ public sealed partial class MainWindow : Window
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
 
         ApplyWindowIcon();
+        _appWindow = ResolveAppWindow();
+        _appWindow.Closing += OnAppWindowClosing;
         ApplyInitialSizeAndPosition(monitors.GetPrimaryMonitor()?.ScaleFactor ?? 1.0);
         Activate();
 
@@ -78,6 +80,77 @@ public sealed partial class MainWindow : Window
     /// стола возвращаются на место. Восстановлением занимается приложение, а не окно.
     /// </summary>
     public event EventHandler? RecoveryRequested;
+
+    private AppWindow? _appWindow;
+    private bool _allowClose;
+    public bool TrayAvailable { get; set; }
+
+    /// <summary>
+    /// Скрывает главное окно: панели и оформление продолжают работать, выход — через значок
+    /// в трее. Вызывается при закрытии окна крестиком, если трей создан, или по команде
+    /// из «Центра управления».
+    /// </summary>
+    public void HideToTray()
+    {
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            _appWindow?.Hide();
+        }
+        else
+        {
+            _ = DispatcherQueue.TryEnqueue(() => _appWindow?.Hide());
+        }
+    }
+
+    /// <summary>
+    /// Показывает главное окно из трея: двойной клик по значку или повторный запуск
+    /// приложения. Вызов может прийти с фонового потока значка, поэтому переключаемся
+    /// на поток интерфейса.
+    /// </summary>
+    public void ShowFromTray()
+    {
+        if (!DispatcherQueue.HasThreadAccess)
+        {
+            _ = DispatcherQueue.TryEnqueue(ShowFromTray);
+            return;
+        }
+
+        if (_appWindow is not null)
+        {
+            _appWindow.Show();
+
+            try
+            {
+                var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                GlazeShell.Windows.Lifecycle.SingleInstanceHelper.BringToForeground(hwnd);
+            }
+            catch
+            {
+                // Best-effort: если активация не удалась, окно всё равно показано.
+            }
+        }
+    }
+
+    /// <summary>
+    /// Разрешает настоящее закрытие окна и приложения: вызывается по команде «Выход»
+    /// из значка в трее. После вызова крестик завершит процесс как раньше.
+    /// </summary>
+    public void CloseForExit()
+    {
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            _allowClose = true;
+            Close();
+        }
+        else
+        {
+            _ = DispatcherQueue.TryEnqueue(() =>
+            {
+                _allowClose = true;
+                Close();
+            });
+        }
+    }
 
     private void OnThemeSelectionChanged(object? sender, ThemeSelectionChangedEventArgs e)
     {
@@ -264,6 +337,22 @@ public sealed partial class MainWindow : Window
         {
             // Иконка — оформление, а не функция: её сбой не должен мешать работе окна.
         }
+    }
+
+    /// <summary>
+    /// Перехват закрытия главного окна. Если приложение владеет значком в трее, крестик
+    /// скрывает окно вместо выхода — панели и оформление продолжают работать. Настоящий
+    /// выход — через пункт «Выход» в трее. Если трей не создан, крестик завершает процесс.
+    /// </summary>
+    private void OnAppWindowClosing(AppWindow sender, AppWindowClosingEventArgs args)
+    {
+        if (_allowClose || !TrayAvailable)
+        {
+            return;
+        }
+
+        args.Cancel = true;
+        HideToTray();
     }
 
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)

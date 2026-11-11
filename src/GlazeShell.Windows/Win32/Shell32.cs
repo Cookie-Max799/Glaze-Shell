@@ -16,6 +16,48 @@ internal static class Shell32
     internal const uint SiigbfIconOnly = 0x0000_0004;
     internal const uint SiigbfResizeToFit = 0x0000_0000;
 
+    // Работа с иконкой в области уведомлений (трей).
+    internal const uint NifMessage = 0x0000_0001;
+    internal const uint NifIcon = 0x0000_0002;
+    internal const uint NifTip = 0x0000_0004;
+    internal const uint NimAdd = 0x0000_0000;
+    internal const uint NimModify = 0x0000_0001;
+    internal const uint NimDelete = 0x0000_0002;
+
+    /// <summary>
+    /// Данные иконки области уведомлений. Поля идут в порядке <c>NOTIFYICONDATA</c>;
+    /// размер структуры передаётся в <see cref="Size"/> и считается маршалером, поэтому
+    /// структура одинаково верна для x64 и x86.
+    /// </summary>
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    internal struct NotifyIconData
+    {
+        public uint Size;
+        public nint Window;
+        public uint Id;
+        public uint Flags;
+        public uint CallbackMessage;
+        public nint Icon;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+        public string Tip;
+
+        public uint State;
+        public uint StateMask;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)]
+        public string Info;
+
+        public uint TimeoutOrVersion;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)]
+        public string InfoTitle;
+
+        public uint InfoFlags;
+        public Guid ItemGuid;
+        public nint BalloonIcon;
+    }
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct NativeSize
     {
@@ -59,4 +101,18 @@ internal static class Shell32
         nint idList,
         in Guid interfaceId,
         out nint item);
+
+    /// <summary>Добавляет, изменяет или удаляет иконку в области уведомлений.</summary>
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool Shell_NotifyIconW(uint message, ref NotifyIconData data);
+
+    /// <summary>Достаёт большую и малую иконки из файла; индекс 0 — иконка приложения.</summary>
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    internal static extern uint ExtractIconExW(
+        string file,
+        int iconIndex,
+        out nint largeIcon,
+        out nint smallIcon,
+        uint iconCount);
 }

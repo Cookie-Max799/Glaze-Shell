@@ -5,6 +5,7 @@ using GlazeShell.App.Theming;
 using GlazeShell.Core.Display;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
+using GlazeShell.Windows.Shell;
 using GlazeShell.Windows.WindowManagement;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
@@ -78,6 +79,12 @@ public sealed partial class TopBarWindow : Window
     private nint _foregroundHwnd;
     private bool _foreignForeground;
 
+    /// <summary>Активно окно Glaze Shell: панель убирается, если включена настройка.</summary>
+    private bool _ownForeground;
+
+    /// <summary>Скрывать ли панель, пока активно окно Glaze Shell (настройка этапа 4).</summary>
+    private bool _hideInOwnProcess;
+
     /// <summary>Окно сейчас активируемо и может держать клавиатуру (поиск или popover).</summary>
     private bool _inputEnabled;
 
@@ -106,6 +113,7 @@ public sealed partial class TopBarWindow : Window
         _themes = themes ?? throw new ArgumentNullException(nameof(themes));
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
         _monitorTarget = new ShellMonitorTarget(monitors);
+        _hideInOwnProcess = settings.GetSettings().HidePanelsInGlazeShell;
 
         ViewModel = new TopBarViewModel(
             windows,
@@ -176,6 +184,12 @@ public sealed partial class TopBarWindow : Window
     /// только пересылает запрос наружу.
     /// </summary>
     public event EventHandler<string?>? ExplorerRequested;
+
+    /// <summary>
+    /// Просьба закрыть Glaze Shell в трей: главное окно скрывается, панели и оформление
+    /// продолжают работать. Окну трея владеет приложение, поэтому панель только просит.
+    /// </summary>
+    public event EventHandler? HideRequested;
 
     /// <summary>
     /// Показывает панель, временно разрешает активацию окна и ставит фокус в строку поиска.
@@ -335,9 +349,9 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
-        // В покое над краем экрана остаётся кромка панели; когда работает чужая программа,
-        // панель убирается полностью и появляется только под курсором у кромки.
-        var peek = _foreignForeground ? 0 : PeekHeight;
+        // В покое над краем экрана остаётся кромка панели; когда работает чужая программа
+        // или активно окно Glaze Shell (настройка этапа 4), панель убирается полностью.
+        var peek = _foreignForeground || (_ownForeground && _hideInOwnProcess) ? 0 : PeekHeight;
         var hidden = (int)Math.Round((BarHeight - peek) * (1.0 - _reveal) * _scale);
         var placement = new RectInt32(_screenLeft, _screenTop - hidden, _screenWidth, _windowHeightPx);
 
@@ -386,9 +400,20 @@ public sealed partial class TopBarWindow : Window
         var pinned = IsPinnedOpen();
         var target = 0.0;
 
-        // На рабочем столе и в собственных окнах панель открыта постоянно, как dock:
-        // прятать её есть смысл только когда работает чужая программа.
-        if (pinned || !_foreignForeground || IsCursorOverHotZone())
+        // На рабочем столе и в собственных окнах панель обычно открыта постоянно, как dock:
+        // прятать её есть смысл только когда работает чужая программа. Если включено
+        // автоскрытие внутри Glaze Shell, собственное окно тоже убирает панель — но касание
+        // верхней кромки по-прежнему возвращает её.
+        if (pinned || IsCursorOverHotZone())
+        {
+            _collapseAt = now + CollapseDelay;
+            target = 1.0;
+        }
+        else if (_ownForeground && _hideInOwnProcess)
+        {
+            target = 0.0;
+        }
+        else if (!_foreignForeground)
         {
             _collapseAt = now + CollapseDelay;
             target = 1.0;
@@ -439,7 +464,17 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void UpdateForegroundState()
     {
-        if (!OverlayWindow.TryGetForegroundWindow(out var hwnd, out var processId) || hwnd == _foregroundHwnd)
+        if (!OverlayWindow.TryGetForegroundWindow(out var hwnd, out var processId))
+        {
+            _foregroundHwnd = 0;
+            // Во время свайпа или переключения задач активного окна может не быть вовсе.
+            // Это не рабочий стол: панель убирается, иначе она висит поверх представления
+            // задач, пока Windows не выберет новое окно.
+            ApplyForegroundState(own: false, foreign: true);
+            return;
+        }
+
+        if (hwnd == _foregroundHwnd)
         {
             return;
         }
@@ -447,17 +482,27 @@ public sealed partial class TopBarWindow : Window
         _foregroundHwnd = hwnd;
         ViewModel.RefreshForeground();
 
-        var foreign = processId != _ownProcessId && !IsShellProcess(processId);
+        var own = processId == _ownProcessId;
+        var foreign = !own && !ShellForeground.IsDesktopOrShellUi(hwnd, processId);
 
-        if (foreign == _foreignForeground)
+        ApplyForegroundState(own, foreign);
+    }
+
+    /// <summary>
+    /// Применяет классификацию активного окна. Уход в чужое приложение или потерю фокуса
+    /// панель убирает сразу, без 350 мс ожидания. Заодно снимается ввод: иначе панель
+    /// оставалась бы активной и «залипала» открытой.
+    /// </summary>
+    private void ApplyForegroundState(bool own, bool foreign)
+    {
+        if (own == _ownForeground && foreign == _foreignForeground)
         {
             return;
         }
 
+        _ownForeground = own;
         _foreignForeground = foreign;
 
-        // Уход в другое приложение убирает панель сразу, без 350 мс ожидания.
-        // Заодно снимается ввод: иначе панель оставалась активной и «залипала» открытой.
         if (foreign)
         {
             _collapseAt = DateTimeOffset.UtcNow;
@@ -473,24 +518,6 @@ public sealed partial class TopBarWindow : Window
         // Высота «кромки» в покое зависит от режима, поэтому положение пересчитывается,
         // даже если прогресс выезда не менялся.
         _lastAppliedReveal = -1;
-    }
-
-    /// <summary>
-    /// Процесс оболочки Windows: рабочий стол, «Пуск», поиск, центр уведомлений. Их окна
-    /// не считаются чужим приложением — панель на рабочем столе остаётся открытой.
-    /// </summary>
-    private static bool IsShellProcess(uint processId)
-    {
-        try
-        {
-            return Process.GetProcessById((int)processId).ProcessName is
-                "explorer" or "StartMenuExperienceHost" or "SearchHost" or
-                "ShellExperienceHost" or "TextInputHost" or "LockApp";
-        }
-        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException)
-        {
-            return false;
-        }
     }
 
     /// <summary>
@@ -510,7 +537,8 @@ public sealed partial class TopBarWindow : Window
         // Скрытая в чужом приложении панель ловится узкой полосой у кромки; как только она
         // выехала, зоной становится вся полоса — иначе клик по поиску не успевал бы
         // удержать панель открытой.
-        var zone = !_foreignForeground || _reveal >= 0.5 ? BarHeight : ForeignHotZone;
+        var hidden = _foreignForeground || (_ownForeground && _hideInOwnProcess);
+        var zone = !hidden || _reveal >= 0.5 ? BarHeight : ForeignHotZone;
         var zoneHeight = Math.Max(1, (int)Math.Round(zone * _scale));
         return x >= _screenLeft && x < _screenLeft + _screenWidth && y >= _screenTop && y < _screenTop + zoneHeight;
     }
@@ -945,7 +973,14 @@ public sealed partial class TopBarWindow : Window
                 presenter.Restore();
             }
 
-            _owner.Activate();
+            if (_owner is MainWindow mainWindow)
+            {
+                mainWindow.ShowFromTray();
+            }
+            else
+            {
+                _owner.Activate();
+            }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {
@@ -958,6 +993,29 @@ public sealed partial class TopBarWindow : Window
     /// окном не владеет, поэтому запрос пересылается приложению.
     /// </summary>
     private void OnExplorerRequested(object? sender, string? path) => ExplorerRequested?.Invoke(this, path);
+
+    /// <summary>Левая кнопка «лупа»: открывает поиск Glance.</summary>
+    private void OnGlanceClick(object sender, RoutedEventArgs e) => FocusSearch();
+
+    /// <summary>Левая кнопка «папка»: открывает проводник Glaze Shell.</summary>
+    private void OnLauncherExplorerClick(object sender, RoutedEventArgs e) =>
+        ExplorerRequested?.Invoke(this, null);
+
+    /// <summary>Левая кнопка «рабочий стол»: сворачивает все окна штатной командой оболочки.</summary>
+    private void OnShowDesktopClick(object sender, RoutedEventArgs e) => DesktopActions.ShowDesktop();
+
+    /// <summary>Левая кнопка «рабочие столы»: открывает представление задач Windows.</summary>
+    private void OnTaskViewClick(object sender, RoutedEventArgs e) => DesktopActions.ShowTaskView();
+
+    /// <summary>
+    /// Кнопка «Закрыть Glaze Shell» в «Центре управления»: главное окно уходит в трей,
+    /// панели и применённое оформление остаются. Выход — через значок в трее.
+    /// </summary>
+    private void OnHideToTrayClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.CloseQuickSettings();
+        HideRequested?.Invoke(this, EventArgs.Empty);
+    }
 
     private void OnActivated(object sender, WindowActivatedEventArgs e)
     {
@@ -986,6 +1044,8 @@ public sealed partial class TopBarWindow : Window
     {
         _themes.ApplyFromSettings(Root);
         ApplyBackdrop();
+        _hideInOwnProcess = changed.Settings.HidePanelsInGlazeShell;
+        _lastAppliedReveal = -1;
         _ = DispatcherQueue.TryEnqueue(() => UpdateOverlayBounds());
     }
 

@@ -418,6 +418,25 @@ public sealed class SettingsDocumentMapperTests
     }
 
     [TestMethod]
+    public void MissingPanelAutoHideDefaultsToEnabled()
+    {
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(new SettingsDocument(), out var settings, out _));
+        Assert.IsTrue(settings!.HidePanelsInGlazeShell);
+    }
+
+    [TestMethod]
+    public void DisabledPanelAutoHideSurvivesSettingsEditAndDocumentRoundTrip()
+    {
+        var original = new UserSettings(hidePanelsInGlazeShell: false);
+        var edited = GlazeShell.Core.Settings.UserSettingsEditor.With(original, topBarTransparency: 60);
+        var document = SettingsDocument.FromSettings(edited);
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var restored, out _));
+        Assert.IsFalse(restored!.HidePanelsInGlazeShell);
+        Assert.AreEqual(60, restored.TopBarTransparency);
+    }
+
+    [TestMethod]
     public void MissingTransparencyFallsBackToTheDefaults()
     {
         var document = new SettingsDocument();

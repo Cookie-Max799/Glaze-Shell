@@ -1095,7 +1095,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             settings.SafeModeEnabled,
             settings.TransparencyEnabled,
             settings.TopBarTransparency,
-            settings.DockTransparency));
+            settings.DockTransparency,
+            settings.HidePanelsInGlazeShell));
 
         monitor.SetNames(
             BuildDefaultMonitorNames(Monitors.Select(static item => item.Monitor).ToList()).TryGetValue(monitor.Id, out var fallback)
@@ -1170,7 +1171,8 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             settings.SafeModeEnabled,
             settings.TransparencyEnabled,
             settings.TopBarTransparency,
-            settings.DockTransparency));
+            settings.DockTransparency,
+            settings.HidePanelsInGlazeShell));
     }
 
     private static Func<string?, string?> BuildMonitorNameResolver(Dictionary<string, string> displayNames) =>

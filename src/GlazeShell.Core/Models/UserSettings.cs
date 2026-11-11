@@ -60,7 +60,8 @@ public sealed record UserSettings
         bool safeModeEnabled = false,
         bool transparencyEnabled = true,
         int topBarTransparency = DefaultTopBarTransparency,
-        int dockTransparency = DefaultDockTransparency)
+        int dockTransparency = DefaultDockTransparency,
+        bool hidePanelsInGlazeShell = true)
     {
         Language = ModelValidation.Required(language, nameof(language));
         ActiveThemeId = ModelValidation.Optional(activeThemeId, nameof(activeThemeId));
@@ -82,6 +83,7 @@ public sealed record UserSettings
         TransparencyEnabled = transparencyEnabled;
         TopBarTransparency = NormalizeTransparency(topBarTransparency);
         DockTransparency = NormalizeTransparency(dockTransparency);
+        HidePanelsInGlazeShell = hidePanelsInGlazeShell;
         StartWithWindows = startWithWindows;
         MinimizeToTray = minimizeToTray;
         ShowDesktopOnStartup = showDesktopOnStartup;
@@ -204,6 +206,13 @@ public sealed record UserSettings
     /// Прозрачность dock в процентах (0–90): настраивается отдельно от верхней панели.
     /// </summary>
     public int DockTransparency { get; }
+
+    /// <summary>
+    /// Скрывать верхнюю и нижнюю панели, пока активно окно Glaze Shell. Когда фокус уходит
+    /// на рабочий стол, панели возвращаются. По умолчанию включено: внутри приложения
+    /// панели отнимают полезную площадь, но остаются доступны касанием кромки экрана.
+    /// </summary>
+    public bool HidePanelsInGlazeShell { get; }
 
     public static UserSettings CreateDefault() => new();
 

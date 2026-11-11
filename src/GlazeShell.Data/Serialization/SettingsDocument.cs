@@ -73,6 +73,12 @@ public sealed class SettingsDocument
     public int? DockTransparency { get; set; }
 
     /// <summary>
+    /// Скрывать панели, пока активно окно Glaze Shell. Отсутствие значения в старом
+    /// документе означает включённое поведение.
+    /// </summary>
+    public bool? HidePanelsInGlazeShell { get; set; }
+
+    /// <summary>
     /// Старое общее значение прозрачности стекла (0–90). Сохранено для чтения документов
     /// предыдущих версий: если новые поля отсутствуют, значение переносится в оба ползунка.
     /// </summary>
@@ -114,6 +120,7 @@ public sealed class SettingsDocument
             TransparencyEnabled = settings.TransparencyEnabled,
             TopBarTransparency = settings.TopBarTransparency,
             DockTransparency = settings.DockTransparency,
+            HidePanelsInGlazeShell = settings.HidePanelsInGlazeShell,
             MonitorNames = settings.MonitorNames.Count == 0
                 ? null
                 : new Dictionary<string, string>(settings.MonitorNames, StringComparer.OrdinalIgnoreCase)
@@ -223,7 +230,8 @@ public static class SettingsDocumentMapper
             document.SafeModeEnabled,
             document.TransparencyEnabled ?? true,
             topBarTransparency,
-            dockTransparency);
+            dockTransparency,
+            document.HidePanelsInGlazeShell ?? true);
         diagnostics = Array.Empty<string>();
         return true;
     }

@@ -214,6 +214,17 @@ public static class SettingsCatalog
             (settings, value) => UserSettingsEditor.With(settings, topBarEnabled: AsBool(value)),
             []),
 
+        new(
+            "hidePanelsInGlazeShell",
+            TopBarPageId,
+            "Скрывать панели внутри Glaze Shell",
+            "Верхняя и нижняя панели убираются в окнах Glaze Shell. На рабочем столе панели возвращаются; в приложениях их можно вызвать у кромки экрана.",
+            ["скрывать", "автоскрытие", "панели", "верхняя панель", "dock", "свайп", "представление задач"],
+            SettingKind.Toggle,
+            settings => settings.HidePanelsInGlazeShell,
+            (settings, value) => UserSettingsEditor.With(settings, hidePanelsInGlazeShell: AsBool(value)),
+            []),
+
         // Проводник.
         new(
             "explorerViewMode",

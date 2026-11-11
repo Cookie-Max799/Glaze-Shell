@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Threading;
+using GlazeShell.Windows.Shell;
 using GlazeShell.Windows.Win32;
 
 namespace GlazeShell.Windows.Lifecycle;
@@ -73,12 +74,30 @@ public static class SingleInstanceHelper
     /// <summary>
     /// Находит видимое top-level окно собственного приложения — по владеющему процессу,
     /// который запущен из того же исполняемого файла, — и поднимает его: восстанавливает
-    /// из свёрнутого состояния и пытается вывести на передний план. Фокус — best-effort:
-    /// при foreground lock система может отклонить перевод на передний план, и это не ошибка.
+    /// из свёрнутого состояния и пытается вывести на передний план. Если видимого окна
+    /// нет (главное свёрнуто в трей), работающему экземпляру отправляется широковещательное
+    /// сообщение: он сам покажет главное окно.
     /// </summary>
     public static void ActivateExistingInstance()
     {
+        RequestShowMainWindow();
         var hwnd = FindOwnVisibleWindow();
+        if (hwnd == 0)
+        {
+            RequestShowMainWindow();
+            return;
+        }
+
+        BringToForeground(hwnd);
+    }
+
+    /// <summary>
+    /// Восстанавливает окно из свёрнутого состояния и пытается вывести его на передний
+    /// план. Фокус — best-effort: при foreground lock система может отклонить перевод,
+    /// и это не ошибка. Повторный запуск и значок трея используют один и тот же путь.
+    /// </summary>
+    public static void BringToForeground(nint hwnd)
+    {
         if (hwnd == 0)
         {
             return;
@@ -127,6 +146,21 @@ public static class SingleInstanceHelper
             {
                 _ = User32.AttachThreadInput(currentThread, foregroundThread, false);
             }
+        }
+    }
+
+    /// <summary>
+    /// Просит работающий экземпляр показать главное окно. Сообщение широковещательное,
+    /// поэтому его получает скрытое окно значка трея: обычные окна приложения в этот
+    /// момент могут быть невидимы.
+    /// </summary>
+    private static void RequestShowMainWindow()
+    {
+        var message = User32.RegisterWindowMessage(TrayIcon.ActivationMessageName);
+
+        if (message != 0)
+        {
+            _ = User32.PostMessage(User32.HwndBroadcast, message, 0, 0);
         }
     }
 

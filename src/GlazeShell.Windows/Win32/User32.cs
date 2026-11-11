@@ -176,12 +176,33 @@ internal static class User32
     internal const int SwRestore = 9;
     internal const int SwMaximize = 3;
 
+    internal const uint WmNull = 0x0000;
     internal const uint WmClose = 0x0010;
     internal const uint WmQuit = 0x0012;
     internal const uint WmSettingChange = 0x001A;
+    internal const uint WmContextMenu = 0x007B;
+    internal const uint WmCommand = 0x0111;
     internal const uint WmDeviceChange = 0x0219;
     internal const uint WmDpiChanged = 0x02E0;
     internal const uint WmHotkey = 0x0312;
+    internal const uint WmLButtonUp = 0x0202;
+    internal const uint WmLButtonDblClk = 0x0203;
+    internal const uint WmRButtonUp = 0x0205;
+    internal const uint WmApp = 0x8000;
+
+    /// <summary>Окно-получатель широковещательного сообщения.</summary>
+    internal const nint HwndBroadcast = 0xFFFF;
+
+    /// <summary>Идентификатор стандартной иконки приложения (<c>IDI_APPLICATION</c>).</summary>
+    internal const nint IdiApplication = 32512;
+
+    /// <summary>Всплывающее меню открывается по правой кнопке и возвращает команду числом.</summary>
+    internal const uint TpmRightButton = 0x0002;
+    internal const uint TpmBottomAlign = 0x0020;
+    internal const uint TpmReturnCmd = 0x0100;
+
+    internal const uint MfString = 0x0000;
+    internal const uint MfSeparator = 0x0800;
 
     internal const uint ModAlt = 0x0001;
     internal const uint ModControl = 0x0002;
@@ -301,6 +322,14 @@ internal static class User32
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern int GetClassName(nint hwnd, char[] buffer, int maxCount);
+
+    /// <summary>Имя класса окна; пустая строка, если окно уже уничтожено.</summary>
+    internal static string GetWindowClassName(nint hwnd)
+    {
+        var buffer = new char[256];
+        var length = GetClassName(hwnd, buffer, buffer.Length);
+        return length > 0 ? new string(buffer, 0, length) : string.Empty;
+    }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -475,4 +504,27 @@ internal static class User32
     /// <summary>Возвращает текущий системный цвет по индексу (например, <c>COLOR_WINDOW</c>).</summary>
     [DllImport("user32.dll", ExactSpelling = true)]
     internal static extern uint GetSysColor(int index);
+
+    /// <summary>Создаёт пустое всплывающее меню (контекстное меню трея).</summary>
+    [DllImport("user32.dll", ExactSpelling = true)]
+    internal static extern nint CreatePopupMenu();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, EntryPoint = "AppendMenuW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool AppendMenuW(nint menu, uint flags, nint itemId, string? text);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    internal static extern int TrackPopupMenuEx(nint menu, uint flags, int x, int y, nint hwnd, nint parameters);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DestroyMenu(nint menu);
+
+    /// <summary>Загружает стандартную иконку системы: используется как запасная для трея.</summary>
+    [DllImport("user32.dll", ExactSpelling = true)]
+    internal static extern nint LoadIconW(nint instance, nint iconName);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool DestroyIcon(nint icon);
 }

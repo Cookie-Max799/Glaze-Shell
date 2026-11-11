@@ -560,7 +560,8 @@ public sealed class DockViewModel : IDisposable
             settings.SafeModeEnabled,
             settings.TransparencyEnabled,
             settings.TopBarTransparency,
-            settings.DockTransparency));
+            settings.DockTransparency,
+            settings.HidePanelsInGlazeShell));
     }
 
     private void QueueRebuild() => _ = _dispatcher.TryEnqueue(Rebuild);
