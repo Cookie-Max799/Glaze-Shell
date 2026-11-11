@@ -40,6 +40,7 @@
                         AutomationProperties.Name="Назад"
                         Click="OnBackClick"
                         IsEnabled="{x:Bind ViewModel.CanGoBack, Mode=OneWay}"
+                        Style="{StaticResource GlazeIconButtonStyle}"
                         ToolTipService.ToolTip="Назад">
                         <FontIcon FontSize="15" Glyph="&#xE72B;" />
                     </Button>
@@ -47,6 +48,7 @@
                         AutomationProperties.Name="Вперёд"
                         Click="OnForwardClick"
                         IsEnabled="{x:Bind ViewModel.CanGoForward, Mode=OneWay}"
+                        Style="{StaticResource GlazeIconButtonStyle}"
                         ToolTipService.ToolTip="Вперёд">
                         <FontIcon FontSize="15" Glyph="&#xE72A;" />
                     </Button>
@@ -54,24 +56,28 @@
                         AutomationProperties.Name="На уровень выше"
                         Click="OnUpClick"
                         IsEnabled="{x:Bind ViewModel.CanGoUp, Mode=OneWay}"
+                        Style="{StaticResource GlazeIconButtonStyle}"
                         ToolTipService.ToolTip="На уровень выше">
                         <FontIcon FontSize="15" Glyph="&#xE74A;" />
                     </Button>
                     <Button
                         AutomationProperties.Name="Обновить"
                         Click="OnRefreshClick"
+                        Style="{StaticResource GlazeIconButtonStyle}"
                         ToolTipService.ToolTip="Обновить">
                         <FontIcon FontSize="15" Glyph="&#xE72C;" />
                     </Button>
                     <Button
                         AutomationProperties.Name="Добавить текущую папку в избранное"
                         Click="OnAddFavoriteClick"
+                        Style="{StaticResource GlazeIconButtonStyle}"
                         ToolTipService.ToolTip="Добавить текущую папку в избранное">
                         <FontIcon FontSize="15" Glyph="&#xE840;" />
                     </Button>
                     <Button
                         AutomationProperties.Name="Предпросмотр выбранного элемента"
                         Click="OnPreviewClick"
+                        Style="{StaticResource GlazeIconButtonStyle}"
                         ToolTipService.ToolTip="Предпросмотр выбранного элемента (пробел)">
                         <FontIcon FontSize="15" Glyph="&#xE8FF;" />
                     </Button>
@@ -109,6 +115,7 @@
                     <Button
                         AutomationProperties.Name="Направление сортировки"
                         Click="OnSortDirectionClick"
+                        Style="{StaticResource GlazeIconButtonStyle}"
                         ToolTipService.ToolTip="{x:Bind ViewModel.SortToolTip, Mode=OneWay}">
                         <FontIcon FontSize="15" Glyph="{x:Bind ViewModel.SortGlyph, Mode=OneWay}" />
                     </Button>
@@ -183,6 +190,7 @@
                                                 Background="Transparent"
                                                 BorderThickness="0"
                                                 Click="OnRemoveFavoriteClick"
+                                                CornerRadius="6"
                                                 ToolTipService.ToolTip="Убрать из избранного"
                                                 Visibility="{x:Bind IsFavorite}">
                                                 <FontIcon FontSize="11" Glyph="&#xE711;" />

@@ -97,6 +97,17 @@
             <StaticResource x:Key="ToggleButtonBorderBrushCheckedPointerOver" ResourceKey="GlazeBorderBrush" />
 
             <!--
+                Единый радиус скруглений (DESIGN §6). ControlCornerRadius задаёт поля,
+                кнопки и списки, OverlayCornerRadius — меню, подсказки и диалоги, поэтому
+                системные элементы перестают выбиваться из собственных поверхностей
+                Glaze Shell радиусами 4. Список и плитка получают свои значения.
+            -->
+            <CornerRadius x:Key="ControlCornerRadius">8</CornerRadius>
+            <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>
+            <CornerRadius x:Key="ListViewItemCornerRadius">8</CornerRadius>
+            <CornerRadius x:Key="GridViewItemCornerRadius">12</CornerRadius>
+
+            <!--
                 Фокус-ринг (доступность, I5). Встроенный фокус-визуал WinUI рисует заливку
                 первым цветом и обводку вторым, поэтому прозрачная заливка и акцентная обводка
                 дают требуемый DESIGN §7 ринг — 2 px акцентом с отступом. ThemeApplicator

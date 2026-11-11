@@ -22,7 +22,8 @@
             HorizontalAlignment="Stretch"
             VerticalAlignment="Top"
             Background="{StaticResource GlazeTopBarGlassBrush}"
-            BorderThickness="0"
+            BorderBrush="{StaticResource GlazeBorderBrush}"
+            BorderThickness="1"
             CornerRadius="0,0,24,24"
             IsHitTestVisible="False" />
 
@@ -304,7 +305,8 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
                 Background="{StaticResource GlazeGlassBrush}"
-                BorderThickness="0"
+                BorderBrush="{StaticResource GlazeBorderBrush}"
+                BorderThickness="1,0,1,1"
                 CornerRadius="0,0,32,32"
                 Visibility="{x:Bind ViewModel.HasResults, Mode=OneWay}">
                 <Grid>
@@ -398,6 +400,8 @@
             HorizontalAlignment="Right"
             VerticalAlignment="Top"
             Background="{StaticResource GlazeGlassBrush}"
+            BorderBrush="{StaticResource GlazeBorderBrush}"
+            BorderThickness="1,0,1,1"
             CornerRadius="0,0,32,32"
             Visibility="{x:Bind ViewModel.QuickSettings.IsOpen, Mode=OneWay}">
             <StackPanel Spacing="16">
@@ -527,6 +531,8 @@
             HorizontalAlignment="Right"
             VerticalAlignment="Top"
             Background="{StaticResource GlazeGlassBrush}"
+            BorderBrush="{StaticResource GlazeBorderBrush}"
+            BorderThickness="1,0,1,1"
             CornerRadius="0,0,32,32"
             Visibility="{x:Bind ViewModel.Calendar.IsOpen, Mode=OneWay}">
             <StackPanel Spacing="12">

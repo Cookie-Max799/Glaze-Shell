@@ -79,6 +79,7 @@
 
                     <Button
                         Style="{StaticResource GlazeIconButtonStyle}"
+                        AutomationProperties.Name="Обновить список"
                         Click="OnRefreshClick"
                         IsEnabled="{x:Bind ViewModel.IsIdle, Mode=OneWay}"
                         ToolTipService.ToolTip="Обновить список приложений (F5)">
@@ -87,6 +88,7 @@
 
                     <Button
                         Style="{StaticResource GlazeToolbarButtonStyle}"
+                        AutomationProperties.Name="Проводник"
                         Click="OnExplorerClick"
                         ToolTipService.ToolTip="Проводник Glaze Shell (E1/E2)">
                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -97,6 +99,7 @@
 
                     <Button
                         Style="{StaticResource GlazeToolbarButtonStyle}"
+                        AutomationProperties.Name="Восстановить интерфейс"
                         Click="OnRecoveryClick"
                         ToolTipService.ToolTip="Восстановить интерфейс Windows (I2)">
                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -107,6 +110,7 @@
 
                     <Button
                         Style="{StaticResource GlazeIconButtonStyle}"
+                        AutomationProperties.Name="Настройки"
                         Click="OnSettingsClick"
                         ToolTipService.ToolTip="Настройки Glaze Shell (I1)">
                         <FontIcon FontSize="15" Glyph="&#xE713;" />
