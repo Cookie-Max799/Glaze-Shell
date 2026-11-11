@@ -238,6 +238,7 @@ internal static class User32
     internal const uint SwpNoMove = 0x0002;
     internal const uint SwpNoZOrder = 0x0004;
     internal const uint SwpShowWindow = 0x0040;
+    internal const uint SwpHideWindow = 0x0080;
     internal const uint SwpNoActivate = 0x0010;
     internal const uint SwpFrameChanged = 0x0020;
 

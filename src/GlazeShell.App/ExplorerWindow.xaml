@@ -105,6 +105,18 @@
                     Orientation="Horizontal"
                     Spacing="6"
                     VerticalAlignment="Center">
+                    <Button AutomationProperties.Name="Оформление проводника"
+                            Style="{StaticResource GlazeIconButtonStyle}"
+                            ToolTipService.ToolTip="Оформление Glaze Shell">
+                        <FontIcon FontSize="15" Glyph="&#xE790;" />
+                        <Button.Flyout>
+                            <MenuFlyout>
+                                <MenuFlyoutItem Text="Системная тема" Tag="system" Click="OnAppearanceClick" />
+                                <MenuFlyoutItem Text="Светлая тема" Tag="light" Click="OnAppearanceClick" />
+                                <MenuFlyoutItem Text="Тёмная тема" Tag="dark" Click="OnAppearanceClick" />
+                            </MenuFlyout>
+                        </Button.Flyout>
+                    </Button>
                     <ComboBox
                         MinWidth="132"
                         AutomationProperties.Name="Сортировка"

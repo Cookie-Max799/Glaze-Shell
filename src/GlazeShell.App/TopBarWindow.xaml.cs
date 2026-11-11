@@ -1017,6 +1017,12 @@ public sealed partial class TopBarWindow : Window
         HideRequested?.Invoke(this, EventArgs.Empty);
     }
 
+    private void OnOpenMainWindowClick(object sender, RoutedEventArgs e)
+    {
+        ViewModel.CloseQuickSettings();
+        OnActivateRequested(this, EventArgs.Empty);
+    }
+
     private void OnActivated(object sender, WindowActivatedEventArgs e)
     {
         if (e.WindowActivationState != WindowActivationState.Deactivated)

@@ -37,6 +37,9 @@ public sealed class TaskbarHider : IDisposable
 
     private readonly object _sync = new();
     private readonly WindowProc _windowProcedure;
+    private readonly WinEventProc _visibilityProcedure;
+    private readonly Dictionary<nint, Rect> _taskbars = [];
+    private nint _visibilityHook;
     private readonly string _eventWindowClassName = EventWindowClassNamePrefix + Guid.NewGuid().ToString("N");
 
     private Thread? _thread;
@@ -44,8 +47,6 @@ public sealed class TaskbarHider : IDisposable
     private uint _threadId;
     private uint _taskbarCreatedMessage;
 
-    private nint _hiddenTaskbar;
-    private Rect _originalBounds;
     private bool _hidden;
 
     private int _started;
@@ -54,6 +55,7 @@ public sealed class TaskbarHider : IDisposable
     public TaskbarHider()
     {
         _windowProcedure = OnWindowMessage;
+        _visibilityProcedure = OnVisibilityChanged;
     }
 
     /// <summary>
@@ -109,23 +111,21 @@ public sealed class TaskbarHider : IDisposable
     /// </summary>
     public bool Restore()
     {
-        nint taskbar;
-        Rect bounds;
-
         lock (_sync)
         {
-            if (!_hidden)
+            _hidden = false;
+            var restored = true;
+            foreach (var (taskbar, bounds) in _taskbars)
             {
-                return true;
+                if (User32.IsWindow(taskbar))
+                {
+                    restored &= RestoreTaskbar(taskbar, bounds);
+                }
             }
 
-            taskbar = _hiddenTaskbar;
-            bounds = _originalBounds;
-            _hidden = false;
-            _hiddenTaskbar = 0;
+            _taskbars.Clear();
+            return restored;
         }
-
-        return RestoreTaskbar(taskbar, bounds);
     }
 
     public void Dispose()
@@ -146,30 +146,26 @@ public sealed class TaskbarHider : IDisposable
     /// </summary>
     public static bool RestoreIfOffScreen()
     {
-        var taskbar = User32.FindWindow(TaskbarClassName, null);
-
-        if (taskbar == 0 || !User32.GetWindowRect(taskbar, out var bounds))
+        var restored = false;
+        User32.EnumWindows((taskbar, _) =>
         {
-            return false;
-        }
+            if (!IsTaskbar(taskbar) || !User32.GetWindowRect(taskbar, out var bounds) ||
+                !TryGetMonitorBounds(taskbar, out var monitor))
+            {
+                return true;
+            }
 
-        if (!TryGetMonitorBounds(taskbar, out var monitor) || !IsBelowMonitor(bounds, monitor))
-        {
-            return false;
-        }
+            var below = IsBelowMonitor(bounds, monitor);
+            if (below || !User32.IsWindowVisible(taskbar))
+            {
+                restored |= User32.SetWindowPos(taskbar, 0, bounds.Left,
+                    below ? monitor.Bottom - (bounds.Bottom - bounds.Top) : bounds.Top,
+                    0, 0, User32.SwpNoSize | User32.SwpNoZOrder | User32.SwpNoActivate | User32.SwpShowWindow);
+            }
 
-        var width = bounds.Right - bounds.Left;
-        var height = bounds.Bottom - bounds.Top;
-        var top = monitor.Bottom - height;
-
-        return User32.SetWindowPos(
-            taskbar,
-            0,
-            bounds.Left,
-            top,
-            width,
-            height,
-            User32.SwpNoZOrder | User32.SwpNoActivate);
+            return true;
+        }, 0);
+        return restored;
     }
 
     /// <summary>
@@ -180,37 +176,54 @@ public sealed class TaskbarHider : IDisposable
 
     private bool HideTaskbar()
     {
-        var taskbar = User32.FindWindow(TaskbarClassName, null);
-
-        if (taskbar == 0)
-        {
-            return false;
-        }
-
-        if (!User32.GetWindowRect(taskbar, out var bounds) || !TryGetMonitorBounds(taskbar, out var monitor))
-        {
-            return false;
-        }
-
         lock (_sync)
         {
-            if (!_hidden || _hiddenTaskbar != taskbar)
+            if (Volatile.Read(ref _disposed) != 0)
             {
-                _originalBounds = bounds;
+                return false;
             }
 
             _hidden = true;
-            _hiddenTaskbar = taskbar;
-        }
+            var found = false;
+            var success = true;
+            User32.EnumWindows((taskbar, _) =>
+            {
+                if (!IsTaskbar(taskbar))
+                {
+                    return true;
+                }
 
-        return User32.SetWindowPos(
-            taskbar,
-            0,
-            bounds.Left,
-            monitor.Bottom + OffScreenGap,
-            0,
-            0,
-            User32.SwpNoSize | User32.SwpNoZOrder | User32.SwpNoActivate);
+                found = true;
+                if (!User32.GetWindowRect(taskbar, out var bounds) || !TryGetMonitorBounds(taskbar, out var monitor))
+                {
+                    success = false;
+                    return true;
+                }
+
+                _taskbars.TryAdd(taskbar, bounds);
+                success &= User32.SetWindowPos(taskbar, 0, bounds.Left, monitor.Bottom + OffScreenGap,
+                    0, 0, User32.SwpNoSize | User32.SwpNoZOrder | User32.SwpNoActivate | User32.SwpHideWindow);
+                return true;
+            }, 0);
+            return found && success;
+        }
+    }
+
+    private static bool IsTaskbar(nint hwnd) =>
+        User32.GetWindowClassName(hwnd) is TaskbarClassName or "Shell_SecondaryTrayWnd";
+
+    private void OnVisibilityChanged(nint hook, uint winEvent, nint hwnd, uint objectId, uint childId, uint eventThread, uint eventTime)
+    {
+        if (objectId == 0 && childId == 0 && hwnd != 0 && IsTaskbar(hwnd) && Volatile.Read(ref _disposed) == 0)
+        {
+            lock (_sync)
+            {
+                if (_hidden)
+                {
+                    _ = HideTaskbar();
+                }
+            }
+        }
     }
 
     private static bool RestoreTaskbar(nint taskbar, Rect bounds)
@@ -227,7 +240,7 @@ public sealed class TaskbarHider : IDisposable
             bounds.Top,
             bounds.Right - bounds.Left,
             bounds.Bottom - bounds.Top,
-            User32.SwpNoZOrder | User32.SwpNoActivate);
+            User32.SwpNoZOrder | User32.SwpNoActivate | User32.SwpShowWindow);
     }
 
     private static bool TryGetMonitorBounds(nint window, out Rect monitor)
@@ -257,6 +270,8 @@ public sealed class TaskbarHider : IDisposable
         try
         {
             _threadId = Kernel32.GetCurrentThreadId();
+            _visibilityHook = User32.SetWinEventHook(User32.EventObjectShow, User32.EventObjectShow, 0,
+                _visibilityProcedure, 0, 0, User32.WineventOutOfContext | User32.WineventSkipOwnProcess);
             _taskbarCreatedMessage = User32.RegisterWindowMessage(TaskbarCreatedMessageName);
 
             if (!RegisterClass())
@@ -294,6 +309,16 @@ public sealed class TaskbarHider : IDisposable
         }
         finally
         {
+            if (_visibilityHook != 0)
+            {
+                _ = User32.UnhookWinEvent(_visibilityHook);
+                _visibilityHook = 0;
+            }
+
+            if (_eventWindow != 0)
+            {
+                _ = User32.DestroyWindow(_eventWindow);
+            }
             _eventWindow = 0;
             _threadId = 0;
         }

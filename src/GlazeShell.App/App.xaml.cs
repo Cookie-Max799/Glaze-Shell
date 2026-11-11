@@ -101,6 +101,7 @@ public partial class App : Application
     /// значок, остаётся <c>null</c>: закрытие крестиком завершит процесс как раньше.
     /// </summary>
     private TrayIcon? _trayIcon;
+    private PersistingSettingsManager? _settingsManager;
 
     /// <summary>
     /// Активная тема хранится в поле, а не в локальной переменной: менеджер должен
@@ -174,6 +175,7 @@ public partial class App : Application
 
         var layoutWriter = new DesktopLayoutPersistenceWriter(store, eventManager, ReportPersistence);
         var settingsManager = new PersistingSettingsManager(store, eventManager, ReportPersistence);
+        _settingsManager = settingsManager;
         ReportPersistenceStatus(settingsManager.Load());
 
         var settings = settingsManager.GetSettings();
@@ -621,8 +623,20 @@ public partial class App : Application
     /// <param name="source">Откуда пришёл запрос — для журнала.</param>
     private void RestoreWindowsUi(string source)
     {
+        if (_window is MainWindow mainWindow && !mainWindow.DispatcherQueue.HasThreadAccess)
+        {
+            _ = mainWindow.DispatcherQueue.TryEnqueue(() => RestoreWindowsUi(source));
+            return;
+        }
+
         try
         {
+            if (_settingsManager is not null)
+            {
+                _settingsManager.SetSettings(Core.Settings.UserSettingsEditor.With(
+                    _settingsManager.GetSettings(), dockReplacesTaskbar: false));
+            }
+
             _taskbarHider?.Dispose();
             _taskbarHider = null;
 

@@ -263,7 +263,7 @@ public sealed class DockViewModel : IDisposable
 
     /// <summary>Размер запроса значка в физических пикселях отображения.</summary>
     private int IconSize =>
-        Math.Clamp((int)Math.Round(IconDips * _iconScale), (int)IconDips, MaxIconPixels);
+        Math.Clamp((int)Math.Ceiling(IconDips * _iconScale * 1.2 * 2), (int)IconDips, MaxIconPixels);
 
     /// <summary>
     /// Пересчитывает значки под масштаб монитора (I6). Кэш сбрасывается: значки, запрошенные
@@ -939,10 +939,11 @@ public sealed class DockViewModel : IDisposable
             }
 
             var captured = path;
+            var requestedSize = IconSize;
 
             _ = Task.Run(() =>
             {
-                var pixels = ShellIconProvider.TryGetIcon(captured, IconSize);
+                var pixels = ShellIconProvider.TryGetIcon(captured, requestedSize);
 
                 if (pixels is null)
                 {
@@ -951,6 +952,11 @@ public sealed class DockViewModel : IDisposable
 
                 _ = _dispatcher.TryEnqueue(() =>
                 {
+                    if (requestedSize != IconSize)
+                    {
+                        return;
+                    }
+
                     var source = CreateImageSource(pixels);
 
                     if (source is not null)

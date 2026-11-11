@@ -25,6 +25,7 @@ public sealed partial class ExplorerWindow : Window
     private const int DefaultHeight = 720;
 
     private readonly ThemeApplicator _themes;
+    private readonly ISettingsManager _settings;
     private readonly IDisposable _settingsChanged;
     private readonly IFilePreviewReader _previewReader;
 
@@ -44,6 +45,7 @@ public sealed partial class ExplorerWindow : Window
         ArgumentNullException.ThrowIfNull(events);
 
         _themes = themes ?? throw new ArgumentNullException(nameof(themes));
+        _settings = settings;
         _previewReader = previewReader ?? throw new ArgumentNullException(nameof(previewReader));
 
         ViewModel = new ExplorerViewModel(browser, settings, DispatcherQueue);
@@ -73,6 +75,16 @@ public sealed partial class ExplorerWindow : Window
     }
 
     public ExplorerViewModel ViewModel { get; }
+
+    private void OnAppearanceClick(object sender, RoutedEventArgs args)
+    {
+        if (sender is MenuFlyoutItem { Tag: string mode } &&
+            GlazeShell.Core.Models.ThemeModeExtensions.TryParse(mode, out var themeMode))
+        {
+            _settings.SetSettings(GlazeShell.Core.Settings.UserSettingsEditor.With(
+                _settings.GetSettings(), themeMode: themeMode));
+        }
+    }
 
     private async Task StartAsync(string? path)
     {
