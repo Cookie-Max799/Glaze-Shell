@@ -99,6 +99,7 @@ public sealed partial class DockWindow : Window
     private double _windowLeft;
     private double _windowTop;
     private bool _cursorInside;
+    private bool _closed;
     private bool _cursorWatchRunning;
 
     private readonly int _ownProcessId = Environment.ProcessId;
@@ -212,6 +213,7 @@ public sealed partial class DockWindow : Window
 
         Closed += (_, _) =>
         {
+            _closed = true;
             _cursorWatch.Stop();
             _cursorWatch.Tick -= OnCursorWatchTick;
             _revealWatch.Stop();
@@ -266,6 +268,10 @@ public sealed partial class DockWindow : Window
 
     private void UpdateDockSize()
     {
+        if (_closed)
+        {
+            return;
+        }
         if (_hwnd == 0)
         {
             return;
@@ -385,6 +391,10 @@ public sealed partial class DockWindow : Window
     /// </summary>
     private void AnimateNewTiles()
     {
+        if (_closed)
+        {
+            return;
+        }
         var present = new HashSet<string>(StringComparer.Ordinal);
 
         for (var index = 0; index < ViewModel.Items.Count; index++)
@@ -512,6 +522,11 @@ public sealed partial class DockWindow : Window
     /// </summary>
     private void OnSettingsChanged(SettingsChanged changed) => _ = DispatcherQueue.TryEnqueue(() =>
     {
+        if (_closed)
+        {
+            return;
+        }
+
         _themes.ApplyFromSettings(Root);
         ApplyBackdrop();
         _hideInOwnProcess = changed.Settings.HidePanelsInGlazeShell;

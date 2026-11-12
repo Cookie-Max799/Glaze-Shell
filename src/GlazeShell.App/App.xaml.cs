@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using GlazeShell.App.Presentation;
 using GlazeShell.App.Theming;
 using GlazeShell.Core.Configuration;
 using GlazeShell.Core.Diagnostics;
@@ -27,8 +28,12 @@ using DesktopLayout = GlazeShell.Core.Models.DesktopLayout;
 
 namespace GlazeShell.App;
 
+#pragma warning disable CA1001 // App не IDisposable, ресурсы высвобождаются в Shutdown()
 public partial class App : Application
 {
+    /// <summary>Размер значка плитки меню «Пуск» в физических пикселях.</summary>
+    private const int StartMenuIconPixels = 48;
+
     private readonly FileLogger _logger;
     private readonly RecoveryCommandLineOptions _commandLine;
     private Window? _window;
@@ -86,6 +91,25 @@ public partial class App : Application
     /// <summary>Хранилище состояния восстановления (I2).</summary>
     private RecoveryStore? _recoveryStore;
 
+    /// <summary>
+    /// Низкоуровневый перехват клавиши Windows (этап 5): активен, пока панель задач
+    /// заменяется, и открывает заглушку меню «Пуск» вместо штатного меню.
+    /// </summary>
+    private WindowsKeyInterceptor? _winKeyInterceptor;
+
+    /// <summary>Заглушка меню «Пуск» (этап 5), открывающаяся клавишей Windows.</summary>
+    private StartMenuWindow? _startMenu;
+
+    /// <summary>Общий лаунчер приложений: используется и заглушкой «Пуск».</summary>
+#pragma warning disable CA1859 // Интерфейс используется во многих сервисах и передаётся в конструкторы
+    private IApplicationLauncher? _launcher;
+#pragma warning restore CA1859
+
+    /// <summary>Каталог приложений для списка закреплённых в заглушке «Пуск».</summary>
+#pragma warning disable CA1859 // Интерфейс используется несколькими services, конкретный тип sealed не ускорит
+    private IApplicationManager? _applications;
+#pragma warning restore CA1859
+
     /// <summary>Счётчик падений оболочки (I2).</summary>
     private CrashTracker? _crashes;
 
@@ -93,6 +117,8 @@ public partial class App : Application
     /// Работает ли оболочка в безопасном режиме (I2): без хуков и оверлеев.
     /// </summary>
     private bool _safeMode;
+
+    private Core.Models.UserSettings? _settingsBeforeUiRecovery;
 
     private IDisposable? _settingsChangedSubscription;
 
@@ -113,6 +139,11 @@ public partial class App : Application
     {
         _commandLine = RecoveryCommandLine.Parse(Environment.GetCommandLineArgs().Skip(1).ToArray());
         _logger = new FileLogger(UserDataPaths.GetLogFilePath(GlazeShellConfiguration.CreateDefault()));
+        UnhandledException += (_, args) => LogUnhandledException("WinUI", args.Exception, args.Message);
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            LogUnhandledException("AppDomain", args.ExceptionObject as Exception, $"Terminating: {args.IsTerminating}.");
+        TaskScheduler.UnobservedTaskException += (_, args) =>
+            LogUnhandledException("TaskScheduler", args.Exception, "An unobserved task failed.");
 
         // Сторож работает отдельным процессом и не должен касаться единственного экземпляра:
         // иначе он сразу же выйдет, не дождавшись оболочки.
@@ -138,6 +169,22 @@ public partial class App : Application
         }
 
         InitializeComponent();
+    }
+
+    private void LogUnhandledException(string source, Exception? exception, string message)
+    {
+        try
+        {
+            _logger.Write(
+                GlazeLogLevel.Error,
+                "Crash",
+                $"Source: {source}; process: {Environment.ProcessId}; thread: {Environment.CurrentManagedThreadId}; HRESULT: 0x{exception?.HResult ?? 0:X8}. {message}",
+                exception);
+        }
+        catch (Exception loggingException)
+        {
+            Debug.WriteLine(loggingException);
+        }
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
@@ -166,6 +213,10 @@ public partial class App : Application
         var launcher = new WindowsApplicationLauncher(
             discovery,
             new ProcessInspector());
+
+        // Плитки заглушки «Пуск» и запуск из неё используют общий лаунчер и каталог.
+        _launcher = launcher;
+        _applications = discovery;
 
         var windowManager = new WindowManager(eventManager);
         var monitorManager = new MonitorManager(eventManager, ReportEventFailure);
@@ -248,6 +299,8 @@ public partial class App : Application
 
         // Кнопка «Восстановить UI» в главном окне возвращает системный интерфейс на место.
         window.RecoveryRequested += (_, _) => RestoreWindowsUi("the main window");
+        window.RestoreGlazeRequested += (_, _) => RestoreGlazeShellUi();
+        window.SetGlazeRestoreAvailable(!_safeMode);
 
         // Верхняя панель создаётся до активации главного окна: панель показывается без
         // перехвата фокуса, поэтому фокус остаётся у главного окна.
@@ -316,9 +369,40 @@ public partial class App : Application
             {
                 _taskbarHider ??= new TaskbarHider();
                 _taskbarHider.Hide();
+
+                // Пока системная панель задач скрыта, штатное меню «Пуск» не нужно:
+                // клавиша Windows перехватывается и открывает заглушку Glaze Shell.
+                if (_winKeyInterceptor is null)
+                {
+                    _winKeyInterceptor = new WindowsKeyInterceptor(
+                        exception => _logger.Write(GlazeLogLevel.Error, "WinKey", "The Windows key handler failed.", exception));
+                    _winKeyInterceptor.Pressed += OnWindowsKeyPressed;
+
+                    if (_winKeyInterceptor.Start())
+                    {
+                        _startMenu = new StartMenuWindow(themeApplicator, monitorManager, settingsManager, eventManager);
+                        _startMenu.ItemActivated += OnStartMenuItemActivated;
+                        _startMenu.SettingsRequested += (_, _) => OpenSettings();
+                        _startMenu.ExplorerRequested += (_, _) => OpenExplorer(null);
+                        _winKeyInterceptor.SetEnabled(true);
+                        _ = LoadStartMenuItemsAsync();
+                    }
+                    else
+                    {
+                        _logger.Write(GlazeLogLevel.Warning, "WinKey", "The low-level keyboard hook was not installed; the Start menu opens as usual.");
+                        _winKeyInterceptor.Dispose();
+                        _winKeyInterceptor = null;
+                    }
+                }
+                else
+                {
+                    _winKeyInterceptor.SetEnabled(true);
+                }
             }
             else
             {
+                _winKeyInterceptor?.SetEnabled(false);
+                _startMenu?.HideMenu();
                 _taskbarHider?.Dispose();
                 _taskbarHider = null;
             }
@@ -633,8 +717,12 @@ public partial class App : Application
         {
             if (_settingsManager is not null)
             {
+                _settingsBeforeUiRecovery ??= _settingsManager.GetSettings();
                 _settingsManager.SetSettings(Core.Settings.UserSettingsEditor.With(
-                    _settingsManager.GetSettings(), dockReplacesTaskbar: false));
+                    _settingsManager.GetSettings(),
+                    topBarEnabled: false,
+                    dockEnabled: false,
+                    dockReplacesTaskbar: false));
             }
 
             _taskbarHider?.Dispose();
@@ -655,12 +743,123 @@ public partial class App : Application
         }
     }
 
+    private void RestoreGlazeShellUi()
+    {
+        if (_safeMode || _settingsManager is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var previous = _settingsBeforeUiRecovery;
+            _settingsManager.SetSettings(Core.Settings.UserSettingsEditor.With(
+                _settingsManager.GetSettings(),
+                topBarEnabled: previous?.TopBarEnabled ?? true,
+                dockEnabled: previous?.DockEnabled ?? true,
+                dockReplacesTaskbar: previous?.DockReplacesTaskbar ?? true));
+            _settingsBeforeUiRecovery = null;
+            _logger.Write(GlazeLogLevel.Information, "Recovery", "The Glaze Shell interface was restored from the main window.");
+        }
+        catch (Exception exception)
+        {
+            _logger.Write(GlazeLogLevel.Error, "Recovery", "The Glaze Shell interface could not be restored.", exception);
+        }
+    }
+
     /// <summary>
     /// Обработка редкой клавиши восстановления (I2). Приходит с потока слушателя, поэтому
     /// сама операция не трогает интерфейс и безопасна из любого потока.
     /// </summary>
     private void OnRecoveryHotkeyPressed(object? sender, EventArgs e) =>
         RestoreWindowsUi("the recovery hotkey");
+
+    /// <summary>
+    /// Нажатие клавиши Windows при замене панели задач (этап 5): вместо штатного «Пуск»
+    /// показывается заглушка Glaze Shell. Приходит с потока хука — показ окна переводится
+    /// в UI-поток.
+    /// </summary>
+    private void OnWindowsKeyPressed(object? sender, EventArgs e)
+    {
+        var window = _window;
+
+        if (window is null || window.DispatcherQueue.HasThreadAccess)
+        {
+            ShowStartMenu();
+            return;
+        }
+
+        _ = window.DispatcherQueue.TryEnqueue(ShowStartMenu);
+    }
+
+    /// <summary>Показывает или скрывает меню «Пуск»: повторное нажатие Windows закрывает его.</summary>
+    private void ShowStartMenu() => _startMenu?.Toggle();
+
+    private void OnStartMenuItemActivated(object? sender, StartMenuItemViewModel item)
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await _launcher!.LaunchAsync(item.ApplicationId);
+            }
+            catch (Exception exception)
+            {
+                _logger.Write(GlazeLogLevel.Error, "StartMenu", $"Launching '{item.ApplicationId}' failed.", exception);
+            }
+        });
+    }
+
+    /// <summary>Заполняет меню «Пуск» приложениями каталога и догружает их значки.</summary>
+    private async Task LoadStartMenuItemsAsync()
+    {
+        try
+        {
+            var applications = _applications is null
+                ? []
+                : await _applications.DiscoverAsync();
+
+            var items = applications
+                .Where(app => !string.IsNullOrWhiteSpace(app.ExecutablePath) || !string.IsNullOrWhiteSpace(app.ApplicationUserModelId))
+                .Take(60)
+                .Select(app => new StartMenuItemViewModel(app.Id, app.Name, app.ExecutablePath))
+                .ToList();
+
+            _window?.DispatcherQueue.TryEnqueue(() => _startMenu?.SetItems(items));
+
+            await Task.Run(() =>
+            {
+                foreach (var item in items)
+                {
+                    if (string.IsNullOrEmpty(item.ExecutablePath))
+                    {
+                        continue;
+                    }
+
+                    var pixels = ShellIconProvider.TryGetIcon(item.ExecutablePath, StartMenuIconPixels);
+
+                    if (pixels is null)
+                    {
+                        continue;
+                    }
+
+                    _window?.DispatcherQueue.TryEnqueue(() =>
+                    {
+                        var source = IconBitmap.Create(pixels);
+
+                        if (source is not null)
+                        {
+                            item.Icon = source;
+                        }
+                    });
+                }
+            });
+        }
+        catch (Exception exception)
+        {
+            _logger.Write(GlazeLogLevel.Error, "StartMenu", "Loading start menu items failed.", exception);
+        }
+    }
 
     private static GlobalHotkey.Modifier ToGlobalModifiers(HotkeyModifiers modifiers)
     {
@@ -730,6 +929,16 @@ public partial class App : Application
         {
             _recoveryHotkey?.Dispose();
             _recoveryHotkey = null;
+        });
+
+        // Перехват клавиши Windows (этап 5) снимается при выходе: хук не должен
+        // оставаться активным после закрытия оболочки.
+        TryShutdownStep("windows key", () =>
+        {
+            _winKeyInterceptor?.Dispose();
+            _winKeyInterceptor = null;
+            _startMenu?.Close();
+            _startMenu = null;
         });
 
         // Сторож завершается вместе с оболочкой: панель задач уже возвращена, а отдельный

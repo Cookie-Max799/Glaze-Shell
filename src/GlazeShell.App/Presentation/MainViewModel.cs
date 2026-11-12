@@ -845,12 +845,17 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
 
         OnPropertyChanged(nameof(IsEmpty));
 
-        if (Items.Count > 0)
+        // Когда поиск НЕ пуст, автоматически выбираем первый результат, чтобы Enter сразу
+        // запустил его. Когда поиск пустой, НЕ авто-выбираем (этап 3 ввёл HasSelection,
+        // который контролирует доступность кнопок, а автовыбор вызывал случайный запуск
+        // «Adobe Acrobat» = Items[0] при нажатии Win+Space или Enter на кнопках).
+        if (!string.IsNullOrWhiteSpace(query) && Items.Count > 0)
         {
-            Selected ??= Items[0];
+            Selected = Items[0];
         }
-        else
+        else if (Selected is not null && !Items.Contains(Selected))
         {
+            // Если прежний выбор теперь отфильтрован, сбрасываем его.
             Selected = null;
         }
     }

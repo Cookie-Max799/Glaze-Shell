@@ -109,6 +109,18 @@
                     </Button>
 
                     <Button
+                        x:Name="RestoreGlazeButton"
+                        Style="{StaticResource GlazeToolbarButtonStyle}"
+                        AutomationProperties.Name="Вернуть UI Glaze Shell"
+                        Click="OnRestoreGlazeClick"
+                        ToolTipService.ToolTip="Вернуть панели Glaze Shell без перезапуска">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="14" Glyph="&#xE71E;" />
+                            <TextBlock FontSize="12" Text="Вернуть UI Glaze Shell" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button
                         Style="{StaticResource GlazeIconButtonStyle}"
                         AutomationProperties.Name="Настройки"
                         Click="OnSettingsClick"

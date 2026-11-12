@@ -54,6 +54,22 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     private string? _appIconPath;
     private readonly Dictionary<string, ImageSource> _iconCache = new(StringComparer.OrdinalIgnoreCase);
     private string _clockTime = string.Empty;
+    private string _keyboardLanguage = string.Empty;
+    private bool _bluetoothVisible;
+    private bool _bluetoothChecking;
+    private long _nextBluetoothCheck;
+
+    public string KeyboardLanguage
+    {
+        get => _keyboardLanguage;
+        set => Set(ref _keyboardLanguage, value);
+    }
+
+    public bool BluetoothVisible
+    {
+        get => _bluetoothVisible;
+        set => Set(ref _bluetoothVisible, value);
+    }
     private string _clockDate = string.Empty;
     private string _batteryText = string.Empty;
     private string _batteryGlyph = "\uE83F";
@@ -690,6 +706,38 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         if (HasGpu)
         {
             GpuPercent = (int)Math.Round(gpu);
+        }
+
+        RefreshBluetoothStatus();
+    }
+
+    private void RefreshBluetoothStatus()
+    {
+        // Опрос адаптера и устройств дороже остальных индикаторов, поэтому он идёт
+        // не чаще раза в 5 секунд и без наложения запросов.
+        if (_bluetoothChecking || Environment.TickCount64 < _nextBluetoothCheck)
+        {
+            return;
+        }
+
+        _bluetoothChecking = true;
+        _nextBluetoothCheck = Environment.TickCount64 + 5000;
+        _ = RefreshBluetoothStatusAsync();
+    }
+
+    private async Task RefreshBluetoothStatusAsync()
+    {
+        try
+        {
+            BluetoothVisible = await GlazeShell.Windows.SystemStatus.BluetoothStatusProvider.HasConnectedDevicesAsync();
+        }
+        catch
+        {
+            BluetoothVisible = false;
+        }
+        finally
+        {
+            _bluetoothChecking = false;
         }
     }
 

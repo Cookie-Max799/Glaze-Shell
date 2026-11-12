@@ -4,12 +4,15 @@ using GlazeShell.App.Presentation;
 using GlazeShell.App.Theming;
 using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
+using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.System;
+using Windows.UI.Core;
 
 namespace GlazeShell.App;
 
@@ -80,6 +83,10 @@ public sealed partial class MainWindow : Window
     /// стола возвращаются на место. Восстановлением занимается приложение, а не окно.
     /// </summary>
     public event EventHandler? RecoveryRequested;
+
+    public event EventHandler? RestoreGlazeRequested;
+
+    public void SetGlazeRestoreAvailable(bool available) => RestoreGlazeButton.IsEnabled = available;
 
     private AppWindow? _appWindow;
     private bool _allowClose;
@@ -159,6 +166,8 @@ public sealed partial class MainWindow : Window
     }
 
     private void OnRecoveryClick(object sender, RoutedEventArgs e) => RecoveryRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnRestoreGlazeClick(object sender, RoutedEventArgs e) => RestoreGlazeRequested?.Invoke(this, EventArgs.Empty);
 
     private void OnExplorerClick(object sender, RoutedEventArgs e) => ExplorerRequested?.Invoke(this, null);
 
@@ -357,6 +366,27 @@ public sealed partial class MainWindow : Window
 
     private void OnRootKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        // Навигация Up/Down работает всегда (даже когда SearchBox в фокусе, иначе стрелки
+        // не могли бы перемещаться по списку). Остальные клавиши игнорируются, если событие
+        // уже обработано (например, Enter в диалоге) или если нажат модификатор (Win+Space).
+        if (e.Handled && e.Key != VirtualKey.Up && e.Key != VirtualKey.Down)
+        {
+            return;
+        }
+
+        // Проверяем модификаторы: Win+Space (переключение языка), Alt+Space (системное меню),
+        // Ctrl+Enter и т.п. НЕ должны запускать приложение из списка.
+        var isModifierPressed =
+            InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.LeftWindows).HasFlag(CoreVirtualKeyStates.Down) ||
+            InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.RightWindows).HasFlag(CoreVirtualKeyStates.Down) ||
+            InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(CoreVirtualKeyStates.Down) ||
+            InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Menu).HasFlag(CoreVirtualKeyStates.Down);
+
+        if (isModifierPressed && e.Key != VirtualKey.Up && e.Key != VirtualKey.Down)
+        {
+            return;
+        }
+
         switch (e.Key)
         {
             case VirtualKey.Down:
@@ -369,15 +399,36 @@ public sealed partial class MainWindow : Window
                 e.Handled = true;
                 break;
 
+            // Enter запускает выбранное приложение ТОЛЬКО когда фокус внутри SearchBox или ApplicationList,
+            // чтобы нажатие Enter на кнопках («Настройки», «Восстановить UI») или в диалогах НЕ запускало
+            // случайное приложение из списка (предыдущая логика не проверяла FocusedElement).
             case VirtualKey.Enter when ViewModel.Selected is not null:
-                ViewModel.LaunchCommand.Execute(null);
-                e.Handled = true;
-                break;
+            {
+                var focused = FocusManager.GetFocusedElement(Root.XamlRoot) as DependencyObject;
 
-            case VirtualKey.Space when SearchBox.FocusState == FocusState.Unfocused && ViewModel.Selected is not null:
-                ViewModel.LaunchCommand.Execute(null);
-                e.Handled = true;
+                if (focused is TextBox || IsDescendantOf(focused, ApplicationList))
+                {
+                    ViewModel.LaunchCommand.Execute(null);
+                    e.Handled = true;
+                }
+
                 break;
+            }
+
+            // Space запускает выбранное приложение ТОЛЬКО когда фокус внутри ApplicationList
+            // (НЕ в SearchBox: там Space вводит символ).
+            case VirtualKey.Space when ViewModel.Selected is not null:
+            {
+                var focused = FocusManager.GetFocusedElement(Root.XamlRoot) as DependencyObject;
+
+                if (IsDescendantOf(focused, ApplicationList))
+                {
+                    ViewModel.LaunchCommand.Execute(null);
+                    e.Handled = true;
+                }
+
+                break;
+            }
 
             case VirtualKey.F5:
                 ViewModel.RefreshCommand.Execute(null);
@@ -389,5 +440,21 @@ public sealed partial class MainWindow : Window
                 e.Handled = true;
                 break;
         }
+    }
+
+    /// <summary>Проверяет, является ли элемент потомком контейнера.</summary>
+    private static bool IsDescendantOf(DependencyObject? element, DependencyObject? container)
+    {
+        while (element is not null)
+        {
+            if (element == container)
+            {
+                return true;
+            }
+
+            element = VisualTreeHelper.GetParent(element);
+        }
+
+        return false;
     }
 }

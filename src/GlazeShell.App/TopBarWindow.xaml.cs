@@ -87,6 +87,12 @@ public sealed partial class TopBarWindow : Window
 
     /// <summary>Окно сейчас активируемо и может держать клавиатуру (поиск или popover).</summary>
     private bool _inputEnabled;
+    private bool _closed;
+    private LanguageToastWindow? _languageToast;
+    private int? _lastLanguageId;
+    private long _nextLanguageCheck;
+    private BluetoothPanelWindow? _bluetoothPanel;
+    private NetworkPanelWindow? _networkPanel;
 
     /// <summary>Окно, активное до открытия поиска или popover: ему возвращается фокус.</summary>
     private nint _previousForegroundHwnd;
@@ -164,6 +170,13 @@ public sealed partial class TopBarWindow : Window
 
         Closed += (_, _) =>
         {
+            _closed = true;
+            _languageToast?.Close();
+            _languageToast = null;
+            _bluetoothPanel?.Close();
+            _bluetoothPanel = null;
+            _networkPanel?.Close();
+            _networkPanel = null;
             _revealWatch.Stop();
             _revealWatch.Tick -= OnRevealWatchTick;
             ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
@@ -208,6 +221,10 @@ public sealed partial class TopBarWindow : Window
 
     private void FocusSearchCore(bool clearText)
     {
+        if (_closed)
+        {
+            return;
+        }
         if (_hwnd == 0)
         {
             return;
@@ -272,7 +289,7 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void UpdateOverlayBounds()
     {
-        if (_hwnd == 0)
+        if (_closed || _hwnd == 0)
         {
             return;
         }
@@ -382,9 +399,27 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void OnRevealWatchTick(object? sender, object e)
     {
-        if (_hwnd == 0)
+        if (_closed || _hwnd == 0)
         {
             return;
+        }
+
+        if (Environment.TickCount64 >= _nextLanguageCheck)
+        {
+            _nextLanguageCheck = Environment.TickCount64 + 100;
+            var culture = GlazeShell.Windows.SystemStatus.KeyboardLayoutProvider.GetForegroundCulture();
+            if (culture is not null && culture.LCID != _lastLanguageId)
+            {
+                var showToast = _lastLanguageId.HasValue;
+                _lastLanguageId = culture.LCID;
+                var code = culture.TwoLetterISOLanguageName.ToUpperInvariant();
+                ViewModel.KeyboardLanguage = code;
+                if (showToast && _monitorTarget.Target is { } monitor)
+                {
+                    _languageToast ??= new LanguageToastWindow(_themes);
+                    _languageToast.ShowLanguage(code, culture.NativeName, monitor);
+                }
+            }
         }
 
         UpdateForegroundState();
@@ -613,6 +648,10 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void UpdateWindowRegion()
     {
+        if (_closed)
+        {
+            return;
+        }
         if (_hwnd == 0 || !OverlayWindow.TryGetClientSize(_hwnd, out var clientWidth, out _))
         {
             return;
@@ -745,6 +784,10 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void RestoreInput()
     {
+        if (_closed)
+        {
+            return;
+        }
         if (_hwnd == 0 ||
             ViewModel.QuickSettings.IsOpen ||
             ViewModel.Calendar.IsOpen)
@@ -779,13 +822,28 @@ public sealed partial class TopBarWindow : Window
 
     /// <summary>
     /// Клик по правому pill открывает «Центр управления» (D1): окно разрешает активацию,
-    /// потому что в popover есть ползунок и другие элементы управления.
+    /// потому что в popover есть ползунок и другие элементы управления. Клик по индикаторам
+    /// сети и Bluetooth открывает их собственные панели.
     /// </summary>
     private void OnStatusPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         // Клик по часам открывает календарь (D4), а не «Центр управления».
         if (IsWithin(e.OriginalSource as DependencyObject, ClockButton))
         {
+            return;
+        }
+
+        if (IsWithin(e.OriginalSource as DependencyObject, NetworkIcon))
+        {
+            ShowNetworkPanel();
+            e.Handled = true;
+            return;
+        }
+
+        if (IsWithin(e.OriginalSource as DependencyObject, BluetoothIcon))
+        {
+            ShowBluetoothPanel();
+            e.Handled = true;
             return;
         }
 
@@ -857,6 +915,42 @@ public sealed partial class TopBarWindow : Window
     private void OnOpenNetworkSettings(object sender, RoutedEventArgs e) => ShellTargets.Open("ms-settings:network");
 
     private void OnOpenBluetoothSettings(object sender, RoutedEventArgs e) => ShellTargets.Open("ms-settings:bluetooth");
+
+    private void ShowNetworkPanel()
+    {
+        _networkPanel ??= new NetworkPanelWindow(_themes);
+        _ = _networkPanel.ShowNearIconAsync(
+            GetIconCenterX(NetworkIcon),
+            GetIconTop(NetworkIcon),
+            _screenLeft,
+            _screenWidth,
+            _scale);
+    }
+
+    private void ShowBluetoothPanel()
+    {
+        _bluetoothPanel ??= new BluetoothPanelWindow(_themes);
+        _ = _bluetoothPanel.ShowNearIconAsync(
+            GetIconCenterX(BluetoothIcon),
+            GetIconTop(BluetoothIcon),
+            _screenLeft,
+            _screenWidth,
+            _scale);
+    }
+
+    /// <summary>Центр индикатора по X в физических пикселях экрана.</summary>
+    private int GetIconCenterX(FrameworkElement icon)
+    {
+        var position = icon.TransformToVisual(null).TransformPoint(new Point(icon.ActualWidth / 2, 0));
+        return _screenLeft + (int)Math.Round(position.X * _scale);
+    }
+
+    /// <summary>Нижняя граница индикатора по Y в физических пикселях экрана.</summary>
+    private int GetIconTop(FrameworkElement icon)
+    {
+        var position = icon.TransformToVisual(null).TransformPoint(new Point(0, icon.ActualHeight));
+        return _screenTop + (int)Math.Round(position.Y * _scale);
+    }
 
     private void OnOpenSoundSettings(object sender, RoutedEventArgs e) => ShellTargets.Open("ms-settings:sound");
 
@@ -1048,6 +1142,17 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void OnSettingsChanged(SettingsChanged changed)
     {
+        if (_closed)
+        {
+            return;
+        }
+
+        if (!DispatcherQueue.HasThreadAccess)
+        {
+            _ = DispatcherQueue.TryEnqueue(() => OnSettingsChanged(changed));
+            return;
+        }
+
         _themes.ApplyFromSettings(Root);
         ApplyBackdrop();
         _hideInOwnProcess = changed.Settings.HidePanelsInGlazeShell;
@@ -1073,6 +1178,10 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void ApplyBackdrop()
     {
+        if (_closed)
+        {
+            return;
+        }
         var previous = _backdrop;
         _backdrop = _themes.CreatePanelBackdrop(isDock: false) as PanelBackdrop;
         SystemBackdrop = _backdrop;

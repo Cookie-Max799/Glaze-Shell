@@ -286,12 +286,27 @@
                     Orientation="Horizontal"
                     Spacing="9"
                     VerticalAlignment="Center">
+                    <TextBlock
+                        VerticalAlignment="Center"
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Text="{x:Bind ViewModel.KeyboardLanguage, Mode=OneWay}"
+                        AutomationProperties.Name="Текущая раскладка клавиатуры" />
                     <FontIcon
+                        x:Name="NetworkIcon"
                         VerticalAlignment="Center"
                         FontSize="12"
                         Foreground="{StaticResource GlazeTextSecondaryBrush}"
                         Glyph="{x:Bind ViewModel.NetworkGlyph, Mode=OneWay}"
-                        ToolTipService.ToolTip="{x:Bind ViewModel.NetworkText, Mode=OneWay}" />
+                        ToolTipService.ToolTip="Сеть: открыть панель Wi-Fi" />
+                    <FontIcon
+                        x:Name="BluetoothIcon"
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                        Glyph="&#xE702;"
+                        ToolTipService.ToolTip="Bluetooth: подключённые устройства"
+                        Visibility="{x:Bind ViewModel.BluetoothVisible, Mode=OneWay}" />
                     <FontIcon
                         VerticalAlignment="Center"
                         FontSize="12"

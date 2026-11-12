@@ -43,6 +43,21 @@ public sealed class EventManagerTests
     }
 
     [TestMethod]
+    public void SubscriptionDisposedDuringPublicationIsNotCalledFromSnapshot()
+    {
+        var manager = new EventManager();
+        IDisposable? closingWindowSubscription = null;
+        using var ownerSubscription = manager.Subscribe<SettingsChanged>(_ => closingWindowSubscription?.Dispose());
+        var calls = 0;
+        using var windowSubscription = manager.Subscribe<SettingsChanged>(_ => calls++);
+        closingWindowSubscription = windowSubscription;
+
+        manager.Publish(new SettingsChanged(UserSettings.CreateDefault()));
+
+        Assert.AreEqual(0, calls);
+    }
+
+    [TestMethod]
     public void HasSubscribersIsTrueWhenSubscriberExists()
     {
         var manager = new EventManager(_ => { });

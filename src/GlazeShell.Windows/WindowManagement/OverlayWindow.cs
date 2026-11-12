@@ -158,18 +158,30 @@ public static class OverlayWindow
         }
     }
 
-    /// <summary>
-    /// Включает системное скругление углов окна (Windows 11). На Windows 10 атрибут
+    /// <summary>Включает системное скругление углов окна (Windows 11). На Windows 10 атрибут
     /// игнорируется, и окно остаётся прямоугольным.
     /// </summary>
     public static void UseRoundedCorners(nint hwnd)
+    {
+        SetCornerPreference(hwnd, Dwmapi.DwmcpRound);
+    }
+
+    /// <summary>
+    /// Убирает системное скругление углов. Нужно панелям, которые примыкают к краю экрана:
+    /// скруглённые углы на краю выглядели бы оторванными от края.
+    /// </summary>
+    public static void UseSquareCorners(nint hwnd)
+    {
+        SetCornerPreference(hwnd, Dwmapi.DwmcpDoNotRound);
+    }
+
+    private static void SetCornerPreference(nint hwnd, int preference)
     {
         if (hwnd == 0)
         {
             return;
         }
 
-        var preference = Dwmapi.DwmcpRound;
         _ = Dwmapi.DwmSetWindowAttribute(hwnd, Dwmapi.DwmwaWindowCornerPreference, ref preference, sizeof(int));
     }
 

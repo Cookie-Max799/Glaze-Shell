@@ -185,6 +185,10 @@ internal static class User32
     internal const uint WmDeviceChange = 0x0219;
     internal const uint WmDpiChanged = 0x02E0;
     internal const uint WmHotkey = 0x0312;
+    internal const nint WmKeydown = 0x0100;
+    internal const nint WmSyskeydown = 0x0104;
+    internal const nint WmKeyup = 0x0101;
+    internal const nint WmSyskeyup = 0x0105;
     internal const uint WmLButtonUp = 0x0202;
     internal const uint WmLButtonDblClk = 0x0203;
     internal const uint WmRButtonUp = 0x0205;
@@ -386,6 +390,9 @@ internal static class User32
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern nint GetForegroundWindow();
 
+    [DllImport("user32.dll")]
+    internal static extern nint GetKeyboardLayout(uint threadId);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetForegroundWindow(nint hwnd);
@@ -408,6 +415,94 @@ internal static class User32
     internal const int VkLeftWindows = 0x5B;
     internal const int VkRightWindows = 0x5C;
     internal const int VkLeftButton = 0x01;
+
+    /// <summary>Ввод клавиатуры для <see cref="SendInput"/>.</summary>
+    internal const uint InputKeyboard = 1;
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MouseInput
+    {
+        public int Dx;
+        public int Dy;
+        public uint MouseData;
+        public uint Flags;
+        public uint Time;
+        public nint ExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct KeybdInput
+    {
+        public ushort Vk;
+        public ushort Scan;
+        public uint Flags;
+        public uint Time;
+        public nint ExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Explicit)]
+    internal struct InputUnion
+    {
+        [FieldOffset(0)] public MouseInput Mouse;
+        [FieldOffset(0)] public KeybdInput Keyboard;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct Input
+    {
+        public uint Type;
+        public InputUnion Union;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    internal static extern uint SendInput(uint count, [In] Input[] inputs, int size);
+
+    /// <summary>Поднимает клавишу, если она ещё не нажата, и оставляет её нажатой.</summary>
+    internal static void PressVirtualKey(ushort virtualKey)
+    {
+        var inputs = new[]
+        {
+            new Input
+            {
+                Type = InputKeyboard,
+                Union = new InputUnion
+                {
+                    Keyboard = new KeybdInput { Vk = virtualKey, Scan = 0, Flags = 0, Time = 0, ExtraInfo = 0 }
+                }
+            }
+        };
+
+        _ = SendInput(1, inputs, Marshal.SizeOf<Input>());
+    }
+
+    /// <summary>Вид хука: низкоуровневая клавиатура.</summary>
+    internal const int WhKeyboardLl = 13;
+
+    /// <summary>Код возврата низкоуровневого хука: заблокировать клавишу.</summary>
+    internal const nint LlhcBlocked = 1;
+
+    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
+    internal delegate nint LowLevelKeyboardProc(int code, nint wParam, nint lParam);
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct KeyboardInput
+    {
+        public uint VkCode;
+        public uint ScanCode;
+        public uint Flags;
+        public uint Time;
+        public nint ExtraInfo;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern nint SetWindowsHookExW(int idHook, LowLevelKeyboardProc procedure, nint module, uint threadId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool UnhookWindowsHookEx(nint hook);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern nint CallNextHookEx(nint hook, int code, nint wParam, nint lParam);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]

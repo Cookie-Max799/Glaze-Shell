@@ -138,7 +138,10 @@ public sealed class EventManager : IEventManager
 
         public void Invoke(GlazeEvent glazeEvent)
         {
-            _handler(glazeEvent);
+            if (Volatile.Read(ref _disposed) == 0)
+            {
+                _handler(glazeEvent);
+            }
         }
 
         public void Dispose()
