@@ -55,6 +55,8 @@ public sealed partial class StartMenuWindow : Window
     private bool _slidingIn;
     private bool _closing;
     private bool _closed;
+    private bool _animating;
+    private bool _pointerDown;
     private PanelBackdrop? _backdrop;
 
     public StartMenuWindow(
@@ -119,7 +121,7 @@ public sealed partial class StartMenuWindow : Window
     /// <summary>Открывает панель: выезд из-за левого края с примыканием к экрану.</summary>
     public void ShowNearTaskbar()
     {
-        if (_closed || AppWindow.IsVisible)
+        if (_closed || (AppWindow.IsVisible && !_closing))
         {
             return;
         }
@@ -142,14 +144,18 @@ public sealed partial class StartMenuWindow : Window
         var height = Math.Min((int)Math.Round(HeightDips * scale), area.Height - (margin * 2));
         var y = area.Y + ((area.Height - height) / 2);
 
-        _shownBounds = new RectInt32(area.X, y, width, height);
-        _animationFrom = new RectInt32(area.X - width, y, width, height);
+        _shownBounds = new RectInt32(area.X + margin, y, width, height);
+        _animationFrom = new RectInt32(_shownBounds.X - (int)Math.Round(32 * scale), y, width, height);
         _animationTo = _shownBounds;
         _slidingIn = true;
         _closing = false;
         _animation.Stop();
 
         AppWindow.MoveAndResize(_animationFrom);
+        OverlayWindow.ApplyRoundedRegions(_hwnd, [new PixelRect(0, 0, width, height)], (int)Math.Round(20 * scale));
+        _pointerDown = OverlayWindow.IsLeftButtonDown();
+        _animating = true;
+        _animation.Interval = TimeSpan.FromMilliseconds(16);
 
         SearchBox.Text = string.Empty;
         ApplyFilter(string.Empty);
@@ -160,6 +166,9 @@ public sealed partial class StartMenuWindow : Window
         if (_themes.ReduceMotion)
         {
             AppWindow.MoveAndResize(_shownBounds);
+            _animating = false;
+            _animation.Interval = TimeSpan.FromMilliseconds(50);
+            _animation.Start();
             return;
         }
 
@@ -194,11 +203,15 @@ public sealed partial class StartMenuWindow : Window
         if (_themes.ReduceMotion)
         {
             AppWindow.Hide();
+            _animation.Stop();
             return;
         }
 
-        _animationTo = new RectInt32(_shownBounds.X - _shownBounds.Width, _shownBounds.Y, _shownBounds.Width, _shownBounds.Height);
-        _animationFrom = _shownBounds;
+        _animationTo = new RectInt32(_shownBounds.X - (int)Math.Round(24 * OverlayWindow.GetScaleFactor(_hwnd)), _shownBounds.Y, _shownBounds.Width, _shownBounds.Height);
+        var position = AppWindow.Position;
+        _animationFrom = new RectInt32(position.X, position.Y, _shownBounds.Width, _shownBounds.Height);
+        _animating = true;
+        _animation.Interval = TimeSpan.FromMilliseconds(16);
         _slidingIn = false;
         _closing = true;
         _watch.Restart();
@@ -207,9 +220,21 @@ public sealed partial class StartMenuWindow : Window
 
     private void OnAnimationTick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
     {
+        var down = OverlayWindow.IsLeftButtonDown();
+        if (down && !_pointerDown && OverlayWindow.TryGetCursorPosition(_hwnd, out var px, out var py) &&
+            (px < 0 || py < 0 || px >= _shownBounds.Width || py >= _shownBounds.Height))
+        {
+            HideMenu();
+        }
+        _pointerDown = down;
+        if (!_animating)
+        {
+            return;
+        }
         var length = _slidingIn ? SlideInMilliseconds : SlideOutMilliseconds;
         var progress = Math.Clamp(_watch.Elapsed.TotalMilliseconds / length, 0, 1);
         var eased = 1 - Math.Pow(1 - progress, 3);
+        Root.Opacity = _slidingIn ? 0.65 + (0.35 * eased) : 1 - (0.35 * eased);
 
         var x = (int)Math.Round(_animationFrom.X + ((_animationTo.X - _animationFrom.X) * eased));
 
@@ -220,16 +245,18 @@ public sealed partial class StartMenuWindow : Window
             return;
         }
 
-        _animation.Stop();
+        _animating = false;
 
         if (_slidingIn)
         {
             AppWindow.MoveAndResize(_shownBounds);
+            _animation.Interval = TimeSpan.FromMilliseconds(50);
         }
         else
         {
             _closing = false;
             AppWindow.Hide();
+            _animation.Stop();
         }
     }
 
@@ -273,6 +300,12 @@ public sealed partial class StartMenuWindow : Window
             ItemActivated?.Invoke(this, item);
             HideMenu();
         }
+    }
+
+    private void OnMainWindowClick(object sender, RoutedEventArgs e)
+    {
+        HideMenu();
+        MainWindowRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private void OnSettingsClick(object sender, RoutedEventArgs e)
@@ -333,6 +366,9 @@ public sealed partial class StartMenuWindow : Window
 
     /// <summary>Пользователь выбрал приложение.</summary>
     public event EventHandler<StartMenuItemViewModel>? ItemActivated;
+
+    /// <summary>Нажата кнопка «Glaze Shell»: открыть главное окно приложения.</summary>
+    public event EventHandler? MainWindowRequested;
 
     /// <summary>Нажата кнопка «Параметры».</summary>
     public event EventHandler? SettingsRequested;

@@ -4,7 +4,7 @@ using GlazeShell.Windows.Win32;
 namespace GlazeShell.Windows.Shell;
 
 /// <summary>
-/// Низкоуровневый перехват клавиши Windows и сочетания Win+Tab.
+/// Низкоуровневый перехват клавиши Windows, Win+Tab и Win+S.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -13,13 +13,13 @@ namespace GlazeShell.Windows.Shell;
 /// <see cref="Pressed"/> позволяет приложению показать свои панели вместо системного UI.
 /// </para>
 /// <para>
-/// Перехватывается одиночное нажатие и Win+Tab. Если пока клавиша Windows удерживается
+/// Перехватывается одиночное нажатие, Win+Tab и Win+S. Если пока клавиша Windows удерживается
 /// нажата любая другая клавиша, перехват «отпускает» клавишу: в систему отправляется
 /// синтетическое нажатие <c>Win</c>, поэтому сочетания <c>Win+R</c>, <c>Win+Space</c>,
 /// <c>Win+Shift+S</c> и остальные работают как обычно. Своё синтетическое событие помечено
 /// меткой <c>ExtraInfo</c> и пропускается хуком; остальной ввод, включая помеченный
 /// <c>LLKHF_INJECTED</c>, обрабатывается — жест тачпада «три пальца» Windows превращает
-/// в Win+Tab, и он должен открывать панели Glaze Shell, а не Task View.
+/// в Win+Tab или Win+S, и он должен открывать панели Glaze Shell, а не системный UI.
 /// </para>
 /// <para>
 /// Хук ставится на выделенном фоновом потоке с петлёй сообщений (как у
@@ -49,6 +49,7 @@ public sealed class WindowsKeyInterceptor : IDisposable
     // Состояние физического нажатия Windows. Пишется и читается только из хук-потока.
     private bool _winHeld;
     private bool _winForwarded;
+    private bool _gestureSuppressed;
     private ushort _winVirtualKey;
 
     /// <param name="errorHandler">Куда сообщать об исключении в обработчике <see cref="Pressed"/>.</param>
@@ -59,6 +60,13 @@ public sealed class WindowsKeyInterceptor : IDisposable
 
     /// <summary>Одиночное нажатие клавиши Windows; приходит с потока хука.</summary>
     public event EventHandler? Pressed;
+
+    /// <summary>
+    /// Жест «три пальца» по тачпаду: Windows превращает его в Win+S (поиск) или Win+Tab
+    /// (представление задач). Событие приходит с потока хука вместо <see cref="Pressed"/>,
+    /// чтобы приложение показало меню Glaze Shell, а не только панели.
+    /// </summary>
+    public event EventHandler? GesturePressed;
 
     /// <summary>
     /// Включает или выключает перехват. Пока выключено, клавиша проходит в систему
@@ -74,6 +82,7 @@ public sealed class WindowsKeyInterceptor : IDisposable
             // нажатия: иначе следующее включение ждало бы «лишнего» нажатия Windows.
             _winHeld = false;
             _winForwarded = false;
+            _gestureSuppressed = false;
         }
     }
 
@@ -207,6 +216,7 @@ public sealed class WindowsKeyInterceptor : IDisposable
 
             _winHeld = true;
             _winForwarded = false;
+            _gestureSuppressed = false;
             _winVirtualKey = (ushort)input.VkCode;
             return User32.LlhcBlocked;
         }
@@ -220,9 +230,11 @@ public sealed class WindowsKeyInterceptor : IDisposable
             }
 
             var forwarded = _winForwarded;
+            var gesture = _gestureSuppressed;
 
             _winHeld = false;
             _winForwarded = false;
+            _gestureSuppressed = false;
 
             if (forwarded)
             {
@@ -231,7 +243,14 @@ public sealed class WindowsKeyInterceptor : IDisposable
 
             try
             {
-                Pressed?.Invoke(this, EventArgs.Empty);
+                if (gesture)
+                {
+                    GesturePressed?.Invoke(this, EventArgs.Empty);
+                }
+                else
+                {
+                    Pressed?.Invoke(this, EventArgs.Empty);
+                }
             }
             catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
             {
@@ -242,11 +261,13 @@ public sealed class WindowsKeyInterceptor : IDisposable
             return User32.LlhcBlocked;
         }
 
-        if (_winHeld && !_winForwarded && input.VkCode == User32.VkTab)
+        if (_winHeld && !_winForwarded && input.VkCode is User32.VkTab or User32.VkS)
         {
-            // Win+Tab и жест тремя пальцами, который Windows превращает в это сочетание:
-            // Task View не открываем. Win остаётся «не пересланной», поэтому на её отпускании
-            // придёт обычное Pressed — приложение покажет свои панели.
+            // Win+Tab и Win+S: жест тачпада «три пальца» Windows превращает в одно из этих
+            // сочетаний (по умолчанию — в поиск). Ни Task View, ни поиск Windows не открываем:
+            // Win остаётся «не пересланной», поэтому на её отпускании придёт GesturePressed,
+            // и приложение покажет меню Glaze Shell вместо системного интерфейса.
+            _gestureSuppressed = true;
             return User32.LlhcBlocked;
         }
 

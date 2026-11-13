@@ -248,6 +248,19 @@ public sealed partial class TopBarWindow : Window
         _collapseAt = DateTimeOffset.UtcNow + RevealHold;
     }
 
+    public bool IsRevealed => _reveal > 0.5;
+
+    private bool _suppressed;
+
+    public void SetSuppressed(bool suppressed)
+    {
+        _suppressed = suppressed;
+        if (suppressed)
+        {
+            _collapseAt = DateTimeOffset.MinValue;
+        }
+    }
+
     private void FocusSearchCore(bool clearText)
     {
         if (_closed)
@@ -491,10 +504,11 @@ public sealed partial class TopBarWindow : Window
 
         if (_themes.ReduceMotion)
         {
-            _reveal = target;
+            _reveal = _suppressed ? 0 : target;
         }
         else
         {
+            target = _suppressed ? 0 : target;
             _reveal += (target - _reveal) * 0.28;
 
             if (Math.Abs(target - _reveal) < 0.002)

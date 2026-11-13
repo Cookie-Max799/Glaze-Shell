@@ -118,7 +118,6 @@ public sealed partial class DockWindow : Window
     private bool _shellForeground;
 
     /// <summary>Клавиша Windows была нажата в прошлом кадре: нужен фронт нажатия.</summary>
-    private bool _windowsKeyDown;
 
     /// <summary>До какого момента dock остаётся раскрытым по клавише Windows.</summary>
     private DateTimeOffset _revealUntil = DateTimeOffset.MinValue;
@@ -241,6 +240,21 @@ public sealed partial class DockWindow : Window
         }
 
         _revealUntil = DateTimeOffset.UtcNow + RevealHold;
+        UpdateReveal();
+    }
+
+    public bool IsRevealed => _reveal > 0.5;
+
+    private bool _suppressed;
+
+    public void SetSuppressed(bool suppressed)
+    {
+        _suppressed = suppressed;
+        if (suppressed)
+        {
+            _revealUntil = DateTimeOffset.MinValue;
+            _cursorExitUntil = DateTimeOffset.MinValue;
+        }
         UpdateReveal();
     }
 
@@ -636,14 +650,6 @@ public sealed partial class DockWindow : Window
     private void UpdateReveal()
     {
         var now = DateTimeOffset.UtcNow;
-        var windowsKey = OverlayWindow.IsWindowsKeyDown();
-
-        if (windowsKey && !_windowsKeyDown)
-        {
-            _revealUntil = now + RevealHold;
-        }
-
-        _windowsKeyDown = windowsKey;
 
         // Пока курсор внутри видимого контура панели или у самой кромки экрана,
         // она держится открытой. Проверка идёт по реальному положению окна,
@@ -679,7 +685,7 @@ public sealed partial class DockWindow : Window
             OverlayWindow.RaiseTopMost(_hwnd);
         }
 
-        SetRevealTarget(target);
+        SetRevealTarget(_suppressed ? 0 : target);
     }
 
     /// <summary>

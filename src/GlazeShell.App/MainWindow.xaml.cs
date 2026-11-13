@@ -126,6 +126,12 @@ public sealed partial class MainWindow : Window
         {
             _appWindow.Show();
 
+            // Show только делает окно видимым: свёрнутое остаётся свёрнутым, а фокус
+            // может остаться у чужого окна. Activate восстанавливает окно и переводит
+            // его на передний план — без него пользователь слышал звук отказа активации,
+            // но так и не видел окно.
+            Activate();
+
             try
             {
                 var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);

@@ -16,7 +16,8 @@
             x:Name="Panel"
             Background="{StaticResource GlazeStartMenuGlassBrush}"
             BorderBrush="{StaticResource GlazeBorderBrush}"
-            BorderThickness="0,0,1,0">
+            BorderThickness="1"
+            CornerRadius="20">
             <Grid Padding="28,26,26,20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -153,12 +154,13 @@
                         Visibility="Collapsed" />
                 </Grid>
 
-                <!--  Нижний ряд: настройки и проводник.  -->
+                <!--  Нижний ряд: главное окно, настройки и проводник.  -->
                 <Grid
                     Grid.Row="4"
                     Margin="0,16,0,0"
-                    ColumnSpacing="10">
+                    ColumnSpacing="8">
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
@@ -166,20 +168,31 @@
                         Grid.Column="0"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Left"
-                        Click="OnSettingsClick">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <FontIcon FontSize="14" Glyph="&#xE713;" />
-                            <TextBlock FontSize="12" Text="Параметры" />
+                        Click="OnMainWindowClick"
+                        ToolTipService.ToolTip="Открыть главное окно Glaze Shell">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="14" Glyph="&#xE8A7;" />
+                            <TextBlock FontSize="11.5" Text="Glaze Shell" />
                         </StackPanel>
                     </Button>
                     <Button
                         Grid.Column="1"
                         HorizontalAlignment="Stretch"
                         HorizontalContentAlignment="Left"
+                        Click="OnSettingsClick">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon FontSize="14" Glyph="&#xE713;" />
+                            <TextBlock FontSize="11.5" Text="Параметры" />
+                        </StackPanel>
+                    </Button>
+                    <Button
+                        Grid.Column="2"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Left"
                         Click="OnExplorerClick">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
                             <FontIcon FontSize="14" Glyph="&#xE8B7;" />
-                            <TextBlock FontSize="12" Text="Проводник" />
+                            <TextBlock FontSize="11.5" Text="Проводник" />
                         </StackPanel>
                     </Button>
                 </Grid>

@@ -23,6 +23,7 @@ using GlazeShell.Windows.Lifecycle;
 using GlazeShell.Windows.Shell;
 using GlazeShell.Windows.SystemEvents;
 using GlazeShell.Windows.WindowManagement;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using DesktopLayout = GlazeShell.Core.Models.DesktopLayout;
 
@@ -33,6 +34,12 @@ public partial class App : Application
 {
     /// <summary>Размер значка плитки меню «Пуск» в физических пикселях.</summary>
     private const int StartMenuIconPixels = 48;
+
+    /// <summary>
+    /// Пауза перед повторным закрытием поиска Windows: во время анимации открытия окно
+    /// игнорирует <c>WM_CLOSE</c>, и первое сообщение пропадает.
+    /// </summary>
+    private static readonly TimeSpan SystemSearchDismissRetry = TimeSpan.FromMilliseconds(350);
 
     private readonly FileLogger _logger;
     private readonly RecoveryCommandLineOptions _commandLine;
@@ -74,6 +81,7 @@ public partial class App : Application
     /// панели, даже когда приложение не в фокусе.
     /// </summary>
     private GlobalHotkey? _hotkey;
+    private GlobalHotkey? _gestureHotkey;
 
     /// <summary>
     /// Редкая горячая клавиша восстановления интерфейса Windows (I2). Регистрируется всегда,
@@ -121,6 +129,18 @@ public partial class App : Application
     private Core.Models.UserSettings? _settingsBeforeUiRecovery;
 
     private IDisposable? _settingsChangedSubscription;
+
+    /// <summary>
+    /// Подписка на смену активного окна: системный поиск, открытый жестом в обход хука,
+    /// закрывается, а вместо него показывается интерфейс Glaze Shell.
+    /// </summary>
+    private IDisposable? _foregroundSubscription;
+
+    /// <summary>
+    /// Повторное закрытие поиска Windows после анимации открытия. Таймер хранится
+    /// в поле: без ссылки сборщик мусора может забрать его до срабатывания.
+    /// </summary>
+    private DispatcherQueueTimer? _searchDismissTimer;
 
     /// <summary>
     /// Значок Glaze Shell в области уведомлений (трей). Если система не позволила создать
@@ -250,6 +270,10 @@ public partial class App : Application
             eventManager,
             themeApplicator);
         _window = window;
+
+        // Системный поиск, открытый жестом тачпада в обход клавиатурного хука, закрывается
+        // и заменяется интерфейсом Glaze Shell. Подписка живёт столько же, сколько окно.
+        _foregroundSubscription = eventManager.Subscribe<ForegroundWindowChanged>(OnSystemSearchOpened);
 
         // Проводник Glaze Shell (E1/E2): создаётся лениво и переиспользуется — повторное
         // открытие показывает уже существующее окно и, если передана папка, переходит в неё.
@@ -389,6 +413,7 @@ public partial class App : Application
                     _winKeyInterceptor = new WindowsKeyInterceptor(
                         exception => _logger.Write(GlazeLogLevel.Error, "WinKey", "The Windows key handler failed.", exception));
                     _winKeyInterceptor.Pressed += OnWindowsKeyPressed;
+                    _winKeyInterceptor.GesturePressed += OnWindowsKeyGesture;
 
                     if (_winKeyInterceptor.Start())
                     {
@@ -396,6 +421,7 @@ public partial class App : Application
                         _startMenu.ItemActivated += OnStartMenuItemActivated;
                         _startMenu.SettingsRequested += (_, _) => OpenSettings();
                         _startMenu.ExplorerRequested += (_, _) => OpenExplorer(null);
+                        _startMenu.MainWindowRequested += (_, _) => window.ShowFromTray();
                         _winKeyInterceptor.SetEnabled(true);
                         _ = LoadStartMenuItemsAsync();
                     }
@@ -436,6 +462,15 @@ public partial class App : Application
 
         // Ctrl K открывает поиск Glance (B1). Комбинацию может занимать другая программа:
         // тогда приложение работает без неё, а причина попадает в лог.
+        _gestureHotkey = GlobalHotkey.TryRegister(
+            GlobalHotkey.Modifier.Control | GlobalHotkey.Modifier.Alt,
+            (uint)'G',
+            exception => _logger.Write(GlazeLogLevel.Error, "Gesture", "The gesture hotkey handler failed.", exception));
+        if (_gestureHotkey is not null)
+        {
+            _gestureHotkey.Pressed += OnWindowsKeyGesture;
+        }
+
         _hotkey = GlobalHotkey.TryRegister(
             GlobalHotkey.Modifier.Control,
             (uint)'K',
@@ -787,27 +822,106 @@ public partial class App : Application
         RestoreWindowsUi("the recovery hotkey");
 
     /// <summary>
-    /// Нажатие клавиши Windows (этап 5): вместо системного UI показываются верхняя
-    /// и нижняя панели Glaze Shell. Приходит с потока хука — показ окна переводится
-    /// в UI-поток. Жест «три пальца» приходит тем же событием через Win+Tab.
+    /// Одиночное нажатие клавиши Windows (этап 5): вместо системного меню «Пуск»
+    /// показываются верхняя и нижняя панели Glaze Shell. Приходит с потока хука —
+    /// показ окна переводится в UI-поток.
     /// </summary>
-    private void OnWindowsKeyPressed(object? sender, EventArgs e)
+    private void OnWindowsKeyPressed(object? sender, EventArgs e) =>
+        RunOnUiThread(() =>
+        {
+            var hide = _topBar?.IsRevealed == true || _dock?.IsRevealed == true;
+            _topBar?.SetSuppressed(hide);
+            _dock?.SetSuppressed(hide);
+            if (!hide)
+            {
+                RevealPanels();
+            }
+        });
+
+    /// <summary>
+    /// Жест «три пальца» по тачпаду (Win+S или Win+Tab): вместо системного поиска и
+    /// представления задач открывается меню «Пуск» Glaze Shell с поиском и кнопкой
+    /// главного окна. Приходит с потока хука.
+    /// </summary>
+    private void OnWindowsKeyGesture(object? sender, EventArgs e) =>
+        RunOnUiThread(() =>
+        {
+            ToggleGestureMenu();
+        });
+
+    /// <summary>
+    /// Системный поиск вышел на передний план в обход клавиатурного хука: закрываем его
+    /// и показываем интерфейс Glaze Shell, чтобы жест тачпада не оставлял окно Windows.
+    /// </summary>
+    private void OnSystemSearchOpened(ForegroundWindowChanged changed)
+    {
+        if (_safeMode || _winKeyInterceptor is null || _taskbarHider is null ||
+            changed.Window is not { } window || !ShellForeground.IsSystemSearchUi((uint)window.ProcessId))
+        {
+            return;
+        }
+
+        var dismissed = WindowManager.DismissWindow(window.Id);
+        _logger.Write(
+            GlazeLogLevel.Information,
+            "Shell",
+            $"The system search came to the foreground; dismissing window {window.Id} returned {dismissed}.");
+
+        RunOnUiThread(() =>
+        {
+            ToggleGestureMenu();
+            var reopen = _startMenu?.IsShown == true;
+
+            // Поиск доигрывает анимацию открытия и пропускает первое WM_CLOSE: повторяем
+            // закрытие, когда окно уже готово его принять.
+            _searchDismissTimer?.Stop();
+            _searchDismissTimer = _window?.DispatcherQueue.CreateTimer();
+            if (_searchDismissTimer is { } timer)
+            {
+                timer.Interval = SystemSearchDismissRetry;
+                timer.IsRepeating = false;
+                timer.Tick += (_, _) =>
+                {
+                    var retried = WindowManager.DismissWindow(window.Id);
+                    _logger.Write(
+                        GlazeLogLevel.Information,
+                        "Shell",
+                        $"Retried dismissing the system search window {window.Id}: {retried}.");
+                    if (reopen && _startMenu?.IsShown == true)
+                    {
+                        _startMenu.Activate();
+                    }
+                };
+                timer.Start();
+            }
+        });
+    }
+
+    /// <summary>Выполняет действие в потоке интерфейса, откуда бы его ни вызвали.</summary>
+    private void RunOnUiThread(Action action)
     {
         var window = _window;
 
         if (window is null || window.DispatcherQueue.HasThreadAccess)
         {
-            RevealPanels();
+            action();
             return;
         }
 
-        _ = window.DispatcherQueue.TryEnqueue(RevealPanels);
+        _ = window.DispatcherQueue.TryEnqueue(() => action());
     }
 
     private void RevealPanels()
     {
         _topBar?.Reveal();
         _dock?.Reveal();
+    }
+
+    private void ToggleGestureMenu()
+    {
+        _topBar?.SetSuppressed(true);
+        _dock?.SetSuppressed(true);
+        _startMenu?.Toggle();
     }
 
     private void OnDockStartRequested(object? sender, EventArgs e) => ShowStartMenu();
@@ -934,6 +1048,8 @@ public partial class App : Application
         {
             _hotkey?.Dispose();
             _hotkey = null;
+            _gestureHotkey?.Dispose();
+            _gestureHotkey = null;
         });
 
         TryShutdownStep("tray", () =>
@@ -973,6 +1089,14 @@ public partial class App : Application
         TryShutdownStep("recovery state", () =>
         {
             _recoveryStore?.Save(new RecoverySnapshot(SessionCompleted: true, _crashes?.Crashes ?? []));
+        });
+
+        TryShutdownStep("foreground watcher", () =>
+        {
+            _foregroundSubscription?.Dispose();
+            _foregroundSubscription = null;
+            _searchDismissTimer?.Stop();
+            _searchDismissTimer = null;
         });
 
         TryShutdownStep("top bar", () =>

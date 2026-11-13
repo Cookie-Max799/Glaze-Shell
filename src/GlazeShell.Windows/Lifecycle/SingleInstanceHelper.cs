@@ -108,6 +108,11 @@ public static class SingleInstanceHelper
             _ = User32.ShowWindowAsync(hwnd, User32.SwRestore);
         }
 
+        // Окно могло быть скрыто в трей (AppWindow.Hide): показываем его явно, иначе
+        // последующая активация работает с невидимым окном, и пользователь видит только
+        // звук ошибки.
+        _ = User32.ShowWindowAsync(hwnd, User32.SwShow);
+
         // Второй процесс не может просто вызвать SetForegroundWindow: пока активно
         // чужое окно, система отклоняет перевод, и приложение выглядит «не открывшимся»
         // (а Windows при этом издаёт звук ошибки). Сначала разрешаем смену активного
@@ -147,6 +152,34 @@ public static class SingleInstanceHelper
                 _ = User32.AttachThreadInput(currentThread, foregroundThread, false);
             }
         }
+
+        if (User32.GetForegroundWindow() == hwnd)
+        {
+            return;
+        }
+
+        // Foreground lock всё ещё не пустил окно: временно поднимаем его в topmost,
+        // затем возвращаем в обычный слой и просим оболочку переключиться на него.
+        // SwitchToThisWindow не показывает системный звук отказа, в отличие от повторного
+        // SetForegroundWindow.
+        _ = User32.SetWindowPos(
+            hwnd,
+            User32.HwndTopmost,
+            0,
+            0,
+            0,
+            0,
+            User32.SwpNoMove | User32.SwpNoSize | User32.SwpNoActivate | User32.SwpShowWindow);
+        _ = User32.SetWindowPos(
+            hwnd,
+            User32.HwndNotTopmost,
+            0,
+            0,
+            0,
+            0,
+            User32.SwpNoMove | User32.SwpNoSize | User32.SwpNoActivate | User32.SwpShowWindow);
+
+        User32.SwitchToThisWindow(hwnd, true);
     }
 
     /// <summary>

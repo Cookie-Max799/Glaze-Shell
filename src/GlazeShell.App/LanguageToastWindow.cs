@@ -21,7 +21,8 @@ namespace GlazeShell.App;
 /// её элементы, и использует тот же Acrylic-фон с той же прозрачностью, что и панель.
 /// Окно не активируется: смена языка не должна забирать фокус у активного приложения.
 /// Анимация — рост прямоугольника окна от квадрата 22×22 DIP с привязкой к правому
-/// верхнему углу; содержимое проявляется по мере роста.
+/// верхнему углу; содержимое прижато вправо, поэтому плашка раскрывается справа налево,
+/// а не «заливается» слева направо.
 /// </remarks>
 internal sealed class LanguageToastWindow : Window
 {
@@ -67,18 +68,23 @@ internal sealed class LanguageToastWindow : Window
         {
             FontSize = 20,
             FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            TextAlignment = TextAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
         };
         _name = new TextBlock
         {
             FontSize = 11.5,
+            HorizontalAlignment = HorizontalAlignment.Right,
             TextTrimming = TextTrimming.CharacterEllipsis,
+            TextAlignment = TextAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
         };
 
         var text = new StackPanel
         {
             Spacing = 1,
+            HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
         };
         text.Children.Add(_code);
@@ -148,6 +154,7 @@ internal sealed class LanguageToastWindow : Window
 
         _target = new RectInt32(right - width, top, width, height);
         _droplet = new RectInt32(right - droplet, top, droplet, droplet);
+        AppWindow.MoveAndResize(_target);
 
         _watch.Restart();
         _timer.Stop();
@@ -182,10 +189,9 @@ internal sealed class LanguageToastWindow : Window
             ? 1
             : Math.Clamp(progress / 0.35, 0, 1);
 
-        AppWindow.MoveAndResize(rect);
         OverlayWindow.ApplyRoundedRegions(
             _hwnd,
-            [new PixelRect(0, 0, rect.Width, rect.Height)],
+            [new PixelRect(_target.Width - rect.Width, 0, rect.Width, rect.Height)],
             (int)Math.Round(16 * scale));
     }
 

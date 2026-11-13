@@ -168,8 +168,10 @@ internal static class User32
 
     internal const nint HwndTop = 0;
     internal const nint HwndTopmost = -1;
+    internal const nint HwndNotTopmost = -2;
     internal const uint AsfwAny = 0xFFFF_FFFF;
 
+    internal const int SwHide = 0;
     internal const int SwShow = 5;
     internal const int SwShowNoActivate = 4;
     internal const int SwMinimize = 6;
@@ -401,6 +403,14 @@ internal static class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool AllowSetForegroundWindow(uint processId);
 
+    /// <summary>
+    /// Принудительно выводит окно на передний план, даже когда система отклонила
+    /// <see cref="SetForegroundWindow"/> из-за foreground lock. Этим же путём пользуется
+    /// панель задач; звонка «не удалось активировать» при отказе не бывает.
+    /// </summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    internal static extern void SwitchToThisWindow(nint hwnd, [MarshalAs(UnmanagedType.Bool)] bool altTab);
+
     /// <summary>Передаёт фокус ввода окну; действует в пределах присоединённой очереди ввода.</summary>
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     internal static extern nint SetFocus(nint hwnd);
@@ -415,6 +425,7 @@ internal static class User32
     internal const int VkLeftWindows = 0x5B;
     internal const int VkRightWindows = 0x5C;
     internal const int VkTab = 0x09;
+    internal const int VkS = 0x53;
     internal const int VkLeftButton = 0x01;
 
     /// <summary>

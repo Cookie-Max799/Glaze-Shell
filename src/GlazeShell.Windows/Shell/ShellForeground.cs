@@ -36,6 +36,17 @@ public static class ShellForeground
     };
 
     /// <summary>
+    /// Активное окно — поиск Windows. Такое окно Glaze Shell закрывает: жест «три пальца»
+    /// по тачпаду на части машин открывает поиск в обход клавиатурного хука, и вместо
+    /// него должен появиться интерфейс оболочки.
+    /// </summary>
+    public static bool IsSystemSearchUi(uint processId)
+    {
+        var name = GetProcessName(processId);
+        return string.Equals(name, "SearchHost", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Активное окно — рабочий стол или системная поверхность (меню «Пуск», поиск,
     /// уведомления). Представление задач и переключатель окон сюда не входят: панели
     /// должны убираться, чтобы не закрывать список.

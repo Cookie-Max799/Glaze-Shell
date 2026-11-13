@@ -63,6 +63,23 @@ public sealed class WindowManager : IWindowManager, IWindowsEventSource
         User32.IsWindow(handle) &&
         User32.PostMessage(handle, User32.WmClose, 0, 0);
 
+    /// <summary>
+    /// Убирает окно системной поверхности (поиск Windows), пришедшее на передний план
+    /// в обход клавиатурного хука. <c>WM_CLOSE</c> очищает состояние приложения, а
+    /// немедленное скрытие убирает окно с экрана, даже если приложение ещё доигрывает
+    /// анимацию открытия и сообщение пока не обработано.
+    /// </summary>
+    public static bool DismissWindow(string windowId)
+    {
+        if (!NativeWindowEnumerator.TryParseId(windowId, out var handle) || !User32.IsWindow(handle))
+        {
+            return false;
+        }
+
+        _ = User32.PostMessage(handle, User32.WmClose, 0, 0);
+        return User32.ShowWindow(handle, User32.SwHide);
+    }
+
     public void Dispose()
     {
         _monitor?.Dispose();
