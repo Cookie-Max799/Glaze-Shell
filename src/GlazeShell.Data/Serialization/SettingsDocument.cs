@@ -72,6 +72,9 @@ public sealed class SettingsDocument
     /// <summary>Прозрачность dock в процентах (0–90).</summary>
     public int? DockTransparency { get; set; }
 
+    /// <summary>Прозрачность меню «Пуск» в процентах (0–90).</summary>
+    public int? StartMenuTransparency { get; set; }
+
     /// <summary>
     /// Скрывать панели, пока активно окно Glaze Shell. Отсутствие значения в старом
     /// документе означает включённое поведение.
@@ -120,6 +123,7 @@ public sealed class SettingsDocument
             TransparencyEnabled = settings.TransparencyEnabled,
             TopBarTransparency = settings.TopBarTransparency,
             DockTransparency = settings.DockTransparency,
+            StartMenuTransparency = settings.StartMenuTransparency,
             HidePanelsInGlazeShell = settings.HidePanelsInGlazeShell,
             MonitorNames = settings.MonitorNames.Count == 0
                 ? null
@@ -188,6 +192,8 @@ public static class SettingsDocumentMapper
         var dockTransparency = document.DockTransparency
             ?? document.GlassTransparency
             ?? UserSettings.DefaultDockTransparency;
+        var startMenuTransparency = document.StartMenuTransparency
+            ?? UserSettings.DefaultStartMenuTransparency;
 
         if (topBarTransparency < 0 || topBarTransparency > UserSettings.MaxTransparency)
         {
@@ -197,6 +203,11 @@ public static class SettingsDocumentMapper
         if (dockTransparency < 0 || dockTransparency > UserSettings.MaxTransparency)
         {
             messages.Add($"The dock transparency '{dockTransparency}' is not valid.");
+        }
+
+        if (startMenuTransparency < 0 || startMenuTransparency > UserSettings.MaxTransparency)
+        {
+            messages.Add($"The start menu transparency '{startMenuTransparency}' is not valid.");
         }
 
         if (messages.Count > 0)
@@ -231,7 +242,8 @@ public static class SettingsDocumentMapper
             document.TransparencyEnabled ?? true,
             topBarTransparency,
             dockTransparency,
-            document.HidePanelsInGlazeShell ?? true);
+            document.HidePanelsInGlazeShell ?? true,
+            startMenuTransparency);
         diagnostics = Array.Empty<string>();
         return true;
     }

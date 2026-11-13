@@ -352,9 +352,20 @@ public partial class App : Application
                     monitorManager,
                     themeApplicator,
                     window);
+
+                if (_dock is not null)
+                {
+                    _dock.StartRequested -= OnDockStartRequested;
+                    _dock.StartRequested += OnDockStartRequested;
+                }
             }
             else
             {
+                if (_dock is not null)
+                {
+                    _dock.StartRequested -= OnDockStartRequested;
+                }
+
                 _dock?.Close();
                 _dock = null;
             }
@@ -371,7 +382,8 @@ public partial class App : Application
                 _taskbarHider.Hide();
 
                 // Пока системная панель задач скрыта, штатное меню «Пуск» не нужно:
-                // клавиша Windows перехватывается и открывает заглушку Glaze Shell.
+                // клавиша Windows перехватывается и показывает панели Glaze Shell,
+                // а меню приложений открывается левой плиткой dock.
                 if (_winKeyInterceptor is null)
                 {
                     _winKeyInterceptor = new WindowsKeyInterceptor(
@@ -775,9 +787,9 @@ public partial class App : Application
         RestoreWindowsUi("the recovery hotkey");
 
     /// <summary>
-    /// Нажатие клавиши Windows при замене панели задач (этап 5): вместо штатного «Пуск»
-    /// показывается заглушка Glaze Shell. Приходит с потока хука — показ окна переводится
-    /// в UI-поток.
+    /// Нажатие клавиши Windows (этап 5): вместо системного UI показываются верхняя
+    /// и нижняя панели Glaze Shell. Приходит с потока хука — показ окна переводится
+    /// в UI-поток. Жест «три пальца» приходит тем же событием через Win+Tab.
     /// </summary>
     private void OnWindowsKeyPressed(object? sender, EventArgs e)
     {
@@ -785,14 +797,21 @@ public partial class App : Application
 
         if (window is null || window.DispatcherQueue.HasThreadAccess)
         {
-            ShowStartMenu();
+            RevealPanels();
             return;
         }
 
-        _ = window.DispatcherQueue.TryEnqueue(ShowStartMenu);
+        _ = window.DispatcherQueue.TryEnqueue(RevealPanels);
     }
 
-    /// <summary>Показывает или скрывает меню «Пуск»: повторное нажатие Windows закрывает его.</summary>
+    private void RevealPanels()
+    {
+        _topBar?.Reveal();
+        _dock?.Reveal();
+    }
+
+    private void OnDockStartRequested(object? sender, EventArgs e) => ShowStartMenu();
+
     private void ShowStartMenu() => _startMenu?.Toggle();
 
     private void OnStartMenuItemActivated(object? sender, StartMenuItemViewModel item)

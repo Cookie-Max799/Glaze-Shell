@@ -36,7 +36,7 @@ public sealed partial class NetworkPanelWindow : Window
             presenter.IsAlwaysOnTop = true;
         }
 
-        SystemBackdrop = _themes.CreatePanelBackdrop(isDock: false);
+        SystemBackdrop = _themes.CreatePanelBackdrop(PanelSurface.TopBar);
         _themes.ApplyFromSettings(Root);
 
         Activated += (_, args) =>

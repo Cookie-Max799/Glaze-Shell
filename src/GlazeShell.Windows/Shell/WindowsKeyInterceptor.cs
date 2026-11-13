@@ -4,20 +4,22 @@ using GlazeShell.Windows.Win32;
 namespace GlazeShell.Windows.Shell;
 
 /// <summary>
-/// Низкоуровневый перехват одиночного нажатия клавиши Windows (замена меню «Пуск»).
+/// Низкоуровневый перехват клавиши Windows и сочетания Win+Tab.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Пока Glaze Shell заменяет панель задач, штатное меню «Пуск» не должно открываться.
 /// Клавиша перехватывается глобальным хуком <c>WH_KEYBOARD_LL</c>, а событие
-/// <see cref="Pressed"/> позволяет приложению показать собственное меню.
+/// <see cref="Pressed"/> позволяет приложению показать свои панели вместо системного UI.
 /// </para>
 /// <para>
-/// Перехватывается только одиночное нажатие. Если пока клавиша Windows удерживается
+/// Перехватывается одиночное нажатие и Win+Tab. Если пока клавиша Windows удерживается
 /// нажата любая другая клавиша, перехват «отпускает» клавишу: в систему отправляется
 /// синтетическое нажатие <c>Win</c>, поэтому сочетания <c>Win+R</c>, <c>Win+Space</c>,
-/// <c>Win+Shift+S</c> и остальные работают как обычно. Синтетические события помечены
-/// флагом <c>LLKHF_INJECTED</c> и пропускаются хуком без обработки.
+/// <c>Win+Shift+S</c> и остальные работают как обычно. Своё синтетическое событие помечено
+/// меткой <c>ExtraInfo</c> и пропускается хуком; остальной ввод, включая помеченный
+/// <c>LLKHF_INJECTED</c>, обрабатывается — жест тачпада «три пальца» Windows превращает
+/// в Win+Tab, и он должен открывать панели Glaze Shell, а не Task View.
 /// </para>
 /// <para>
 /// Хук ставится на выделенном фоновом потоке с петлёй сообщений (как у
@@ -30,9 +32,6 @@ public sealed class WindowsKeyInterceptor : IDisposable
     private const string WindowClassNamePrefix = "GlazeShellWinKey";
 
     private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(5);
-
-    /// <summary>Флаги <c>LLKHF_INJECTED</c> и <c>LLKHF_LOWER_IL_INJECTED</c>.</summary>
-    private const uint InjectedFlags = 0x02 | 0x10;
 
     private readonly User32.LowLevelKeyboardProc _keyboardProcedure;
     private readonly string _windowClassName = WindowClassNamePrefix + Guid.NewGuid().ToString("N");
@@ -180,9 +179,10 @@ public sealed class WindowsKeyInterceptor : IDisposable
     {
         var input = Marshal.PtrToStructure<User32.KeyboardInput>(lParam);
 
-        // Своё же синтетическое нажатие (Win для сочетаний) и ввод из программ
-        // с низким уровнем целостности не перехватываем: иначе получился бы цикл.
-        if ((input.Flags & InjectedFlags) != 0)
+        // Пропускаем только собственное синтетическое нажатие Win (метка ExtraInfo).
+        // Остальной ввод, включая помеченный LLKHF_INJECTED, обрабатываем: жест тачпада
+        // приходит как Win+Tab и тоже должен открывать панели Glaze Shell.
+        if (input.ExtraInfo == User32.SyntheticMarker)
         {
             return User32.CallNextHookEx(_hook, 0, wParam, lParam);
         }
@@ -239,6 +239,14 @@ public sealed class WindowsKeyInterceptor : IDisposable
             }
 
             // «Пуск» открывается на отпускание: без блокировки меню открылось бы.
+            return User32.LlhcBlocked;
+        }
+
+        if (_winHeld && !_winForwarded && input.VkCode == User32.VkTab)
+        {
+            // Win+Tab и жест тремя пальцами, который Windows превращает в это сочетание:
+            // Task View не открываем. Win остаётся «не пересланной», поэтому на её отпускании
+            // придёт обычное Pressed — приложение покажет свои панели.
             return User32.LlhcBlocked;
         }
 

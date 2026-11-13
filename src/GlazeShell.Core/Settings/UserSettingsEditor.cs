@@ -36,7 +36,8 @@ public static class UserSettingsEditor
         bool? transparencyEnabled = null,
         int? topBarTransparency = null,
         int? dockTransparency = null,
-        bool? hidePanelsInGlazeShell = null)
+        bool? hidePanelsInGlazeShell = null,
+        int? startMenuTransparency = null)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -65,6 +66,7 @@ public static class UserSettingsEditor
             transparencyEnabled: transparencyEnabled ?? source.TransparencyEnabled,
             topBarTransparency: topBarTransparency ?? source.TopBarTransparency,
             dockTransparency: dockTransparency ?? source.DockTransparency,
-            hidePanelsInGlazeShell: hidePanelsInGlazeShell ?? source.HidePanelsInGlazeShell);
+            hidePanelsInGlazeShell: hidePanelsInGlazeShell ?? source.HidePanelsInGlazeShell,
+            startMenuTransparency: startMenuTransparency ?? source.StartMenuTransparency);
     }
 }

@@ -253,21 +253,26 @@ public sealed class UserSettingsTests
         Assert.IsTrue(settings.TransparencyEnabled);
         Assert.AreEqual(UserSettings.DefaultTopBarTransparency, settings.TopBarTransparency);
         Assert.AreEqual(UserSettings.DefaultDockTransparency, settings.DockTransparency);
+        Assert.AreEqual(UserSettings.DefaultStartMenuTransparency, settings.StartMenuTransparency);
         Assert.IsGreaterThan(0, UserSettings.DefaultTopBarTransparency);
         Assert.IsGreaterThan(0, UserSettings.DefaultDockTransparency);
+        Assert.IsGreaterThan(0, UserSettings.DefaultStartMenuTransparency);
         Assert.IsLessThan(UserSettings.MaxTransparency, UserSettings.DefaultTopBarTransparency);
         Assert.IsLessThan(UserSettings.MaxTransparency, UserSettings.DefaultDockTransparency);
+        Assert.IsLessThan(UserSettings.MaxTransparency, UserSettings.DefaultStartMenuTransparency);
     }
 
     [TestMethod]
     public void TransparencyIsClampedToTheAllowedRange()
     {
-        var settings = new UserSettings(topBarTransparency: 500, dockTransparency: -1);
+        var settings = new UserSettings(topBarTransparency: 500, dockTransparency: -1, startMenuTransparency: 500);
 
         Assert.AreEqual(UserSettings.MaxTransparency, settings.TopBarTransparency);
         Assert.AreEqual(0, settings.DockTransparency);
+        Assert.AreEqual(UserSettings.MaxTransparency, settings.StartMenuTransparency);
         Assert.AreEqual(20, new UserSettings(topBarTransparency: 20).TopBarTransparency);
         Assert.AreEqual(20, new UserSettings(dockTransparency: 20).DockTransparency);
+        Assert.AreEqual(20, new UserSettings(startMenuTransparency: 20).StartMenuTransparency);
     }
 
     [TestMethod]
@@ -276,12 +281,14 @@ public sealed class UserSettingsTests
         var source = new UserSettings(
             topBarTransparency: 30,
             dockTransparency: 50,
-            transparencyEnabled: false);
+            transparencyEnabled: false,
+            startMenuTransparency: 40);
 
         var updated = UserSettingsEditor.With(source, themeMode: ThemeMode.Dark);
 
         Assert.AreEqual(30, updated.TopBarTransparency);
         Assert.AreEqual(50, updated.DockTransparency);
+        Assert.AreEqual(40, updated.StartMenuTransparency);
         Assert.IsFalse(updated.TransparencyEnabled);
     }
 
@@ -294,11 +301,13 @@ public sealed class UserSettingsTests
             source,
             transparencyEnabled: false,
             topBarTransparency: 10,
-            dockTransparency: 60);
+            dockTransparency: 60,
+            startMenuTransparency: 35);
 
         Assert.IsFalse(updated.TransparencyEnabled);
         Assert.AreEqual(10, updated.TopBarTransparency);
         Assert.AreEqual(60, updated.DockTransparency);
+        Assert.AreEqual(35, updated.StartMenuTransparency);
         Assert.AreEqual(ThemeMode.Dark, updated.ThemeMode);
         Assert.AreEqual("rose", updated.AccentId);
         Assert.IsTrue(updated.HighContrast);

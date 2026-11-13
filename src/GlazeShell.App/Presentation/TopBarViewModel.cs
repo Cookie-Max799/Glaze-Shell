@@ -37,6 +37,13 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Логический размер значка в левой плитке: совпадает с разметкой (16 DIP).</summary>
     private const double AppIconDips = 16;
 
+    /// <summary>
+    /// Запас по разрешению: значок запрашивается вдвое крупнее отображаемого. Shell отдаёт
+    /// иконки дискретными размерами (16, 32, 48…), и 16-пиксельная иконка после подгонки
+    /// в плитку получает рваные края; 32 пикселя уменьшаются чисто.
+    /// </summary>
+    private const double AppIconOversample = 2;
+
     /// <summary>Верхняя граница запроса значка: защита от неверного масштаба монитора.</summary>
     private const int MaxIconPixels = 256;
 
@@ -237,12 +244,15 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     }
 
     /// <summary>
-    /// Размер запроса значка в физических пикселях: 16 DIP, умноженные на масштаб монитора.
-    /// Значок просится ровно в пикселях отображения, поэтому не размывается интерполяцией
-    /// при масштабе 125 % и выше.
+    /// Размер запроса значка в физических пикселях: 16 DIP, умноженные на масштаб монитора
+    /// и запас разрешения. Значок просится крупнее отображаемого, поэтому не размывается
+    /// и не получает рваных краёв при масштабе 125 % и выше.
     /// </summary>
     private int AppIconSize =>
-        Math.Clamp((int)Math.Round(AppIconDips * _iconScale), (int)AppIconDips, MaxIconPixels);
+        Math.Clamp(
+            (int)Math.Round(AppIconDips * AppIconOversample * _iconScale),
+            (int)(AppIconDips * AppIconOversample),
+            MaxIconPixels);
 
     /// <summary>
     /// Пересчитывает значки под масштаб монитора (I6). При смене масштаба кэш сбрасывается:

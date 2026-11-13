@@ -22,7 +22,7 @@ internal static class IconBitmap
 
             using (var stream = bitmap.PixelBuffer.AsStream())
             {
-                stream.Write(pixels.Bgra, 0, pixels.Bgra.Length);
+                stream.Write(Premultiply(pixels.Bgra), 0, pixels.Bgra.Length);
             }
 
             bitmap.Invalidate();
@@ -33,5 +33,40 @@ internal static class IconBitmap
             Trace.WriteLine($"GlazeShell.IconBitmap: an icon image could not be created. {exception}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// Переводит пиксели из straight alpha в premultiplied: <c>WriteableBitmap</c> в WinUI
+    /// ожидает BGRA с уже умноженным на альфу цветом, а <c>IShellItemImageFactory</c>
+    /// отдаёт цвет без умножения. Без этого полупрозрачные края значков светятся
+    /// (светлые «звёзды» и рваная кромка поверх тёмной панели).
+    /// </summary>
+    private static byte[] Premultiply(byte[] bgra)
+    {
+        var result = (byte[])bgra.Clone();
+
+        for (var i = 0; i < result.Length; i += 4)
+        {
+            var alpha = result[i + 3];
+
+            if (alpha == 255)
+            {
+                continue;
+            }
+
+            if (alpha == 0)
+            {
+                result[i] = 0;
+                result[i + 1] = 0;
+                result[i + 2] = 0;
+                continue;
+            }
+
+            result[i] = (byte)((result[i] * alpha + 127) / 255);
+            result[i + 1] = (byte)((result[i + 1] * alpha + 127) / 255);
+            result[i + 2] = (byte)((result[i + 2] * alpha + 127) / 255);
+        }
+
+        return result;
     }
 }

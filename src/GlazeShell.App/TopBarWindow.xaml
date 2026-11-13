@@ -269,129 +269,152 @@
                 </Border>
             </Grid>
 
-            <!--  Правая плитка: статус (сеть, звук, батарея) и часы (DESIGN §7.1).  -->
-            <Border
-                x:Name="StatusPill"
+            <!--
+                Правые плашки статуса: слева — часы, питание и загрузка ЦП/ГП, справа —
+                раскладка, сеть, Bluetooth и звук. Разделение повторяет Windows 11:
+                счётчики не смешиваются с индикаторами связи.
+            -->
+            <StackPanel
                 Grid.Row="0"
                 Grid.Column="2"
-                Margin="0,3"
-                Padding="10,0"
-                AutomationProperties.Name="Центр управления"
-                Background="{StaticResource GlazeTopBarPillBrush}"
-                CornerRadius="10"
-                IsTabStop="True"
-                KeyDown="OnStatusKeyDown"
-                PointerPressed="OnStatusPointerPressed">
-                <StackPanel
-                    Orientation="Horizontal"
-                    Spacing="9"
-                    VerticalAlignment="Center">
-                    <TextBlock
-                        VerticalAlignment="Center"
-                        FontSize="11"
-                        FontWeight="SemiBold"
-                        Text="{x:Bind ViewModel.KeyboardLanguage, Mode=OneWay}"
-                        AutomationProperties.Name="Текущая раскладка клавиатуры" />
-                    <FontIcon
-                        x:Name="NetworkIcon"
-                        VerticalAlignment="Center"
-                        FontSize="12"
-                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                        Glyph="{x:Bind ViewModel.NetworkGlyph, Mode=OneWay}"
-                        ToolTipService.ToolTip="Сеть: открыть панель Wi-Fi" />
-                    <FontIcon
-                        x:Name="BluetoothIcon"
-                        VerticalAlignment="Center"
-                        FontSize="12"
-                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                        Glyph="&#xE702;"
-                        ToolTipService.ToolTip="Bluetooth: подключённые устройства"
-                        Visibility="{x:Bind ViewModel.BluetoothVisible, Mode=OneWay}" />
-                    <FontIcon
-                        VerticalAlignment="Center"
-                        FontSize="12"
-                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                        Glyph="{x:Bind ViewModel.QuickSettings.VolumeGlyph, Mode=OneWay}"
-                        ToolTipService.ToolTip="{x:Bind ViewModel.QuickSettings.VolumeLabel, Mode=OneWay}" />
+                Orientation="Horizontal"
+                Spacing="4"
+                VerticalAlignment="Center">
+
+                <!--  Плашка производительности: дата, питание, ЦП и ГП.  -->
+                <Border
+                    x:Name="SystemPill"
+                    Margin="0,3"
+                    Padding="10,0"
+                    AutomationProperties.Name="Часы, питание и загрузка"
+                    Background="{StaticResource GlazeTopBarPillBrush}"
+                    CornerRadius="10"
+                    IsTabStop="True"
+                    KeyDown="OnStatusKeyDown"
+                    PointerPressed="OnStatusPointerPressed">
                     <StackPanel
                         Orientation="Horizontal"
-                        Spacing="3"
-                        AutomationProperties.Name="Питание"
-                        ToolTipService.ToolTip="Питание"
-                        Visibility="{x:Bind ViewModel.HasBattery, Mode=OneWay}">
+                        Spacing="9"
+                        VerticalAlignment="Center">
+                        <Button
+                            x:Name="ClockButton"
+                            Height="20"
+                            Padding="2,0"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="Дата и время — открыть календарь"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Click="OnClockClick"
+                            CornerRadius="6"
+                            HorizontalContentAlignment="Right"
+                            ToolTipService.ToolTip="Календарь">
+                            <StackPanel
+                                VerticalAlignment="Center"
+                                Orientation="Horizontal"
+                                Spacing="6"
+                                AutomationProperties.Name="Дата и время">
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    FontSize="11"
+                                    FontWeight="SemiBold"
+                                    Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                                    Text="{x:Bind ViewModel.ClockTime, Mode=OneWay}" />
+                                <TextBlock
+                                    VerticalAlignment="Center"
+                                    FontSize="10"
+                                    Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                    Text="{x:Bind ViewModel.ClockDate, Mode=OneWay}" />
+                            </StackPanel>
+                        </Button>
+
+                        <StackPanel
+                            Orientation="Horizontal"
+                            Spacing="3"
+                            AutomationProperties.Name="Питание"
+                            ToolTipService.ToolTip="Питание"
+                            Visibility="{x:Bind ViewModel.HasBattery, Mode=OneWay}">
+                            <FontIcon
+                                VerticalAlignment="Center"
+                                FontSize="12"
+                                Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                Glyph="{x:Bind ViewModel.BatteryGlyph, Mode=OneWay}" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="11"
+                                Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                Text="{x:Bind ViewModel.BatteryText, Mode=OneWay}" />
+                        </StackPanel>
+
+                        <TextBlock
+                            x:Name="CpuBlock"
+                            MinWidth="46"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="{x:Bind ViewModel.CpuText, Mode=OneWay}"
+                            FontSize="11"
+                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                            Text="{x:Bind ViewModel.CpuText, Mode=OneWay}"
+                            TextAlignment="Right"
+                            ToolTipService.ToolTip="Загрузка процессора" />
+
+                        <TextBlock
+                            x:Name="GpuBlock"
+                            MinWidth="46"
+                            VerticalAlignment="Center"
+                            AutomationProperties.Name="{x:Bind ViewModel.GpuText, Mode=OneWay}"
+                            FontSize="11"
+                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                            Text="{x:Bind ViewModel.GpuText, Mode=OneWay}"
+                            TextAlignment="Right"
+                            ToolTipService.ToolTip="Загрузка графического процессора"
+                            Visibility="{x:Bind ViewModel.HasGpu, Mode=OneWay}" />
+                    </StackPanel>
+                </Border>
+
+                <!--  Плашка индикаторов: раскладка, сеть, Bluetooth и звук.  -->
+                <Border
+                    x:Name="StatusPill"
+                    Margin="0,3"
+                    Padding="10,0"
+                    AutomationProperties.Name="Раскладка, сеть, Bluetooth и звук"
+                    Background="{StaticResource GlazeTopBarPillBrush}"
+                    CornerRadius="10"
+                    IsTabStop="True"
+                    KeyDown="OnStatusKeyDown"
+                    PointerPressed="OnStatusPointerPressed">
+                    <StackPanel
+                        Orientation="Horizontal"
+                        Spacing="9"
+                        VerticalAlignment="Center">
+                        <TextBlock
+                            VerticalAlignment="Center"
+                            FontSize="11"
+                            FontWeight="SemiBold"
+                            Text="{x:Bind ViewModel.KeyboardLanguage, Mode=OneWay}"
+                            AutomationProperties.Name="Текущая раскладка клавиатуры" />
+                        <FontIcon
+                            x:Name="NetworkIcon"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                            Glyph="{x:Bind ViewModel.NetworkGlyph, Mode=OneWay}"
+                            ToolTipService.ToolTip="Сеть: открыть панель Wi-Fi" />
+                        <FontIcon
+                            x:Name="BluetoothIcon"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                            Glyph="&#xE702;"
+                            ToolTipService.ToolTip="Bluetooth: подключённые устройства"
+                            Visibility="{x:Bind ViewModel.BluetoothVisible, Mode=OneWay}" />
                         <FontIcon
                             VerticalAlignment="Center"
                             FontSize="12"
                             Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                            Glyph="{x:Bind ViewModel.BatteryGlyph, Mode=OneWay}" />
-                        <TextBlock
-                            VerticalAlignment="Center"
-                            FontSize="11"
-                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                            Text="{x:Bind ViewModel.BatteryText, Mode=OneWay}" />
+                            Glyph="{x:Bind ViewModel.QuickSettings.VolumeGlyph, Mode=OneWay}"
+                            ToolTipService.ToolTip="{x:Bind ViewModel.QuickSettings.VolumeLabel, Mode=OneWay}" />
                     </StackPanel>
-
-                    <TextBlock
-                        x:Name="CpuBlock"
-                        MinWidth="46"
-                        VerticalAlignment="Center"
-                        AutomationProperties.Name="{x:Bind ViewModel.CpuText, Mode=OneWay}"
-                        FontSize="11"
-                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                        Text="{x:Bind ViewModel.CpuText, Mode=OneWay}"
-                        TextAlignment="Right"
-                        ToolTipService.ToolTip="Загрузка процессора" />
-
-                    <TextBlock
-                        x:Name="GpuBlock"
-                        MinWidth="46"
-                        VerticalAlignment="Center"
-                        AutomationProperties.Name="{x:Bind ViewModel.GpuText, Mode=OneWay}"
-                        FontSize="11"
-                        Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                        Text="{x:Bind ViewModel.GpuText, Mode=OneWay}"
-                        TextAlignment="Right"
-                        ToolTipService.ToolTip="Загрузка графического процессора"
-                        Visibility="{x:Bind ViewModel.HasGpu, Mode=OneWay}" />
-
-                    <Rectangle
-                        Width="1"
-                        Height="14"
-                        Fill="{StaticResource GlazeTextMutedBrush}"
-                        Opacity="0.4" />
-
-                    <Button
-                        x:Name="ClockButton"
-                        Height="20"
-                        Padding="2,0"
-                        VerticalAlignment="Center"
-                        AutomationProperties.Name="Дата и время — открыть календарь"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Click="OnClockClick"
-                        CornerRadius="6"
-                        HorizontalContentAlignment="Right"
-                        ToolTipService.ToolTip="Календарь">
-                        <StackPanel
-                            VerticalAlignment="Center"
-                            Orientation="Horizontal"
-                            Spacing="6"
-                            AutomationProperties.Name="Дата и время">
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                FontSize="11"
-                                FontWeight="SemiBold"
-                                Foreground="{StaticResource GlazeTextPrimaryBrush}"
-                                Text="{x:Bind ViewModel.ClockTime, Mode=OneWay}" />
-                            <TextBlock
-                                VerticalAlignment="Center"
-                                FontSize="10"
-                                Foreground="{StaticResource GlazeTextSecondaryBrush}"
-                                Text="{x:Bind ViewModel.ClockDate, Mode=OneWay}" />
-                        </StackPanel>
-                    </Button>
-                </StackPanel>
-            </Border>
+                </Border>
+            </StackPanel>
 
             <!--  Панель результатов Glance (B1) под строкой поиска: та же колонка, что и поиск.  -->
             <Border
@@ -590,31 +613,15 @@
                         FontSize="11.5"
                         Foreground="{StaticResource GlazeTextMutedBrush}"
                         Text="СИСТЕМА" />
-                    <Grid ColumnSpacing="8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="*" />
-                        </Grid.ColumnDefinitions>
-                        <Button
-                            Grid.Column="0"
-                            HorizontalAlignment="Stretch"
-                            Click="OnOpenNetworkSettings"
-                            Content="Сеть"
-                            CornerRadius="16" />
-                        <Button
-                            Grid.Column="1"
-                            HorizontalAlignment="Stretch"
-                            Click="OnOpenBluetoothSettings"
-                            Content="Bluetooth"
-                            CornerRadius="16" />
-                        <Button
-                            Grid.Column="2"
-                            HorizontalAlignment="Stretch"
-                            Click="OnOpenSoundSettings"
-                            Content="Звук"
-                            CornerRadius="16" />
-                    </Grid>
+                    <!--
+                        Сеть и Bluetooth открываются кликом по своим индикаторам в правой
+                        плашке: дублировать их кнопками здесь больше не нужно.
+                    -->
+                    <Button
+                        HorizontalAlignment="Stretch"
+                        Click="OnOpenSoundSettings"
+                        Content="Звук"
+                        CornerRadius="16" />
                 </StackPanel>
 
                 <StackPanel Spacing="8">

@@ -140,7 +140,7 @@ public static class SettingsCatalog
             "transparencyEnabled",
             TransparencyPageId,
             "Включить прозрачность",
-            "Верхняя панель и dock пропускают рабочий стол. Когда выключено, панели остаются непрозрачными.",
+            "Верхняя панель, dock и меню «Пуск» пропускают рабочий стол. Когда выключено, панели остаются непрозрачными.",
             ["прозрачность", "transparency", "прозрачный", "стекло", "glass", "панели", "эффект"],
             SettingKind.Toggle,
             settings => settings.TransparencyEnabled,
@@ -174,6 +174,22 @@ public static class SettingsCatalog
             (settings, value) => UserSettingsEditor.With(
                 settings,
                 dockTransparency: (int)Math.Round(AsDouble(value))),
+            [],
+            Maximum: UserSettings.MaxTransparency,
+            Unit: "%",
+            IsEnabledBy: "transparencyEnabled"),
+
+        new(
+            "startMenuTransparency",
+            TransparencyPageId,
+            "Прозрачность меню «Пуск»",
+            "0 % — плотное меню, 90 % — панель почти растворяется в рабочем столе.",
+            ["прозрачность", "меню", "пуск", "start", "start menu", "transparency", "стекло", "фон"],
+            SettingKind.Range,
+            settings => (double)settings.StartMenuTransparency,
+            (settings, value) => UserSettingsEditor.With(
+                settings,
+                startMenuTransparency: (int)Math.Round(AsDouble(value))),
             [],
             Maximum: UserSettings.MaxTransparency,
             Unit: "%",

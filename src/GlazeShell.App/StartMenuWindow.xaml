@@ -14,7 +14,7 @@
     <Grid x:Name="Root" KeyDown="OnKeyDown">
         <Border
             x:Name="Panel"
-            Background="{StaticResource GlazeSurfaceBrush}"
+            Background="{StaticResource GlazeStartMenuGlassBrush}"
             BorderBrush="{StaticResource GlazeBorderBrush}"
             BorderThickness="0,0,1,0">
             <Grid Padding="28,26,26,20">

@@ -90,6 +90,16 @@ public sealed class SettingsCatalogTests
         Assert.AreEqual(
             (double)UserSettings.DefaultDockTransparency,
             (double)dock.Read(UserSettings.CreateDefault())!);
+
+        var startMenu = page.Single(item => item.Id == "startMenuTransparency");
+        Assert.AreEqual(SettingKind.Range, startMenu.Kind);
+        Assert.AreEqual(0.0, startMenu.Minimum);
+        Assert.AreEqual(UserSettings.MaxTransparency, startMenu.Maximum);
+        Assert.AreEqual("%", startMenu.Unit);
+        Assert.AreEqual("transparencyEnabled", startMenu.IsEnabledBy);
+        Assert.AreEqual(
+            (double)UserSettings.DefaultStartMenuTransparency,
+            (double)startMenu.Read(UserSettings.CreateDefault())!);
     }
 
     [TestMethod]
@@ -97,17 +107,21 @@ public sealed class SettingsCatalogTests
     {
         var topBar = SettingsCatalog.All.Single(item => item.Id == "topBarTransparency");
         var dock = SettingsCatalog.All.Single(item => item.Id == "dockTransparency");
+        var startMenu = SettingsCatalog.All.Single(item => item.Id == "startMenuTransparency");
         var toggle = SettingsCatalog.All.Single(item => item.Id == "transparencyEnabled");
 
         var written = topBar.Write(UserSettings.CreateDefault(), 12.0);
         written = dock.Write(written, 34.0);
+        written = startMenu.Write(written, 45.0);
         written = toggle.Write(written, false);
 
         Assert.AreEqual(12, written.TopBarTransparency);
         Assert.AreEqual(34, written.DockTransparency);
+        Assert.AreEqual(45, written.StartMenuTransparency);
         Assert.IsFalse(written.TransparencyEnabled);
         Assert.AreEqual(12.0, (double)topBar.Read(written)!);
         Assert.AreEqual(34.0, (double)dock.Read(written)!);
+        Assert.AreEqual(45.0, (double)startMenu.Read(written)!);
     }
 
     [TestMethod]
@@ -119,6 +133,8 @@ public sealed class SettingsCatalogTests
             SettingsCatalog.Search("стекло").Any(definition => definition.Id == "dockTransparency"));
         Assert.IsTrue(
             SettingsCatalog.Search("transparency").Any(definition => definition.Id == "transparencyEnabled"));
+        Assert.IsTrue(
+            SettingsCatalog.Search("меню").Any(definition => definition.Id == "startMenuTransparency"));
     }
 
     [TestMethod]

@@ -200,7 +200,7 @@ public sealed partial class DockWindow : Window
 
         _themes.ApplyFromSettings(Root);
 
-        ViewModel.ActivateRequested += OnActivateRequested;
+        ViewModel.StartRequested += OnStartRequested;
         ViewModel.Items.CollectionChanged += OnItemsChanged;
         Tiles.SizeChanged += OnTilesSizeChanged;
         _settingsChanged = events.Subscribe<SettingsChanged>(OnSettingsChanged);
@@ -218,7 +218,7 @@ public sealed partial class DockWindow : Window
             _cursorWatch.Tick -= OnCursorWatchTick;
             _revealWatch.Stop();
             _revealWatch.Tick -= OnRevealWatchTick;
-            ViewModel.ActivateRequested -= OnActivateRequested;
+            ViewModel.StartRequested -= OnStartRequested;
             ViewModel.Items.CollectionChanged -= OnItemsChanged;
             Tiles.SizeChanged -= OnTilesSizeChanged;
             _settingsChanged.Dispose();
@@ -228,6 +228,24 @@ public sealed partial class DockWindow : Window
     }
 
     public DockViewModel ViewModel { get; }
+
+    /// <summary>
+    /// Показывает dock на время после нажатия клавиши Windows или жеста тачпада:
+    /// панель выезжает из-за нижнего края, даже если активно чужое приложение.
+    /// </summary>
+    public void Reveal()
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        _revealUntil = DateTimeOffset.UtcNow + RevealHold;
+        UpdateReveal();
+    }
+
+    /// <summary>Просьба открыть меню «Пуск»: приходит от левой плитки dock.</summary>
+    public event EventHandler? StartRequested;
 
     private void ConfigureOverlay()
     {
@@ -487,6 +505,9 @@ public sealed partial class DockWindow : Window
         storyboard.Begin();
     }
 
+    private void OnStartRequested(object? sender, EventArgs e) =>
+        StartRequested?.Invoke(this, EventArgs.Empty);
+
     private void OnActivateRequested(object? sender, EventArgs e)
     {
         try
@@ -553,7 +574,7 @@ public sealed partial class DockWindow : Window
     /// выключенной прозрачности backdrop убирается: полупрозрачный фон поверх произвольного
     /// рабочего стола нечитаем, а непрозрачный цвет берётся из темы.
     /// </summary>
-    private void ApplyBackdrop() => SystemBackdrop = _themes.CreatePanelBackdrop(isDock: true);
+    private void ApplyBackdrop() => SystemBackdrop = _themes.CreatePanelBackdrop(PanelSurface.Dock);
 
     /// <summary>
     /// Следит за активным окном: на рабочем столе dock виден всегда, в чужом приложении

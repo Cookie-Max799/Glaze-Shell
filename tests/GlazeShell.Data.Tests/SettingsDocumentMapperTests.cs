@@ -445,6 +445,7 @@ public sealed class SettingsDocumentMapperTests
         Assert.IsTrue(settings!.TransparencyEnabled);
         Assert.AreEqual(UserSettings.DefaultTopBarTransparency, settings.TopBarTransparency);
         Assert.AreEqual(UserSettings.DefaultDockTransparency, settings.DockTransparency);
+        Assert.AreEqual(UserSettings.DefaultStartMenuTransparency, settings.StartMenuTransparency);
     }
 
     [TestMethod]
@@ -455,6 +456,7 @@ public sealed class SettingsDocumentMapperTests
         Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var settings, out _));
         Assert.AreEqual(30, settings!.TopBarTransparency);
         Assert.AreEqual(30, settings.DockTransparency);
+        Assert.AreEqual(UserSettings.DefaultStartMenuTransparency, settings.StartMenuTransparency);
     }
 
     [TestMethod]
@@ -467,22 +469,34 @@ public sealed class SettingsDocumentMapperTests
     }
 
     [TestMethod]
+    public void RejectsOutOfRangeStartMenuTransparency()
+    {
+        var document = new SettingsDocument { StartMenuTransparency = UserSettings.MaxTransparency + 1 };
+
+        Assert.IsFalse(SettingsDocumentMapper.TryMap(document, out _, out var diagnostics));
+        StringAssert.Contains(diagnostics.Single(), "start menu transparency");
+    }
+
+    [TestMethod]
     public void PanelTransparencySurvivesTheRoundTrip()
     {
         var settings = new UserSettings(
             topBarTransparency: 15,
             dockTransparency: 65,
-            transparencyEnabled: false);
+            transparencyEnabled: false,
+            startMenuTransparency: 40);
 
         var document = SettingsDocument.FromSettings(settings);
 
         Assert.AreEqual(15, document.TopBarTransparency);
         Assert.AreEqual(65, document.DockTransparency);
+        Assert.AreEqual(40, document.StartMenuTransparency);
         Assert.IsFalse(document.TransparencyEnabled);
 
         Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var restored, out _));
         Assert.AreEqual(15, restored!.TopBarTransparency);
         Assert.AreEqual(65, restored.DockTransparency);
+        Assert.AreEqual(40, restored.StartMenuTransparency);
         Assert.IsFalse(restored.TransparencyEnabled);
     }
 

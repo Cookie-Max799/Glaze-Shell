@@ -27,6 +27,12 @@ public sealed record UserSettings
     public const int DefaultDockTransparency = 45;
 
     /// <summary>
+    /// Прозрачность меню «Пуск» по умолчанию: 35 % — как у верхней панели, рядом с которой
+    /// меню открывается.
+    /// </summary>
+    public const int DefaultStartMenuTransparency = 35;
+
+    /// <summary>
     /// Предел прозрачности, который пользователь может выставить ползунком. Дальше панель
     /// почти сливается с фоном, и подписи теряют читаемость.
     /// </summary>
@@ -61,7 +67,8 @@ public sealed record UserSettings
         bool transparencyEnabled = true,
         int topBarTransparency = DefaultTopBarTransparency,
         int dockTransparency = DefaultDockTransparency,
-        bool hidePanelsInGlazeShell = true)
+        bool hidePanelsInGlazeShell = true,
+        int startMenuTransparency = DefaultStartMenuTransparency)
     {
         Language = ModelValidation.Required(language, nameof(language));
         ActiveThemeId = ModelValidation.Optional(activeThemeId, nameof(activeThemeId));
@@ -83,6 +90,7 @@ public sealed record UserSettings
         TransparencyEnabled = transparencyEnabled;
         TopBarTransparency = NormalizeTransparency(topBarTransparency);
         DockTransparency = NormalizeTransparency(dockTransparency);
+        StartMenuTransparency = NormalizeTransparency(startMenuTransparency);
         HidePanelsInGlazeShell = hidePanelsInGlazeShell;
         StartWithWindows = startWithWindows;
         MinimizeToTray = minimizeToTray;
@@ -206,6 +214,12 @@ public sealed record UserSettings
     /// Прозрачность dock в процентах (0–90): настраивается отдельно от верхней панели.
     /// </summary>
     public int DockTransparency { get; }
+
+    /// <summary>
+    /// Прозрачность меню «Пуск» в процентах (0–90): у меню собственный ползунок, потому
+    /// что это большая панель посреди экрана, а не полоса у кромки.
+    /// </summary>
+    public int StartMenuTransparency { get; }
 
     /// <summary>
     /// Скрывать верхнюю и нижнюю панели, пока активно окно Glaze Shell. Когда фокус уходит

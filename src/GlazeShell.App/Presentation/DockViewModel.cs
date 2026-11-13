@@ -311,8 +311,8 @@ public sealed class DockViewModel : IDisposable
         _windowStateChanged = events.Subscribe<WindowStateChanged>(_ => _runningRefresh.Request());
     }
 
-    /// <summary>Возникает при нажатии плитки «Пуск»: главное окно выводится на передний план.</summary>
-    public event EventHandler? ActivateRequested;
+    /// <summary>Возникает при нажатии плитки «Пуск»: открывается меню «Пуск» Glaze Shell.</summary>
+    public event EventHandler? StartRequested;
 
     public ObservableCollection<DockItemViewModel> Items { get; } = [];
 
@@ -353,8 +353,8 @@ public sealed class DockViewModel : IDisposable
     }
 
     /// <summary>
-    /// Обрабатывает нажатие плитки: «Пуск» выводит главное окно, запущенное приложение
-    /// переключает на своё окно, а незапущенное — запускается.
+    /// Обрабатывает нажатие плитки: «Пуск» открывает меню приложений, запущенное
+    /// приложение переключает на своё окно, а незапущенное — запускается.
     /// </summary>
     public async Task ActivateItemAsync(DockItemViewModel item)
     {
@@ -362,7 +362,7 @@ public sealed class DockViewModel : IDisposable
 
         if (item.IsStart)
         {
-            ActivateRequested?.Invoke(this, EventArgs.Empty);
+            StartRequested?.Invoke(this, EventArgs.Empty);
             return;
         }
 

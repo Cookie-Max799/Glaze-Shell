@@ -57,6 +57,9 @@ public sealed partial class TopBarWindow : Window
     /// <summary>Задержка сворачивания после ухода курсора.</summary>
     private static readonly TimeSpan CollapseDelay = TimeSpan.FromMilliseconds(350);
 
+    /// <summary>Сколько панель остаётся открытой после нажатия клавиши Windows.</summary>
+    private static readonly TimeSpan RevealHold = TimeSpan.FromMilliseconds(1500);
+
     private readonly Window _owner;
     private readonly ThemeApplicator _themes;
     private readonly IDisposable _settingsChanged;
@@ -155,6 +158,7 @@ public sealed partial class TopBarWindow : Window
             SearchHit.SizeChanged += (_, _) => UpdateOverlayBounds();
         }
         StatusPill.SizeChanged += (_, _) => UpdateOverlayBounds();
+        SystemPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         ResultsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
         QuickSettingsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
         CalendarPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
@@ -217,6 +221,31 @@ public sealed partial class TopBarWindow : Window
         }
 
         _ = DispatcherQueue.TryEnqueue(() => FocusSearchCore(clearText: true));
+    }
+
+    /// <summary>
+    /// Показывает панель на время после нажатия клавиши Windows: вызывается, когда
+    /// Glaze Shell просит вывести верхнюю панель поверх активного приложения.
+    /// </summary>
+    public void Reveal()
+    {
+        if (DispatcherQueue.HasThreadAccess)
+        {
+            RevealCore();
+            return;
+        }
+
+        _ = DispatcherQueue.TryEnqueue(RevealCore);
+    }
+
+    private void RevealCore()
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        _collapseAt = DateTimeOffset.UtcNow + RevealHold;
     }
 
     private void FocusSearchCore(bool clearText)
@@ -444,6 +473,12 @@ public sealed partial class TopBarWindow : Window
             _collapseAt = now + CollapseDelay;
             target = 1.0;
         }
+        else if (now < _collapseAt)
+        {
+            // Панель недавно вызвана клавишей Windows (или курсором): пока идёт удержание,
+            // она видна и в чужом приложении, и при автоскрытии внутри Glaze Shell.
+            target = 1.0;
+        }
         else if (_ownForeground && _hideInOwnProcess)
         {
             target = 0.0;
@@ -451,10 +486,6 @@ public sealed partial class TopBarWindow : Window
         else if (!_foreignForeground)
         {
             _collapseAt = now + CollapseDelay;
-            target = 1.0;
-        }
-        else if (now < _collapseAt)
-        {
             target = 1.0;
         }
 
@@ -912,10 +943,6 @@ public sealed partial class TopBarWindow : Window
 
     private void OnToggleMute(object sender, RoutedEventArgs e) => ViewModel.QuickSettings.ToggleMute();
 
-    private void OnOpenNetworkSettings(object sender, RoutedEventArgs e) => ShellTargets.Open("ms-settings:network");
-
-    private void OnOpenBluetoothSettings(object sender, RoutedEventArgs e) => ShellTargets.Open("ms-settings:bluetooth");
-
     private void ShowNetworkPanel()
     {
         _networkPanel ??= new NetworkPanelWindow(_themes);
@@ -1183,7 +1210,7 @@ public sealed partial class TopBarWindow : Window
             return;
         }
         var previous = _backdrop;
-        _backdrop = _themes.CreatePanelBackdrop(isDock: false) as PanelBackdrop;
+        _backdrop = _themes.CreatePanelBackdrop(PanelSurface.TopBar) as PanelBackdrop;
         SystemBackdrop = _backdrop;
         previous?.Dispose();
     }

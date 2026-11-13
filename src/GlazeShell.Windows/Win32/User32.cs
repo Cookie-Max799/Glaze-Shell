@@ -414,7 +414,15 @@ internal static class User32
 
     internal const int VkLeftWindows = 0x5B;
     internal const int VkRightWindows = 0x5C;
+    internal const int VkTab = 0x09;
     internal const int VkLeftButton = 0x01;
+
+    /// <summary>
+    /// Метка синтетического нажатия Win, которое отправляет сам Glaze Shell. По ней хук
+    /// отличает своё событие от чужого ввода: жесты тачпада и средства автоматизации тоже
+    /// помечены <c>LLKHF_INJECTED</c>, но их перехватывать нужно.
+    /// </summary>
+    internal const nint SyntheticMarker = 0x474C415A;
 
     /// <summary>Ввод клавиатуры для <see cref="SendInput"/>.</summary>
     internal const uint InputKeyboard = 1;
@@ -467,7 +475,7 @@ internal static class User32
                 Type = InputKeyboard,
                 Union = new InputUnion
                 {
-                    Keyboard = new KeybdInput { Vk = virtualKey, Scan = 0, Flags = 0, Time = 0, ExtraInfo = 0 }
+                    Keyboard = new KeybdInput { Vk = virtualKey, Scan = 0, Flags = 0, Time = 0, ExtraInfo = SyntheticMarker }
                 }
             }
         };

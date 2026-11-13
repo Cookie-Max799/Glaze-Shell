@@ -10,6 +10,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Windows.Graphics;
 using Windows.System;
 
@@ -27,6 +28,16 @@ namespace GlazeShell.App;
 public sealed partial class StartMenuWindow : Window
 {
     private const int WidthDips = 420;
+
+    /// <summary>
+    /// Высота меню: не на весь экран, а прямоугольник по центру левого края. Небольшие
+    /// экраны ужимают его, чтобы сверху и снизу остались одинаковые отступы.
+    /// </summary>
+    private const int HeightDips = 560;
+
+    /// <summary>Минимальный отступ сверху и снизу от рабочей области.</summary>
+    private const int VerticalMarginDips = 24;
+
     private const double SlideInMilliseconds = 240;
     private const double SlideOutMilliseconds = 170;
 
@@ -44,6 +55,7 @@ public sealed partial class StartMenuWindow : Window
     private bool _slidingIn;
     private bool _closing;
     private bool _closed;
+    private PanelBackdrop? _backdrop;
 
     public StartMenuWindow(
         ThemeApplicator themes,
@@ -66,12 +78,12 @@ public sealed partial class StartMenuWindow : Window
         }
 
         _themes.ApplyFromSettings(Root);
-        SystemBackdrop = _themes.CreatePanelBackdrop(isDock: false);
+        ApplyBackdrop();
 
         _settingsChanged = events.Subscribe<SettingsChanged>(_ =>
         {
             _themes.ApplyFromSettings(Root);
-            SystemBackdrop = _themes.CreatePanelBackdrop(isDock: false);
+            ApplyBackdrop();
         });
 
         _animation = DispatcherQueue.CreateTimer();
@@ -85,6 +97,8 @@ public sealed partial class StartMenuWindow : Window
             _animation.Stop();
             _animation.Tick -= OnAnimationTick;
             _settingsChanged.Dispose();
+            _backdrop?.Dispose();
+            _backdrop = null;
         };
     }
 
@@ -124,9 +138,12 @@ public sealed partial class StartMenuWindow : Window
         var scale = OverlayWindow.GetScaleFactor(_hwnd);
         var width = (int)Math.Round(WidthDips * scale);
         var area = monitor.WorkingArea ?? monitor.Bounds;
+        var margin = (int)Math.Round(VerticalMarginDips * scale);
+        var height = Math.Min((int)Math.Round(HeightDips * scale), area.Height - (margin * 2));
+        var y = area.Y + ((area.Height - height) / 2);
 
-        _shownBounds = new RectInt32(area.X, area.Y, width, area.Height);
-        _animationFrom = new RectInt32(area.X - width, area.Y, width, area.Height);
+        _shownBounds = new RectInt32(area.X, y, width, height);
+        _animationFrom = new RectInt32(area.X - width, y, width, height);
         _animationTo = _shownBounds;
         _slidingIn = true;
         _closing = false;
@@ -295,6 +312,20 @@ public sealed partial class StartMenuWindow : Window
             default:
                 break;
         }
+    }
+
+    /// <summary>Тот же Acrylic-фон, что у остальных панелей, но с ползунком меню «Пуск».</summary>
+    private void ApplyBackdrop()
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        var previous = _backdrop;
+        _backdrop = _themes.CreatePanelBackdrop(PanelSurface.StartMenu) as PanelBackdrop;
+        SystemBackdrop = _backdrop;
+        previous?.Dispose();
     }
 
     /// <summary>Текст поиска изменился; владелец может дополнить выдачу.</summary>

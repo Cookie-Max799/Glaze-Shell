@@ -27,6 +27,7 @@ public sealed class ThemeApplicator
     private const string GlassKey = "GlazeGlassBrush";
     private const string TopBarGlassKey = "GlazeTopBarGlassBrush";
     private const string DockGlassKey = "GlazeDockGlassBrush";
+    private const string StartMenuGlassKey = "GlazeStartMenuGlassBrush";
     private const string PillKey = "GlazeTopBarPillBrush";
     private const string BlackKey = "GlazeBlackBrush";
     private const string WhiteKey = "GlazeWhiteBrush";
@@ -105,6 +106,11 @@ public sealed class ThemeApplicator
     public int DockTransparency { get; private set; } = UserSettings.DefaultDockTransparency;
 
     /// <summary>
+    /// Прозрачность меню «Пуск» в процентах (0–90).
+    /// </summary>
+    public int StartMenuTransparency { get; private set; } = UserSettings.DefaultStartMenuTransparency;
+
+    /// <summary>
     /// Действует ли режим высокой контрастности: стекло отключено, цвета системные.
     /// </summary>
     public bool HighContrast { get; private set; }
@@ -123,7 +129,7 @@ public sealed class ThemeApplicator
             system.HighContrast,
             system.AnimationsEnabled);
 
-        Apply(root, settings.ThemeMode, settings.AccentId, settings.BaseColorId, settings.TransparencyEnabled, settings.TopBarTransparency, settings.DockTransparency, accessibility, system.Palette);
+        Apply(root, settings.ThemeMode, settings.AccentId, settings.BaseColorId, settings.TransparencyEnabled, settings.TopBarTransparency, settings.DockTransparency, settings.StartMenuTransparency, accessibility, system.Palette);
     }
 
     /// <summary>
@@ -167,7 +173,7 @@ public sealed class ThemeApplicator
             system.HighContrast,
             system.AnimationsEnabled);
 
-        Apply(root, mode, accentId, settings.BaseColorId, settings.TransparencyEnabled, settings.TopBarTransparency, settings.DockTransparency, accessibility, system.Palette);
+        Apply(root, mode, accentId, settings.BaseColorId, settings.TransparencyEnabled, settings.TopBarTransparency, settings.DockTransparency, settings.StartMenuTransparency, accessibility, system.Palette);
     }
 
     /// <summary>
@@ -182,6 +188,7 @@ public sealed class ThemeApplicator
         bool transparencyEnabled,
         int topBarTransparency,
         int dockTransparency,
+        int startMenuTransparency,
         AccessibilityState accessibility,
         SystemAccessibilityPalette palette)
     {
@@ -214,8 +221,11 @@ public sealed class ThemeApplicator
             var dockAlpha = backdropAvailable
                 ? GlazePalette.GlassAlphaFor(dockTransparency)
                 : (byte)0xFF;
+            var startMenuAlpha = backdropAvailable
+                ? GlazePalette.GlassAlphaFor(startMenuTransparency)
+                : (byte)0xFF;
 
-            ApplyBrushes(theme, topBarTransparency, topBarAlpha, dockAlpha);
+            ApplyBrushes(theme, topBarTransparency, topBarAlpha, dockAlpha, startMenuAlpha);
         }
 
         ApplyFocusVisual(accessibility.HighContrast ? ToColor(palette.Highlight) : theme.AccentForeground);
@@ -231,6 +241,7 @@ public sealed class ThemeApplicator
         TransparencyEnabled = transparencyEnabled;
         TopBarTransparency = topBarTransparency;
         DockTransparency = dockTransparency;
+        StartMenuTransparency = startMenuTransparency;
         HighContrast = accessibility.HighContrast;
         ReduceMotion = accessibility.ReduceMotion;
     }
@@ -240,8 +251,8 @@ public sealed class ThemeApplicator
     /// Возвращает <c>null</c>, когда прозрачность выключена, включён режим высокой
     /// контрастности или система не поддерживает Acrylic: тогда панель остаётся плотной.
     /// </summary>
-    /// <param name="isDock"><c>true</c> для dock, <c>false</c> для верхней панели.</param>
-    public SystemBackdrop? CreatePanelBackdrop(bool isDock)
+    /// <param name="surface">Панель: верхняя, dock или меню «Пуск».</param>
+    public SystemBackdrop? CreatePanelBackdrop(PanelSurface surface)
     {
         if (HighContrast || !TransparencyEnabled || !PanelBackdrop.IsSupported())
         {
@@ -250,7 +261,12 @@ public sealed class ThemeApplicator
 
         var light = ThemeModeResolver.Resolve(Mode, SystemUsesLightTheme()) == ThemeMode.Light;
         var transparency = Math.Clamp(
-            isDock ? DockTransparency : TopBarTransparency,
+            surface switch
+            {
+                PanelSurface.Dock => DockTransparency,
+                PanelSurface.StartMenu => StartMenuTransparency,
+                _ => TopBarTransparency,
+            },
             0,
             UserSettings.MaxTransparency);
 
@@ -285,7 +301,7 @@ public sealed class ThemeApplicator
         }
     }
 
-    private static void ApplyBrushes(GlazeTheme theme, int topBarTransparency, byte topBarAlpha, byte dockAlpha)
+    private static void ApplyBrushes(GlazeTheme theme, int topBarTransparency, byte topBarAlpha, byte dockAlpha, byte startMenuAlpha)
     {
         var accent = theme.DefaultAccent;
         var accentForeground = theme.AccentForeground;
@@ -310,6 +326,7 @@ public sealed class ThemeApplicator
             GlazePalette.WithAlpha(theme.Glass, overlayAlpha));
         SetBrush(TopBarGlassKey, GlazePalette.WithAlpha(theme.Glass, topBarAlpha));
         SetBrush(DockGlassKey, GlazePalette.WithAlpha(theme.Glass, dockAlpha));
+        SetBrush(StartMenuGlassKey, GlazePalette.WithAlpha(theme.Glass, startMenuAlpha));
         SetBrush(PillKey, GlazePalette.WithAlpha(theme.Elevated, pillAlpha));
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));

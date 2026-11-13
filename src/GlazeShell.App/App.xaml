@@ -36,6 +36,7 @@
             <!--  Стекло панелей: у верхней панели и dock свои ползунки прозрачности.  -->
             <SolidColorBrush x:Key="GlazeTopBarGlassBrush" Color="#8C211B45" />
             <SolidColorBrush x:Key="GlazeDockGlassBrush" Color="#8C211B45" />
+            <SolidColorBrush x:Key="GlazeStartMenuGlassBrush" Color="#8C211B45" />
             <!--  Плашки верхней панели: следуют её прозрачности и растворяются в полосе.  -->
             <SolidColorBrush x:Key="GlazeTopBarPillBrush" Color="#33221C48" />
             <SolidColorBrush x:Key="GlazeBlackBrush" Color="#000000" />
