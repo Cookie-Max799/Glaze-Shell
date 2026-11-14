@@ -133,6 +133,7 @@ public sealed partial class TopBarWindow : Window
             DispatcherQueue);
 
         InitializeComponent();
+        AppWindow.IsShownInSwitchers = false;
         Title = "Glaze Shell — Верхняя панель";
 
         // x:Bind в окне обновляются по событию Activated, а панель показывается без
@@ -245,10 +246,12 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
+        _suppressed = false;
         _collapseAt = DateTimeOffset.UtcNow + RevealHold;
     }
 
-    public bool IsRevealed => _reveal > 0.5;
+    public bool IsRevealed => !_suppressed &&
+        (_reveal > 0.5 || DateTimeOffset.UtcNow < _collapseAt);
 
     private bool _suppressed;
 
@@ -410,7 +413,7 @@ public sealed partial class TopBarWindow : Window
 
         // В покое над краем экрана остаётся кромка панели; когда работает чужая программа
         // или активно окно Glaze Shell (настройка этапа 4), панель убирается полностью.
-        var peek = _foreignForeground || (_ownForeground && _hideInOwnProcess) ? 0 : PeekHeight;
+        var peek = _suppressed || _foreignForeground || (_ownForeground && _hideInOwnProcess) ? 0 : PeekHeight;
         var hidden = (int)Math.Round((BarHeight - peek) * (1.0 - _reveal) * _scale);
         var placement = new RectInt32(_screenLeft, _screenTop - hidden, _screenWidth, _windowHeightPx);
 
@@ -459,7 +462,7 @@ public sealed partial class TopBarWindow : Window
                 if (showToast && _monitorTarget.Target is { } monitor)
                 {
                     _languageToast ??= new LanguageToastWindow(_themes);
-                    _languageToast.ShowLanguage(code, culture.NativeName, monitor);
+                    _languageToast.ShowLanguage(code, culture.NativeName, monitor, IsRevealed);
                 }
             }
         }

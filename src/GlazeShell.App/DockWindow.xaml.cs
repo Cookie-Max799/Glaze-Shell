@@ -191,6 +191,7 @@ public sealed partial class DockWindow : Window
         ViewModel = new DockViewModel(applications, launcher, windows, settings, events, DispatcherQueue);
 
         InitializeComponent();
+        AppWindow.IsShownInSwitchers = false;
         Title = "Glaze Shell — Dock";
 
         // Панель показывается без активации, поэтому Activated не приходит и x:Bind
@@ -239,11 +240,13 @@ public sealed partial class DockWindow : Window
             return;
         }
 
+        _suppressed = false;
         _revealUntil = DateTimeOffset.UtcNow + RevealHold;
         UpdateReveal();
     }
 
-    public bool IsRevealed => _reveal > 0.5;
+    public bool IsRevealed => !_suppressed &&
+        (_reveal > 0.5 || DateTimeOffset.UtcNow < _revealUntil);
 
     private bool _suppressed;
 

@@ -30,7 +30,7 @@ public static class GlazePalette
 
     private const double PrimaryContrast = 7.0;
     private const double SecondaryContrast = 4.5;
-    private const double MutedContrast = 3.0;
+    private const double MutedContrast = 4.5;
     private const double AccentContrast = 4.5;
 
     public static GlazeTheme Light { get; } = new(
@@ -81,7 +81,7 @@ public static class GlazePalette
         theme = EnsureReadable(theme);
 
         var accent = ResolveAccent(accentId, theme);
-        var surfaces = new[] { theme.Background, theme.Surface, theme.Elevated };
+        var surfaces = new[] { theme.Background, theme.Surface, theme.Elevated, theme.Glass };
         var accentForeground = accent.EnsureContrastAgainst(
             surfaces,
             AccentContrast,
@@ -128,14 +128,51 @@ public static class GlazePalette
 
     /// <summary>
     /// Альфа-канал для поверхностей внутри верхней панели (pill, чип сочетания клавиш).
-    /// Чуть плотнее стекла, но тоже следует ползунку: на предельной прозрачности плашки
-    /// почти растворяются в полосе, а на плотной остаются заметной подложкой.
+    /// На этих плашках лежат подписи и иконки, поэтому плотность не опускается ниже
+    /// <see cref="SurfaceAlphaFloor"/>: панель остаётся прозрачной, а текст читается
+    /// поверх любого рабочего стола. При небольшой прозрачности плашки выглядят как раньше.
     /// </summary>
     public static byte SurfaceAlphaFor(int transparency)
     {
         var limited = Math.Clamp(transparency, 0, MaxTransparency);
+        var alpha = (byte)Math.Round(255 * (1 - (0.9 * limited / 100.0)));
 
-        return (byte)Math.Round(255 * (1 - (0.9 * limited / 100.0)));
+        return Math.Max(alpha, SurfaceAlphaFloor);
+    }
+
+    /// <summary>
+    /// Нижний предел плотности плашек верхней панели — 55 % непрозрачности. Полоса
+    /// при этом сохраняет выбранную прозрачность: плотнее становится только подложка
+    /// под подписями.
+    /// </summary>
+    public const byte SurfaceAlphaFloor = 140;
+
+    /// <summary>
+    /// Порог, выше которого стеклянная поверхность считается светлой и требует тёмных
+    /// подписей. Ниже порога подписи светлые.
+    /// </summary>
+    public const double GlassLightThreshold = 0.2;
+
+    /// <summary>
+    /// Светлая ли стеклянная панель после смешения с обоями. Прозрачность настоящая,
+    /// поэтому при высоком ползунке панель наследует яркость рабочего стола: на светлых
+    /// обоях подписи должны стать тёмными, иначе белый текст на них не читается.
+    /// </summary>
+    /// <param name="theme">Действующая тема: важен цвет её стекла.</param>
+    /// <param name="transparency">Прозрачность панели в процентах.</param>
+    /// <param name="wallpaperLuminance">Относительная яркость обоев (0–1).</param>
+    public static bool GlassIsLight(GlazeTheme theme, int transparency, double wallpaperLuminance)
+    {
+        var limited = Math.Clamp(transparency, 0, MaxTransparency);
+        var transmission = limited / 100.0;
+
+        // Тонирование Acrylic и заливка панели накладываются друг на друга, поэтому
+        // обои просвечивают дважды: на 90 % остаётся около 81 % их яркости.
+        var wallpaperWeight = transmission * transmission;
+        var backdrop = (wallpaperWeight * Math.Clamp(wallpaperLuminance, 0, 1))
+            + ((1 - wallpaperWeight) * theme.Glass.RelativeLuminance);
+
+        return backdrop > GlassLightThreshold;
     }
 
     /// <summary>
@@ -185,7 +222,7 @@ public static class GlazePalette
             var surface = theme.Surface.ClampLuminance(0.70, 1.0);
             var elevated = theme.Elevated.ClampLuminance(0.66, 1.0);
             var glass = theme.Glass.ClampLuminance(0.65, 1.0);
-            var surfaces = new[] { background, surface, elevated };
+            var surfaces = new[] { background, surface, elevated, glass };
 
             return theme with
             {
@@ -203,7 +240,7 @@ public static class GlazePalette
         var darkSurface = theme.Surface.ClampLuminance(0.0, 0.08);
         var darkElevated = theme.Elevated.ClampLuminance(0.0, 0.10);
         var darkGlass = theme.Glass.ClampLuminance(0.0, 0.09);
-        var darkSurfaces = new[] { darkBackground, darkSurface, darkElevated };
+        var darkSurfaces = new[] { darkBackground, darkSurface, darkElevated, darkGlass };
 
         return theme with
         {

@@ -57,6 +57,7 @@ public sealed partial class MainWindow : Window
 
         ApplyWindowIcon();
         _appWindow = ResolveAppWindow();
+        _appWindow.IsShownInSwitchers = true;
         _appWindow.Closing += OnAppWindowClosing;
         ApplyInitialSizeAndPosition(monitors.GetPrimaryMonitor()?.ScaleFactor ?? 1.0);
         Activate();
@@ -101,11 +102,15 @@ public sealed partial class MainWindow : Window
     {
         if (DispatcherQueue.HasThreadAccess)
         {
-            _appWindow?.Hide();
+            if (_appWindow is not null)
+            {
+                _appWindow.IsShownInSwitchers = false;
+                _appWindow.Hide();
+            }
         }
         else
         {
-            _ = DispatcherQueue.TryEnqueue(() => _appWindow?.Hide());
+            _ = DispatcherQueue.TryEnqueue(HideToTray);
         }
     }
 
@@ -124,6 +129,11 @@ public sealed partial class MainWindow : Window
 
         if (_appWindow is not null)
         {
+            _appWindow.IsShownInSwitchers = true;
+            if (_appWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Minimized } presenter)
+            {
+                presenter.Restore();
+            }
             _appWindow.Show();
 
             // Show только делает окно видимым: свёрнутое остаётся свёрнутым, а фокус

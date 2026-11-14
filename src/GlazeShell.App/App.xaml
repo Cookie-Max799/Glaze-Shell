@@ -52,6 +52,17 @@
             <SolidColorBrush x:Key="GlazeTextSecondaryBrush" Color="#C6C0EC" />
             <SolidColorBrush x:Key="GlazeTextMutedBrush" Color="#918BBB" />
             <SolidColorBrush x:Key="GlazeAccentBrush" Color="#C9BEFF" />
+            <!--
+                Подписи на стеклянных поверхностях. Панель настоящая прозрачная, её
+                светлота зависит от обоев, поэтому на светлом рабочем столе подписи
+                становятся тёмными, а на тёмном — светлыми. Обычные окна на
+                непрозрачных поверхностях продолжают использовать GlazeText*Brush.
+                Схему выбирает ThemeApplicator по яркости обоев.
+            -->
+            <SolidColorBrush x:Key="GlazeGlassTextPrimaryBrush" Color="#F8F4FF" />
+            <SolidColorBrush x:Key="GlazeGlassTextSecondaryBrush" Color="#C6C0EC" />
+            <SolidColorBrush x:Key="GlazeGlassTextMutedBrush" Color="#918BBB" />
+            <SolidColorBrush x:Key="GlazeGlassTextAccentBrush" Color="#C9BEFF" />
             <SolidColorBrush x:Key="GlazeSelectionBrush" Color="#33B4A4FF" />
             <SolidColorBrush x:Key="TextOnAccentFillColorPrimaryBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="TextOnAccentFillColorSecondaryBrush" Color="#E6FFFFFF" />
@@ -97,6 +108,32 @@
             <StaticResource x:Key="ToggleButtonBorderBrushChecked" ResourceKey="GlazeBorderBrush" />
             <StaticResource x:Key="ToggleButtonBorderBrushCheckedPointerOver" ResourceKey="GlazeBorderBrush" />
 
+            <StaticResource x:Key="ButtonForeground" ResourceKey="GlazeTextPrimaryBrush" />
+            <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="GlazeTextPrimaryBrush" />
+            <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="GlazeTextPrimaryBrush" />
+            <StaticResource x:Key="ButtonBackground" ResourceKey="GlazeElevatedBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="GlazeSurfaceBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="GlazeElevatedBrush" />
+            <StaticResource x:Key="TextControlForeground" ResourceKey="GlazeTextPrimaryBrush" />
+            <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="GlazeTextPrimaryBrush" />
+            <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="GlazeTextSecondaryBrush" />
+
+            <!--
+                Цвета текста по умолчанию для стандартных элементов (TextBlock без явной
+                кисти, ComboBox, CheckBox, ToggleSwitch, заголовки меню). Системные кисти
+                WinUI берутся из темы Windows и на прозрачных панелях давали нечитаемые
+                подписи; здесь они связаны с кистями Glaze Shell, которые ThemeApplicator
+                перекрашивает под текущую тему и режим контрастности.
+            -->
+            <StaticResource x:Key="TextFillColorPrimaryBrush" ResourceKey="GlazeTextPrimaryBrush" />
+            <StaticResource x:Key="TextFillColorSecondaryBrush" ResourceKey="GlazeTextSecondaryBrush" />
+            <StaticResource x:Key="TextFillColorTertiaryBrush" ResourceKey="GlazeTextMutedBrush" />
+            <StaticResource x:Key="TextFillColorDisabledBrush" ResourceKey="GlazeTextMutedBrush" />
+            <StaticResource x:Key="SystemControlForegroundBaseHighBrush" ResourceKey="GlazeTextPrimaryBrush" />
+            <StaticResource x:Key="SystemControlForegroundBaseMediumBrush" ResourceKey="GlazeTextSecondaryBrush" />
+            <StaticResource x:Key="SystemControlForegroundBaseMediumLowBrush" ResourceKey="GlazeTextMutedBrush" />
+            <StaticResource x:Key="SystemControlForegroundBaseLowBrush" ResourceKey="GlazeBorderBrush" />
+
             <!--
                 Единый радиус скруглений (DESIGN §6). ControlCornerRadius задаёт поля,
                 кнопки и списки, OverlayCornerRadius — меню, подсказки и диалоги, поэтому
@@ -129,6 +166,7 @@
                 <Setter Property="MinHeight" Value="32" />
                 <Setter Property="Padding" Value="10,4" />
                 <Setter Property="Background" Value="Transparent" />
+                <Setter Property="Foreground" Value="{StaticResource GlazeTextPrimaryBrush}" />
                 <Setter Property="BorderThickness" Value="0" />
                 <Setter Property="CornerRadius" Value="8" />
                 <Setter Property="FontSize" Value="12" />

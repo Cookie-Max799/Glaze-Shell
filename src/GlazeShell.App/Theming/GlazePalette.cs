@@ -40,6 +40,11 @@ internal static class GlazePalette
 
     public static byte OverlayAlphaFor(int transparency) => CorePalette.OverlayAlphaFor(transparency);
 
+    public static bool GlassIsLight(CoreTheme theme, int transparency, double wallpaperLuminance) =>
+        CorePalette.GlassIsLight(theme, transparency, wallpaperLuminance);
+
+    public static GlazeTheme FromCore(CoreTheme theme) => Convert(theme);
+
     public static Color Lighten(Color color, double amount) => ToColor(GlazeColor.Lighten(ToCore(color), amount));
 
     public static Color OnAccent(Color accent) => ToColor(GlazeColor.OnAccent(ToCore(accent)));

@@ -38,9 +38,9 @@ internal sealed class LanguageToastWindow : Window
     /// <summary>Размер «капли», из которой раскрывается плашка.</summary>
     private const int DropletDips = 22;
 
-    private const double GrowMilliseconds = 280;
+    private const double GrowMilliseconds = 340;
     private const double HoldMilliseconds = 1150;
-    private const double FadeMilliseconds = 180;
+    private const double FadeMilliseconds = 145;
 
     private static readonly TimeSpan GrowTime = TimeSpan.FromMilliseconds(GrowMilliseconds);
     private static readonly TimeSpan HoldTime = TimeSpan.FromMilliseconds(HoldMilliseconds);
@@ -92,6 +92,8 @@ internal sealed class LanguageToastWindow : Window
 
         _root = new Border
         {
+            Width = WidthDips,
+            Height = HeightDips,
             Padding = new Thickness(16, 8, 16, 8),
             CornerRadius = new CornerRadius(16),
             BorderThickness = new Thickness(1),
@@ -99,6 +101,7 @@ internal sealed class LanguageToastWindow : Window
         };
 
         Content = _root;
+        AppWindow.IsShownInSwitchers = false;
         Title = "Glaze Shell — Раскладка";
 
         if (AppWindow.Presenter is OverlappedPresenter presenter)
@@ -112,6 +115,7 @@ internal sealed class LanguageToastWindow : Window
 
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         OverlayWindow.MakeTopMostToolWindow(_hwnd);
+        OverlayWindow.SetNonActivating(_hwnd, true);
 
         _timer = DispatcherQueue.CreateTimer();
         _timer.Interval = TimeSpan.FromMilliseconds(16);
@@ -127,7 +131,7 @@ internal sealed class LanguageToastWindow : Window
         };
     }
 
-    public void ShowLanguage(string code, string name, MonitorInfo monitor)
+    public void ShowLanguage(string code, string name, MonitorInfo monitor, bool topBarVisible = true)
     {
         if (_closed)
         {
@@ -137,17 +141,18 @@ internal sealed class LanguageToastWindow : Window
         _themes.ApplyFromSettings(_root);
         _root.Background = (Brush)Application.Current.Resources["GlazeTopBarGlassBrush"];
         _root.BorderBrush = (Brush)Application.Current.Resources["GlazeBorderBrush"];
-        _code.Foreground = (Brush)Application.Current.Resources["GlazeTextPrimaryBrush"];
-        _name.Foreground = (Brush)Application.Current.Resources["GlazeTextSecondaryBrush"];
+        _code.Foreground = (Brush)Application.Current.Resources["GlazeGlassTextPrimaryBrush"];
+        _name.Foreground = (Brush)Application.Current.Resources["GlazeGlassTextSecondaryBrush"];
         _code.Text = code;
         _name.Text = name;
 
         ApplyBackdrop();
 
         var scale = monitor.ScaleFactor;
-        var area = monitor.WorkingArea ?? monitor.Bounds;
+        var area = monitor.Bounds;
         var right = area.X + area.Width - (int)Math.Round(MarginDips * scale);
-        var top = area.Y + (int)Math.Round(TopDips * scale);
+        var topOffset = topBarVisible ? TopDips : 8;
+        var top = area.Y + (int)Math.Round(topOffset * scale);
         var width = (int)Math.Round(WidthDips * scale);
         var height = (int)Math.Round(HeightDips * scale);
         var droplet = (int)Math.Round(DropletDips * scale);
@@ -185,9 +190,10 @@ internal sealed class LanguageToastWindow : Window
 
         // Содержимое проявляется на первой трети роста: в размере «капли» текст всё равно
         // не читается, а резкое появление букв в маленьком окне выглядело бы рывком.
+        var fading = Math.Clamp((elapsed - GrowTime - HoldTime).TotalMilliseconds / FadeMilliseconds, 0, 1);
         _root.Opacity = _themes.ReduceMotion
             ? 1
-            : Math.Clamp(progress / 0.35, 0, 1);
+            : Math.Clamp(progress / 0.6, 0, 1) * (1 - fading);
 
         OverlayWindow.ApplyRoundedRegions(
             _hwnd,
@@ -204,10 +210,7 @@ internal sealed class LanguageToastWindow : Window
         if (elapsed < GrowTime)
         {
             var t = elapsed.TotalMilliseconds / GrowMilliseconds;
-            const double Back = 1.35;
-            const double BackCube = Back + 1;
-            var eased = 1 + (BackCube * Math.Pow(t - 1, 3)) + (Back * Math.Pow(t - 1, 2));
-            return Math.Clamp(eased, 0, 1.06);
+            return 1 - Math.Pow(1 - t, 4);
         }
 
         var afterGrow = elapsed - GrowTime;
@@ -218,7 +221,7 @@ internal sealed class LanguageToastWindow : Window
         }
 
         var fade = Math.Clamp((afterGrow - HoldTime).TotalMilliseconds / FadeMilliseconds, 0, 1);
-        return 1 - fade;
+        return Math.Pow(1 - fade, 1.35);
     }
 
     private static RectInt32 Interpolate(RectInt32 from, RectInt32 to, double progress)

@@ -90,6 +90,7 @@ public partial class App : Application
     /// </summary>
     private GlobalHotkey? _recoveryHotkey;
 
+
     /// <summary>
     /// Сторож восстановления (I2): отдельный процесс, который возвращает интерфейс Windows,
     /// если оболочка завершилась неожиданно.
@@ -829,10 +830,11 @@ public partial class App : Application
     private void OnWindowsKeyPressed(object? sender, EventArgs e) =>
         RunOnUiThread(() =>
         {
-            var hide = _topBar?.IsRevealed == true || _dock?.IsRevealed == true;
-            _topBar?.SetSuppressed(hide);
-            _dock?.SetSuppressed(hide);
-            if (!hide)
+            var currentlyVisible = _topBar?.IsRevealed == true ||
+                                   _dock?.IsRevealed == true;
+            _topBar?.SetSuppressed(currentlyVisible);
+            _dock?.SetSuppressed(currentlyVisible);
+            if (!currentlyVisible)
             {
                 RevealPanels();
             }

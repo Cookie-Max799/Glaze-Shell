@@ -7,7 +7,7 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid x:Name="Root" Padding="20" UseLayoutRounding="True">
+    <Grid x:Name="Root" Padding="20" UseLayoutRounding="True" Background="{StaticResource GlazeGlassBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -20,7 +20,7 @@
             Margin="0,0,0,10"
             FontSize="18"
             FontWeight="SemiBold"
-            Foreground="{StaticResource GlazeTextPrimaryBrush}"
+            Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
             Text="Wi-Fi" />
 
         <StackPanel Grid.Row="1" Spacing="3" Margin="0,0,0,14">
@@ -28,11 +28,11 @@
                 x:Name="StatusText"
                 FontSize="13"
                 FontWeight="SemiBold"
-                Foreground="{StaticResource GlazeTextPrimaryBrush}" />
+                Foreground="{StaticResource GlazeGlassTextPrimaryBrush}" />
             <TextBlock
                 x:Name="SubtitleText"
                 FontSize="11"
-                Foreground="{StaticResource GlazeTextMutedBrush}" />
+                Foreground="{StaticResource GlazeGlassTextSecondaryBrush}" />
         </StackPanel>
 
         <Grid Grid.Row="2">
@@ -51,12 +51,12 @@
                                     <TextBlock
                                         FontSize="13"
                                         FontWeight="SemiBold"
-                                        Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                                        Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
                                         Text="{Binding Name}"
                                         TextTrimming="CharacterEllipsis" />
                                     <TextBlock
                                         FontSize="11"
-                                        Foreground="{StaticResource GlazeTextMutedBrush}"
+                                        Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
                                         Text="{Binding Status}" />
                                 </StackPanel>
                             </Border>
@@ -71,7 +71,7 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
                 FontSize="12"
-                Foreground="{StaticResource GlazeTextMutedBrush}"
+                Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
                 Text="Сети не найдены"
                 Visibility="Collapsed" />
         </Grid>

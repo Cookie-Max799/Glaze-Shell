@@ -26,6 +26,7 @@ public sealed partial class BluetoothPanelWindow : Window
     {
         _themes = themes ?? throw new ArgumentNullException(nameof(themes));
         InitializeComponent();
+        AppWindow.IsShownInSwitchers = false;
 
         if (AppWindow.Presenter is OverlappedPresenter presenter)
         {

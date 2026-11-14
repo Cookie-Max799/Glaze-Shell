@@ -227,6 +227,9 @@ internal static class User32
     /// <summary>Чтение параметров темы высокой контрастности.</summary>
     internal const uint SpiGetHighContrast = 0x0042;
 
+    /// <summary>Путь к файлу обоев рабочего стола.</summary>
+    internal const uint SpiGetDesktopWallpaper = 0x0073;
+
     /// <summary>Признак включённой темы высокой контрастности.</summary>
     internal const uint HcfHighContrastOn = 0x0000_0001;
 
@@ -615,6 +618,11 @@ internal static class User32
     [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SystemParametersInfoW(uint action, uint param, ref uint value, uint winIni);
+
+    /// <summary>Читает строковый параметр системы, например путь к файлу обоев.</summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SystemParametersInfoW(uint action, uint param, [Out] char[] value, uint winIni);
 
     /// <summary>Возвращает текущий системный цвет по индексу (например, <c>COLOR_WINDOW</c>).</summary>
     [DllImport("user32.dll", ExactSpelling = true)]

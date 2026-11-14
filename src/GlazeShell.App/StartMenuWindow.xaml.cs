@@ -38,8 +38,8 @@ public sealed partial class StartMenuWindow : Window
     /// <summary>Минимальный отступ сверху и снизу от рабочей области.</summary>
     private const int VerticalMarginDips = 24;
 
-    private const double SlideInMilliseconds = 240;
-    private const double SlideOutMilliseconds = 170;
+    private const double SlideInMilliseconds = 300;
+    private const double SlideOutMilliseconds = 180;
 
     private readonly ThemeApplicator _themes;
     private readonly IMonitorManager _monitors;
@@ -68,6 +68,7 @@ public sealed partial class StartMenuWindow : Window
         _themes = themes ?? throw new ArgumentNullException(nameof(themes));
         _monitors = monitors ?? throw new ArgumentNullException(nameof(monitors));
         InitializeComponent();
+        AppWindow.IsShownInSwitchers = false;
         Title = "Glaze Shell — Пуск";
 
         if (AppWindow.Presenter is OverlappedPresenter presenter)
@@ -128,7 +129,7 @@ public sealed partial class StartMenuWindow : Window
 
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         OverlayWindow.MakeTopMostToolWindow(_hwnd);
-        OverlayWindow.UseSquareCorners(_hwnd);
+        OverlayWindow.UseRoundedCorners(_hwnd);
 
         var monitor = _monitors.GetPrimaryMonitor();
 
@@ -153,12 +154,20 @@ public sealed partial class StartMenuWindow : Window
 
         AppWindow.MoveAndResize(_animationFrom);
         OverlayWindow.ApplyRoundedRegions(_hwnd, [new PixelRect(0, 0, width, height)], (int)Math.Round(20 * scale));
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            if (!_closed)
+            {
+                OverlayWindow.ApplyRoundedRegions(_hwnd, [new PixelRect(0, 0, width, height)], (int)Math.Round(20 * scale));
+            }
+        });
         _pointerDown = OverlayWindow.IsLeftButtonDown();
         _animating = true;
         _animation.Interval = TimeSpan.FromMilliseconds(16);
 
         SearchBox.Text = string.Empty;
         ApplyFilter(string.Empty);
+        Root.Opacity = _themes.ReduceMotion ? 1 : 0.65;
 
         Activate();
         SearchBox.Focus(FocusState.Programmatic);
@@ -202,6 +211,8 @@ public sealed partial class StartMenuWindow : Window
 
         if (_themes.ReduceMotion)
         {
+            _animating = false;
+            _closing = false;
             AppWindow.Hide();
             _animation.Stop();
             return;
@@ -233,7 +244,11 @@ public sealed partial class StartMenuWindow : Window
         }
         var length = _slidingIn ? SlideInMilliseconds : SlideOutMilliseconds;
         var progress = Math.Clamp(_watch.Elapsed.TotalMilliseconds / length, 0, 1);
-        var eased = 1 - Math.Pow(1 - progress, 3);
+        var eased = _slidingIn
+            ? (progress < 0.5
+                ? 4 * progress * progress * progress
+                : 1 - (Math.Pow(-2 * progress + 2, 3) / 2))
+            : 1 - Math.Pow(1 - progress, 3);
         Root.Opacity = _slidingIn ? 0.65 + (0.35 * eased) : 1 - (0.35 * eased);
 
         var x = (int)Math.Round(_animationFrom.X + ((_animationTo.X - _animationFrom.X) * eased));
@@ -250,6 +265,10 @@ public sealed partial class StartMenuWindow : Window
         if (_slidingIn)
         {
             AppWindow.MoveAndResize(_shownBounds);
+            OverlayWindow.ApplyRoundedRegions(
+                _hwnd,
+                [new PixelRect(0, 0, _shownBounds.Width, _shownBounds.Height)],
+                (int)Math.Round(20 * OverlayWindow.GetScaleFactor(_hwnd)));
             _animation.Interval = TimeSpan.FromMilliseconds(50);
         }
         else

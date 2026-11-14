@@ -2,6 +2,8 @@ using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
 using GlazeShell.Core.Services;
 using GlazeShell.Windows.SystemAccessibility;
+using GlazeShell.Windows.SystemStatus;
+using CorePalette = GlazeShell.Core.Theming.GlazePalette;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI;
@@ -35,6 +37,10 @@ public sealed class ThemeApplicator
     private const string TextSecondaryKey = "GlazeTextSecondaryBrush";
     private const string TextMutedKey = "GlazeTextMutedBrush";
     private const string AccentKey = "GlazeAccentBrush";
+    private const string GlassTextPrimaryKey = "GlazeGlassTextPrimaryBrush";
+    private const string GlassTextSecondaryKey = "GlazeGlassTextSecondaryBrush";
+    private const string GlassTextMutedKey = "GlazeGlassTextMutedBrush";
+    private const string GlassTextAccentKey = "GlazeGlassTextAccentBrush";
     private const string SelectionKey = "GlazeSelectionBrush";
     private const string AccentFillKey = "AccentFillColorDefaultBrush";
     private const string TextOnAccentPrimaryKey = "TextOnAccentFillColorPrimaryBrush";
@@ -225,7 +231,14 @@ public sealed class ThemeApplicator
                 ? GlazePalette.GlassAlphaFor(startMenuTransparency)
                 : (byte)0xFF;
 
-            ApplyBrushes(theme, topBarTransparency, topBarAlpha, dockAlpha, startMenuAlpha);
+            var glassText = ResolveGlassTextTheme(
+                light,
+                baseColorId,
+                accentId,
+                topBarTransparency,
+                backdropAvailable);
+
+            ApplyBrushes(theme, glassText, topBarTransparency, topBarAlpha, dockAlpha, startMenuAlpha);
         }
 
         ApplyFocusVisual(accessibility.HighContrast ? ToColor(palette.Highlight) : theme.AccentForeground);
@@ -281,6 +294,48 @@ public sealed class ThemeApplicator
     }
 
     /// <summary>
+    /// Собирает тему подписей для стеклянных поверхностей. Панель действительно прозрачная,
+    /// поэтому её светлота зависит от обоев: на светлом рабочем столе подписи становятся
+    /// тёмными, на тёмном — светлыми. Смена цвета текста, а не плотности стекла, сохраняет
+    /// прозрачность на всём диапазоне ползунка.
+    /// </summary>
+    /// <param name="light">Действующая тема приложения.</param>
+    /// <param name="baseColorId">Основной цвет темы.</param>
+    /// <param name="accentId">Акцент темы.</param>
+    /// <param name="transparency">Прозрачность верхней панели: она задаёт долю обоев в смеси.</param>
+    /// <param name="backdropAvailable">Есть ли Acrylic: без него панель остаётся плотной.</param>
+    private static GlazeTheme ResolveGlassTextTheme(
+        bool light,
+        string? baseColorId,
+        string? accentId,
+        int transparency,
+        bool backdropAvailable)
+    {
+        // Без backdrop стеклянные окна рисуются плотной заливкой темы, поэтому подписи
+        // остаются обычными.
+        if (!backdropAvailable)
+        {
+            return GlazePalette.Create(light, baseColorId, accentId, 0);
+        }
+
+        var wallpaper = DesktopWallpaper.Luminance;
+
+        // Обои недоступны (сплошной цвет, служебный рабочий стол) — оставляем светлоту
+        // темы: она предсказуема и уже проверена на контраст.
+        if (wallpaper is not { } luminance)
+        {
+            return GlazePalette.Create(light, baseColorId, accentId, 0);
+        }
+
+        var theme = CorePalette.Create(light, baseColorId, accentId, 0);
+        var darkOnLight = GlazePalette.GlassIsLight(theme, transparency, luminance);
+
+        return darkOnLight == light
+            ? GlazePalette.FromCore(theme)
+            : GlazePalette.FromCore(CorePalette.Create(!light, baseColorId, accentId, 0));
+    }
+
+    /// <summary>
     /// Читает системную настройку «светлая/тёмная тема приложений». Если значение
     /// отсутствует или недоступно, считается тема светлая (как в Windows по умолчанию).
     /// </summary>
@@ -301,7 +356,7 @@ public sealed class ThemeApplicator
         }
     }
 
-    private static void ApplyBrushes(GlazeTheme theme, int topBarTransparency, byte topBarAlpha, byte dockAlpha, byte startMenuAlpha)
+    private static void ApplyBrushes(GlazeTheme theme, GlazeTheme glassText, int topBarTransparency, byte topBarAlpha, byte dockAlpha, byte startMenuAlpha)
     {
         var accent = theme.DefaultAccent;
         var accentForeground = theme.AccentForeground;
@@ -327,13 +382,21 @@ public sealed class ThemeApplicator
         SetBrush(TopBarGlassKey, GlazePalette.WithAlpha(theme.Glass, topBarAlpha));
         SetBrush(DockGlassKey, GlazePalette.WithAlpha(theme.Glass, dockAlpha));
         SetBrush(StartMenuGlassKey, GlazePalette.WithAlpha(theme.Glass, startMenuAlpha));
-        SetBrush(PillKey, GlazePalette.WithAlpha(theme.Elevated, pillAlpha));
+        SetBrush(PillKey, GlazePalette.WithAlpha(glassText.Elevated, pillAlpha));
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         SetBrush(TextPrimaryKey, theme.TextPrimary);
         SetBrush(TextSecondaryKey, theme.TextSecondary);
         SetBrush(TextMutedKey, theme.TextMuted);
         SetBrush(AccentKey, accentForeground);
+
+        // Подписи на стекле выбираются по светлоте рабочего стола: панель прозрачная,
+        // и на светлых обоях тёмный текст читается лучше светлого.
+        SetBrush(GlassTextPrimaryKey, glassText.TextPrimary);
+        SetBrush(GlassTextSecondaryKey, glassText.TextSecondary);
+        SetBrush(GlassTextMutedKey, glassText.TextMuted);
+        SetBrush(GlassTextAccentKey, glassText.AccentForeground);
+
         SetBrush(SelectionKey, selection);
 
         // Стандартные элементы (ползунок, переключатель, флажок, подсветка списков)
@@ -376,6 +439,7 @@ public sealed class ThemeApplicator
         SetOverlayGlass(background, background);
         SetBrush(TopBarGlassKey, background);
         SetBrush(DockGlassKey, background);
+        SetBrush(StartMenuGlassKey, background);
         SetBrush(PillKey, surface);
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
@@ -383,6 +447,13 @@ public sealed class ThemeApplicator
         SetBrush(TextSecondaryKey, surfaceText);
         SetBrush(TextMutedKey, muted);
         SetBrush(AccentKey, highlight);
+
+        // В высокой контрастности стекло непрозрачное, поэтому подписи на нём совпадают
+        // с системными цветами обычных поверхностей.
+        SetBrush(GlassTextPrimaryKey, foreground);
+        SetBrush(GlassTextSecondaryKey, surfaceText);
+        SetBrush(GlassTextMutedKey, muted);
+        SetBrush(GlassTextAccentKey, highlight);
         SetBrush(SelectionKey, selection);
         SetBrush(TextOnAccentPrimaryKey, ToColor(palette.HighlightText));
         SetBrush(TextOnAccentSecondaryKey, ToColor(palette.HighlightText));

@@ -21,7 +21,17 @@ public static class ShellIconProvider
 {
     private const int BytesPerPixel = 4;
 
-    public static IconPixels? TryGetIcon(string? path, int size = 64)
+    public static IconPixels? TryGetIcon(string? path, int size = 64) =>
+        TryGetImage(path, size, Shell32.SiigbfIconOnly | Shell32.SiigbfResizeToFit);
+
+    /// <summary>
+    /// Достаёт уменьшенное изображение файла (например, обоев) через тот же shell-провайдер.
+    /// Возвращает <c>null</c>, если файл недоступен или оболочка не отдала миниатюру.
+    /// </summary>
+    public static IconPixels? TryGetThumbnail(string? path, int size = 16) =>
+        TryGetImage(path, size, Shell32.SiigbfResizeToFit);
+
+    private static IconPixels? TryGetImage(string? path, int size, uint flags)
     {
         if (size <= 0 || string.IsNullOrWhiteSpace(path) || !(File.Exists(path) || Directory.Exists(path)))
         {
@@ -51,7 +61,7 @@ public static class ShellIconProvider
             }
 
             var nativeSize = new Shell32.NativeSize { Width = size, Height = size };
-            result = factory.GetImage(nativeSize, Shell32.SiigbfIconOnly | Shell32.SiigbfResizeToFit, out bitmap);
+            result = factory.GetImage(nativeSize, flags, out bitmap);
 
             if (result != 0 || bitmap == 0)
             {

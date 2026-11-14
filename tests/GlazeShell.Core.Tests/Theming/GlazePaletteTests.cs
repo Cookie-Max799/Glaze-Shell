@@ -151,6 +151,54 @@ public sealed class GlazePaletteTests
         }
     }
 
+    /// <summary>
+    /// Плашки внутри верхней панели остаются подложкой под подписями при любой прозрачности:
+    /// на предельном ползунке они не растворяются в полосе, иначе текст теряется на обоях.
+    /// Сама полоса при этом сохраняет выбранную прозрачность.
+    /// </summary>
+    [TestMethod]
+    public void PillsKeepAReadableBackingAtTheTransparencyLimit()
+    {
+        Assert.AreEqual(255, GlazePalette.SurfaceAlphaFor(0));
+        Assert.AreEqual(GlazePalette.SurfaceAlphaFloor, GlazePalette.SurfaceAlphaFor(GlazePalette.MaxTransparency));
+        Assert.IsGreaterThan(
+            GlazePalette.SurfaceAlphaFor(GlazePalette.MaxTransparency),
+            GlazePalette.SurfaceAlphaFor(20),
+            "Pills must still follow the slider below the floor.");
+        Assert.AreEqual(
+            (byte)Math.Round(255 * (1 - (0.9 * GlazePalette.DefaultTransparency / 100.0))),
+            GlazePalette.SurfaceAlphaFor(GlazePalette.DefaultTransparency),
+            "The floor must not affect the usual range.");
+    }
+
+    /// <summary>
+    /// Светлота стекла считается по реальному просвечиванию обоев: ползунок прозрачности
+    /// не ограничивается, поэтому на светлом рабочем столе тёмная тема получает светлую
+    /// панель и тёмные подписи, а на тёмном — тёмную панель и светлые подписи.
+    /// </summary>
+    [TestMethod]
+    public void GlassLightnessFollowsTheWallpaperAtHighTransparency()
+    {
+        var dark = GlazePalette.Create(light: false, baseColorId: null, accentId: null, glassTransparency: 0);
+        var light = GlazePalette.Create(light: true, baseColorId: null, accentId: null, glassTransparency: 0);
+
+        const double lightWallpaper = 0.31;
+        const double darkWallpaper = 0.02;
+
+        Assert.IsTrue(
+            GlazePalette.GlassIsLight(dark, GlazePalette.MaxTransparency, lightWallpaper),
+            "Dark theme over a light wallpaper must switch to dark captions.");
+        Assert.IsFalse(
+            GlazePalette.GlassIsLight(dark, GlazePalette.MaxTransparency, darkWallpaper),
+            "Dark theme over a dark wallpaper keeps light captions.");
+        Assert.IsTrue(
+            GlazePalette.GlassIsLight(light, GlazePalette.MaxTransparency, darkWallpaper),
+            "Light theme over a dark wallpaper stays light because its own glass is light.");
+        Assert.IsFalse(
+            GlazePalette.GlassIsLight(dark, 0, lightWallpaper),
+            "An opaque panel does not depend on the wallpaper.");
+    }
+
     private static void AssertContrast(
         GlazeColor foreground,
         IReadOnlyList<GlazeColor> backgrounds,
