@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Window
     x:Class="GlazeShell.App.TopBarWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -468,7 +468,7 @@
                                         CornerRadius="10">
                                         <FontIcon
                                             FontSize="14"
-                                            Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                            Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                                             Glyph="{x:Bind Glyph}" />
                                     </Border>
 
@@ -478,12 +478,12 @@
                                         <TextBlock
                                             FontSize="13"
                                             FontWeight="SemiBold"
-                                            Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
+                                            Foreground="{StaticResource GlazePanelTextPrimaryBrush}"
                                             Text="{x:Bind Title}"
                                             TextTrimming="CharacterEllipsis" />
                                         <TextBlock
                                             FontSize="11.5"
-                                            Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                                            Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                                             Text="{x:Bind Subtitle}"
                                             TextTrimming="CharacterEllipsis"
                                             Visibility="{x:Bind HasSubtitle}" />
@@ -493,7 +493,7 @@
                                         Grid.Column="2"
                                         VerticalAlignment="Center"
                                         FontSize="11.5"
-                                        Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                                        Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                                         Text="{x:Bind KindLabel}" />
                                 </Grid>
                             </DataTemplate>
@@ -505,7 +505,7 @@
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
                         FontSize="13"
-                        Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                        Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                         Text="Ничего не найдено"
                         Visibility="{x:Bind ViewModel.ShowEmptyState, Mode=OneWay}" />
                 </Grid>
@@ -531,13 +531,13 @@
                 <TextBlock
                     FontSize="19"
                     FontWeight="SemiBold"
-                    Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
+                    Foreground="{StaticResource GlazePanelTextPrimaryBrush}"
                     Text="Центр управления" />
 
                 <StackPanel Spacing="8">
                     <TextBlock
                         FontSize="11.5"
-                        Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                        Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                         Text="ЗВУК" />
                     <Grid ColumnSpacing="12">
                         <Grid.ColumnDefinitions>
@@ -560,7 +560,7 @@
                             ToolTipService.ToolTip="Выключить звук">
                             <FontIcon
                                 FontSize="15"
-                                Foreground="{StaticResource GlazeTextPrimaryBrush}"
+                                Foreground="{StaticResource GlazePanelTextPrimaryBrush}"
                                 Glyph="{x:Bind ViewModel.QuickSettings.VolumeGlyph, Mode=OneWay}" />
                         </Button>
 
@@ -578,14 +578,14 @@
                             Width="64"
                             VerticalAlignment="Center"
                             FontSize="12"
-                            Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                            Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                             Text="{x:Bind ViewModel.QuickSettings.VolumeLabel, Mode=OneWay}"
                             TextAlignment="Right" />
                     </Grid>
 
                     <TextBlock
                         FontSize="11.5"
-                        Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                        Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                         Text="Устройство вывода не найдено"
                         Visibility="{x:Bind ViewModel.QuickSettings.HasNoVolume, Mode=OneWay}" />
                 </StackPanel>
@@ -593,7 +593,7 @@
                 <StackPanel Spacing="8">
                     <TextBlock
                         FontSize="11.5"
-                        Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                        Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                         Text="ОФОРМЛЕНИЕ" />
                     <ComboBox
                         HorizontalAlignment="Stretch"
@@ -612,7 +612,7 @@
                 <StackPanel Spacing="8">
                     <TextBlock
                         FontSize="11.5"
-                        Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                        Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                         Text="СИСТЕМА" />
                     <!--
                         Сеть и Bluetooth открываются кликом по своим индикаторам в правой
@@ -628,7 +628,7 @@
                 <StackPanel Spacing="8">
                     <TextBlock
                         FontSize="11.5"
-                        Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                        Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                         Text="ПРИЛОЖЕНИЕ" />
                     <Grid ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
@@ -691,11 +691,11 @@
                         <TextBlock
                             FontSize="19"
                             FontWeight="SemiBold"
-                            Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
+                            Foreground="{StaticResource GlazePanelTextPrimaryBrush}"
                             Text="{x:Bind ViewModel.Calendar.MonthTitle, Mode=OneWay}" />
                         <TextBlock
                             FontSize="11.5"
-                            Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                            Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                             Text="{x:Bind ViewModel.Calendar.TodayLabel, Mode=OneWay}" />
                     </StackPanel>
 
@@ -714,7 +714,7 @@
                             Click="OnCalendarPreviousMonth"
                             CornerRadius="16"
                             ToolTipService.ToolTip="Предыдущий месяц">
-                            <FontIcon FontSize="12" Foreground="{StaticResource GlazeTextPrimaryBrush}" Glyph="&#xE76B;" />
+                            <FontIcon FontSize="12" Foreground="{StaticResource GlazePanelTextPrimaryBrush}" Glyph="&#xE76B;" />
                         </Button>
                         <Button
                             Height="32"
@@ -737,7 +737,7 @@
                             Click="OnCalendarNextMonth"
                             CornerRadius="16"
                             ToolTipService.ToolTip="Следующий месяц">
-                            <FontIcon FontSize="12" Foreground="{StaticResource GlazeTextPrimaryBrush}" Glyph="&#xE76C;" />
+                            <FontIcon FontSize="12" Foreground="{StaticResource GlazePanelTextPrimaryBrush}" Glyph="&#xE76C;" />
                         </Button>
                     </StackPanel>
                 </Grid>
@@ -756,7 +756,7 @@
                                 Width="40"
                                 Margin="2,0"
                                 FontSize="11"
-                                Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                                Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                                 Text="{Binding}"
                                 TextAlignment="Center" />
                         </DataTemplate>
@@ -796,7 +796,7 @@
                                                 HorizontalAlignment="Center"
                                                 VerticalAlignment="Center"
                                                 FontSize="12.5"
-                                                Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
+                                                Foreground="{StaticResource GlazePanelTextPrimaryBrush}"
                                                 Opacity="{x:Bind Opacity}"
                                                 Text="{x:Bind DayText}" />
                                         </Grid>

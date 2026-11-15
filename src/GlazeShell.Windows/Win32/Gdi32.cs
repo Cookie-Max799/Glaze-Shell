@@ -68,8 +68,7 @@ internal static class Gdi32
         ref BitmapInfoHeader bitmapInfoHeader,
         uint usage);
 
-    /// <summary>
-    /// Создаёт прямоугольник со скруглёнными углами для региональной маски окна.
+    /// <summary>Создаёт прямоугольник со скруглёнными углами для региональной маски окна.
     /// Правый и нижний края не входят в область.
     /// </summary>
     [DllImport("gdi32.dll", ExactSpelling = true)]
@@ -80,6 +79,29 @@ internal static class Gdi32
         int bottom,
         int widthEllipse,
         int heightEllipse);
+
+    /// <summary>Контекст экрана: источник пикселей для чтения фона под панелью.</summary>
+    [DllImport("user32.dll", ExactSpelling = true)]
+    internal static extern nint GetDC(nint hwnd);
+
+    [DllImport("user32.dll", ExactSpelling = true)]
+    internal static extern int ReleaseDC(nint hwnd, nint dc);
+
+    [DllImport("gdi32.dll", ExactSpelling = true)]
+    internal static extern nint CreateCompatibleDC(nint dc);
+
+    [DllImport("gdi32.dll", ExactSpelling = true)]
+    internal static extern nint CreateCompatibleBitmap(nint dc, int width, int height);
+
+    [DllImport("gdi32.dll", ExactSpelling = true)]
+    internal static extern nint SelectObject(nint dc, nint obj);
+
+    [DllImport("gdi32.dll", ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool BitBlt(nint destination, int x, int y, int width, int height, nint source, int sourceX, int sourceY, uint rasterOperation);
+
+    /// <summary>Копирование пикселей экрана в буфер: <c>SRCCOPY</c>.</summary>
+    internal const uint SrcCopy = 0x00CC0020;
 
     /// <summary>
     /// Создаёт прямоугольную область для региональной маски окна — например, нижнюю полосу,

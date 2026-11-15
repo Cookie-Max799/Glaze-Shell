@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Window
     x:Class="GlazeShell.App.StartMenuWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -50,11 +50,11 @@
                         <TextBlock
                             FontSize="15"
                             FontWeight="SemiBold"
-                            Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
+                            Foreground="{StaticResource GlazePanelTextPrimaryBrush}"
                             Text="Glaze Shell" />
                         <TextBlock
                             FontSize="11"
-                            Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                            Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                             Text="Меню приложений" />
                     </StackPanel>
                 </StackPanel>
@@ -77,7 +77,7 @@
                             Grid.Column="0"
                             VerticalAlignment="Center"
                             FontSize="14"
-                            Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                            Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                             Glyph="&#xE721;" />
                         <TextBox
                             Grid.Column="1"
@@ -85,9 +85,9 @@
                             Background="Transparent"
                             BorderThickness="0"
                             FontSize="14"
-                            Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
+                            Foreground="{StaticResource GlazePanelTextPrimaryBrush}"
                             IsSpellCheckEnabled="False"
-                            PlaceholderForeground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                            PlaceholderForeground="{StaticResource GlazePanelTextSecondaryBrush}"
                             PlaceholderText="Поиск приложений"
                             TextChanged="OnSearchTextChanged" />
                     </Grid>
@@ -98,7 +98,7 @@
                     Margin="4,0,0,10"
                     FontSize="11"
                     FontWeight="SemiBold"
-                    Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                    Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                     Text="ПРИЛОЖЕНИЯ" />
 
                 <Grid Grid.Row="3">
@@ -135,7 +135,7 @@
                                         </Border>
                                         <TextBlock
                                             FontSize="11"
-                                            Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
+                                            Foreground="{StaticResource GlazePanelTextPrimaryBrush}"
                                             MaxLines="2"
                                             Text="{Binding Name}"
                                             TextAlignment="Center"
@@ -152,7 +152,7 @@
                         VerticalAlignment="Top"
                         Margin="0,24,0,0"
                         FontSize="12"
-                        Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                        Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                         Text="Ничего не найдено"
                         Visibility="Collapsed" />
                 </Grid>

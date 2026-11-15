@@ -21,8 +21,26 @@ public sealed partial class NetworkPanelWindow : Window
     private const int WidthDips = 340;
     private const int HeightDips = 380;
 
+    /// <summary>
+    /// Позиция прогрева: окно показывается далеко за пределами рабочего стола, чтобы
+    /// состав и Acrylic подключились, а пользователь ничего не увидел.
+    /// </summary>
+    private const int OffscreenX = -30000;
+    private const int OffscreenY = -30000;
+
+    /// <summary>
+    /// Сколько ждать подключения Acrylic при прогреве. Первый кадр окна без backdrop —
+    /// чёрная подложка, и без паузы она попадала в кадр: прозрачность «появлялась»
+    /// с задержкой и не совпадала с верхней полосой.
+    /// </summary>
+    private const int PreloadMilliseconds = 320;
+
     private readonly ThemeApplicator _themes;
     private bool _closed;
+    private bool _preloaded;
+    private bool _presented;
+    private int _preparedWidth = 1;
+    private int _preparedHeight = 1;
     private readonly uint _ownProcessId = (uint)Environment.ProcessId;
     private long _shownAtTick;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _dismissTimer;
@@ -45,7 +63,10 @@ public sealed partial class NetworkPanelWindow : Window
 
         _backdrop = _themes.CreatePanelBackdrop(PanelSurface.TopBar) as PanelBackdrop;
         SystemBackdrop = _backdrop;
-        _themes.ApplyFromSettings(Root);
+
+        // Схема подписей читается по фону под панелью, а он известен только после показа
+        // и раскладки: до этого ActualWidth ещё нулевой.
+        Root.Loaded += (_, _) => _themes.ApplyFromSettings(Root, Root);
 
         // Панель забирает фокус при показе, поэтому любой клик вне её — по рабочему столу,
         // верхней панели или приложению — уводит фокус. Таймер замечает это и закрывает
@@ -78,23 +99,61 @@ public sealed partial class NetworkPanelWindow : Window
         _backdrop = _themes.CreatePanelBackdrop(PanelSurface.TopBar) as PanelBackdrop;
         SystemBackdrop = _backdrop;
         previous?.Dispose();
-        _themes.ApplyFromSettings(Root);
+        _themes.ApplyFromSettings(Root, Root);
     }
 
-    /// <summary>Закрывает панель: окно разрушается, следующий показ создаёт новое.</summary>
+    /// <summary>
+    /// Создаёт окно заранее: показывает его вне экрана, чтобы XAML-дерево и Acrylic
+    /// подключились до первого открытия. Без прогрева первый кадр панели рисовался без
+    /// backdrop — плотной чёрной подложкой, и прозрачность расходилась с верхней полосой.
+    /// </summary>
+    public async Task PrepareAsync(double scale)
+    {
+        if (_closed || _preloaded)
+        {
+            return;
+        }
+
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        OverlayWindow.MakeTopMostToolWindow(hwnd);
+        OverlayWindow.UseRoundedCorners(hwnd);
+        OverlayWindow.SetNonActivating(hwnd, true);
+
+        _preparedWidth = Math.Max(1, (int)Math.Round(WidthDips * scale));
+        _preparedHeight = Math.Max(1, (int)Math.Round(HeightDips * scale));
+
+        AppWindow.MoveAndResize(new RectInt32(OffscreenX, OffscreenY, _preparedWidth, _preparedHeight));
+        AppWindow.Show();
+        OverlayWindow.ShowWithoutActivation(hwnd);
+
+        // Пауза нужна, чтобы контроллер Acrylic успел подключиться к цели: подключение
+        // асинхронное, и без ожидания первый кадр на экране будет уже без стекла.
+        await Task.Delay(PreloadMilliseconds);
+
+        _preloaded = true;
+    }
+
+    /// <summary>Закрывает панель: окно уезжает за экран и остаётся готовым к следующему показу.</summary>
     public void ClosePanel()
     {
         _dismissTimer?.Stop();
-        if (!_closed)
+
+        if (_closed)
         {
-            Close();
+            return;
         }
+
+        _presented = false;
+
+        // Окно не разрушается: следующий показ переиспользует прогретый экземпляр,
+        // и стекло появляется сразу, без плотного первого кадра.
+        AppWindow.MoveAndResize(new RectInt32(OffscreenX, OffscreenY, _preparedWidth, _preparedHeight));
     }
 
     /// <summary>Сдвигает панель вместе с верхней полосой при её выезде или автоскрытии.</summary>
     public void ShiftBy(int deltaPx)
     {
-        if (_closed || deltaPx == 0 || !AppWindow.IsVisible)
+        if (_closed || deltaPx == 0 || !_presented)
         {
             return;
         }
@@ -105,7 +164,7 @@ public sealed partial class NetworkPanelWindow : Window
 
     private void DismissIfDeactivated()
     {
-        if (_closed || !AppWindow.IsVisible)
+        if (_closed || !_presented)
         {
             _dismissTimer?.Stop();
             return;
@@ -141,9 +200,9 @@ public sealed partial class NetworkPanelWindow : Window
             return;
         }
 
+        await PrepareAsync(scale);
+
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        OverlayWindow.MakeTopMostToolWindow(hwnd);
-        OverlayWindow.UseRoundedCorners(hwnd);
 
         var width = (int)Math.Round(WidthDips * scale);
         var height = (int)Math.Round(HeightDips * scale);
@@ -152,8 +211,10 @@ public sealed partial class NetworkPanelWindow : Window
         var y = iconY + (int)Math.Round(36 * scale);
 
         AppWindow.MoveAndResize(new RectInt32(x, y, width, height));
+        _preparedWidth = Math.Max(1, width);
+        _preparedHeight = Math.Max(1, height);
+        _presented = true;
         _shownAtTick = Environment.TickCount64;
-        AppWindow.Show();
         Activate();
         OverlayWindow.ActivateForInput(hwnd);
         _dismissTimer?.Start();

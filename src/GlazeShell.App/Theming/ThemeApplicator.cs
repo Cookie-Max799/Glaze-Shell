@@ -41,6 +41,10 @@ public sealed class ThemeApplicator
     private const string GlassTextSecondaryKey = "GlazeGlassTextSecondaryBrush";
     private const string GlassTextMutedKey = "GlazeGlassTextMutedBrush";
     private const string GlassTextAccentKey = "GlazeGlassTextAccentBrush";
+    private const string PanelTextPrimaryKey = "GlazePanelTextPrimaryBrush";
+    private const string PanelTextSecondaryKey = "GlazePanelTextSecondaryBrush";
+    private const string PanelTextMutedKey = "GlazePanelTextMutedBrush";
+    private const string PanelTextAccentKey = "GlazePanelTextAccentBrush";
     private const string SelectionKey = "GlazeSelectionBrush";
     private const string HoverKey = "GlazeHoverBrush";
     private const string PressedKey = "GlazePressedBrush";
@@ -135,7 +139,18 @@ public sealed class ThemeApplicator
     /// </summary>
     public bool ReduceMotion { get; private set; }
 
-    public void ApplyFromSettings(FrameworkElement root)
+    public void ApplyFromSettings(FrameworkElement root) => ApplyFromSettings(root, panel: null);
+
+    /// <summary>
+    /// Применяет тему к окну и отдельно к раскрытой панели, если она есть.
+    /// </summary>
+    /// <param name="root">Корень визуального дерева окна.</param>
+    /// <param name="panel">
+    /// Элемент раскрытой панели («Центр управления», календарь, результаты поиска) или
+    /// <see langword="null"/>, если панель закрыта. По его области читается фон под панелью:
+    /// он бывает противоположен фону под полосой, и подписи панели выбираются отдельно.
+    /// </param>
+    public void ApplyFromSettings(FrameworkElement root, FrameworkElement? panel)
     {
         var settings = _settings.GetSettings();
         var system = SystemAccessibilityProvider.GetInfo();
@@ -144,7 +159,7 @@ public sealed class ThemeApplicator
             system.HighContrast,
             system.AnimationsEnabled);
 
-        Apply(root, settings.ThemeMode, settings.AccentId, settings.BaseColorId, settings.TransparencyEnabled, settings.TopBarTransparency, settings.DockTransparency, settings.StartMenuTransparency, accessibility, system.Palette);
+        Apply(root, panel, settings.ThemeMode, settings.AccentId, settings.BaseColorId, settings.TransparencyEnabled, settings.TopBarTransparency, settings.DockTransparency, settings.StartMenuTransparency, accessibility, system.Palette);
     }
 
     /// <summary>
@@ -188,7 +203,7 @@ public sealed class ThemeApplicator
             system.HighContrast,
             system.AnimationsEnabled);
 
-        Apply(root, mode, accentId, settings.BaseColorId, settings.TransparencyEnabled, settings.TopBarTransparency, settings.DockTransparency, settings.StartMenuTransparency, accessibility, system.Palette);
+        Apply(root, panel: null, mode, accentId, settings.BaseColorId, settings.TransparencyEnabled, settings.TopBarTransparency, settings.DockTransparency, settings.StartMenuTransparency, accessibility, system.Palette);
     }
 
     /// <summary>
@@ -197,6 +212,7 @@ public sealed class ThemeApplicator
     /// </summary>
     private void Apply(
         FrameworkElement root,
+        FrameworkElement? panel,
         ThemeMode mode,
         string? accentId,
         string? baseColorId,
@@ -240,14 +256,29 @@ public sealed class ThemeApplicator
                 ? GlazePalette.GlassAlphaFor(startMenuTransparency)
                 : (byte)0xFF;
 
+            // Фон читается по области той поверхности, для которой собираются подписи:
+            // под полосой и под раскрытым popover он разный, и общая схема на окно
+            // делала часть подписей нечитаемой.
+            var surfaceLuminance = ReadSurfaceLuminance(root, SurfaceProbe.TopBar);
+
             var glassText = ResolveGlassTextTheme(
                 light,
                 baseColorId,
                 accentId,
                 topBarTransparency,
-                backdropAvailable);
+                backdropAvailable,
+                surfaceLuminance);
+
+            var panelGlassText = ResolveGlassTextTheme(
+                light,
+                baseColorId,
+                accentId,
+                topBarTransparency,
+                backdropAvailable,
+                ReadSurfaceLuminance(panel ?? root, SurfaceProbe.Panel));
 
             ApplyBrushes(theme, glassText, topBarTransparency, topBarAlpha, dockAlpha, startMenuAlpha);
+            ApplyPanelGlassText(panelGlassText);
         }
 
         ApplyFocusVisual(accessibility.HighContrast ? ToColor(palette.Highlight) : theme.AccentForeground);
@@ -304,21 +335,26 @@ public sealed class ThemeApplicator
 
     /// <summary>
     /// Собирает тему подписей для стеклянных поверхностей. Панель действительно прозрачная,
-    /// поэтому её светлота зависит от обоев: на светлом рабочем столе подписи становятся
-    /// тёмными, на тёмном — светлыми. Смена цвета текста, а не плотности стекла, сохраняет
-    /// прозрачность на всём диапазоне ползунка.
+    /// поэтому её светлота зависит от того, что оказалось под ней: над панелью задач или
+    /// светлым окном подписи должны быть тёмными, над тёмным окном — светлыми. Смена цвета
+    /// текста, а не плотности стекла, сохраняет прозрачность на всём диапазоне ползунка.
     /// </summary>
     /// <param name="light">Действующая тема приложения.</param>
     /// <param name="baseColorId">Основной цвет темы.</param>
     /// <param name="accentId">Акцент темы.</param>
-    /// <param name="transparency">Прозрачность верхней панели: она задаёт долю обоев в смеси.</param>
+    /// <param name="transparency">Прозрачность поверхности: она задаёт долю фона в смеси.</param>
     /// <param name="backdropAvailable">Есть ли Acrylic: без него панель остаётся плотной.</param>
+    /// <param name="backgroundLuminance">
+    /// Яркость фона под поверхностью (0–1). <see langword="null"/> — фон неизвестен, и тогда
+    /// схема остаётся темой: она предсказуема и уже проверена на контраст.
+    /// </param>
     private static GlazeTheme ResolveGlassTextTheme(
         bool light,
         string? baseColorId,
         string? accentId,
         int transparency,
-        bool backdropAvailable)
+        bool backdropAvailable,
+        double? backgroundLuminance)
     {
         // Без backdrop стеклянные окна рисуются плотной заливкой темы, поэтому подписи
         // остаются обычными.
@@ -327,21 +363,81 @@ public sealed class ThemeApplicator
             return GlazePalette.Create(light, baseColorId, accentId, 0);
         }
 
-        var wallpaper = DesktopWallpaper.Luminance;
-
-        // Обои недоступны (сплошной цвет, служебный рабочий стол) — оставляем светлоту
-        // темы: она предсказуема и уже проверена на контраст.
-        if (wallpaper is not { } luminance)
+        if (backgroundLuminance is not { } luminance)
         {
             return GlazePalette.Create(light, baseColorId, accentId, 0);
         }
 
-        var theme = CorePalette.Create(light, baseColorId, accentId, 0);
-        var darkOnLight = GlazePalette.GlassIsLight(theme, transparency, luminance);
+        var core = CorePalette.Create(light, baseColorId, accentId, 0);
+        var darkOnLight = GlazePalette.GlassIsLight(core, transparency, luminance);
 
         return darkOnLight == light
-            ? GlazePalette.FromCore(theme)
+            ? GlazePalette.FromCore(core)
             : GlazePalette.FromCore(CorePalette.Create(!light, baseColorId, accentId, 0));
+    }
+
+    /// <summary>
+    /// Яркость фона непосредственно под поверхностью окна. Прозрачная панель показывает
+    /// не рабочий стол вообще, а конкретный участок экрана: под полосой обычно окно
+    /// приложения или панель задач, под popover — часть того же окна. Подписи должны
+    /// контрастировать именно с ним.
+    /// </summary>
+    /// <param name="root">Корень визуального дерева окна с прозрачной поверхностью.</param>
+    /// <param name="surface">Какую поверхность окна измерять.</param>
+    private static double? ReadSurfaceLuminance(FrameworkElement root, SurfaceProbe surface)
+    {
+        try
+        {
+            if (root.ActualWidth < 1 || root.ActualHeight < 1)
+            {
+                return null;
+            }
+
+            var scale = root.XamlRoot?.RasterizationScale ?? 1;
+
+            if (scale <= 0)
+            {
+                scale = 1;
+            }
+
+            // Область отсчёта берётся из указанного элемента, а не из всего окна: у окна
+            // верхней панели высота включает раскрытый popover, и средняя яркость по нему
+            // относилась бы сразу к двум разным фонам.
+            var area = surface == SurfaceProbe.TopBar
+                ? new global::Windows.Foundation.Rect(0, 0, root.ActualWidth, BarProbeHeight)
+                : new global::Windows.Foundation.Rect(0, 0, root.ActualWidth, root.ActualHeight);
+
+            var bounds = root.TransformToVisual(null).TransformBounds(area);
+
+            var x = (int)Math.Round(bounds.X * scale);
+            var y = (int)Math.Round(bounds.Y * scale);
+            var width = (int)Math.Round(bounds.Width * scale);
+            var height = (int)Math.Round(bounds.Height * scale);
+
+            return ScreenLuminance.Read(x, y, width, height);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            // Окно могло закрыться между вызовами: тогда фон неизвестен, и схема подписей
+            // остаётся темой.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Высота полосы верхней панели (DIP): по ней читается фон под ней. Совпадает с
+    /// высотой панели в разметке окна.
+    /// </summary>
+    private const double BarProbeHeight = 30;
+
+    /// <summary>Какая поверхность окна измеряется для выбора схемы подписей.</summary>
+    private enum SurfaceProbe
+    {
+        /// <summary>Полоса верхней панели.</summary>
+        TopBar,
+
+        /// <summary>Раскрытые панели: результаты поиска, «Центр управления», календарь.</summary>
+        Panel,
     }
 
     /// <summary>
@@ -429,6 +525,19 @@ public sealed class ThemeApplicator
     }
 
     /// <summary>
+    /// Подписи раскрытых панелей. Схема может отличаться от полосы: popover занимает
+    /// другую часть экрана, и фон под ним бывает противоположным. Отдельные токены нужны,
+    /// чтобы поправить читаемость панели, не трогая полосу и остальные окна.
+    /// </summary>
+    private static void ApplyPanelGlassText(GlazeTheme glassText)
+    {
+        SetBrush(PanelTextPrimaryKey, glassText.TextPrimary);
+        SetBrush(PanelTextSecondaryKey, glassText.TextSecondary);
+        SetBrush(PanelTextMutedKey, glassText.TextMuted);
+        SetBrush(PanelTextAccentKey, glassText.AccentForeground);
+    }
+
+    /// <summary>
     /// Перекрашивает токены в системные цвета темы высокой контрастности. Стекло становится
     /// непрозрачным фоном, приглушённый текст — системным «серым», а акцент — системным
     /// выделением.
@@ -465,6 +574,10 @@ public sealed class ThemeApplicator
         SetBrush(GlassTextSecondaryKey, surfaceText);
         SetBrush(GlassTextMutedKey, muted);
         SetBrush(GlassTextAccentKey, highlight);
+        SetBrush(PanelTextPrimaryKey, foreground);
+        SetBrush(PanelTextSecondaryKey, surfaceText);
+        SetBrush(PanelTextMutedKey, muted);
+        SetBrush(PanelTextAccentKey, highlight);
         SetBrush(SelectionKey, selection);
         SetBrush(HoverKey, selection);
         SetBrush(PressedKey, GlazePalette.WithAlpha(highlight, ContrastSelectionAlpha));

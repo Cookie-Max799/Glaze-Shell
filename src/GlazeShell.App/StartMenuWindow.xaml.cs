@@ -80,12 +80,14 @@ public sealed partial class StartMenuWindow : Window
             presenter.IsAlwaysOnTop = true;
         }
 
-        _themes.ApplyFromSettings(Root);
+        // Схема подписей читается по фону под панелью, а он известен только после показа
+        // и раскладки: до этого ActualWidth ещё нулевой.
+        Root.Loaded += (_, _) => _themes.ApplyFromSettings(Root, Root);
         ApplyBackdrop();
 
         _settingsChanged = events.Subscribe<SettingsChanged>(_ =>
         {
-            _themes.ApplyFromSettings(Root);
+            _themes.ApplyFromSettings(Root, Root);
             ApplyBackdrop();
         });
 

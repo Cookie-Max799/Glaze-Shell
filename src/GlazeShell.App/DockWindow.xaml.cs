@@ -198,7 +198,7 @@ public sealed partial class DockWindow : Window
         // не обновлялись бы: плитки приложений оставались бы пустыми.
         Bindings?.Update();
 
-        _themes.ApplyFromSettings(Root);
+        _themes.ApplyFromSettings(Root, Root);
 
         ViewModel.StartRequested += OnStartRequested;
         ViewModel.Items.CollectionChanged += OnItemsChanged;
@@ -565,7 +565,7 @@ public sealed partial class DockWindow : Window
             return;
         }
 
-        _themes.ApplyFromSettings(Root);
+        _themes.ApplyFromSettings(Root, Root);
         ApplyBackdrop();
         _hideInOwnProcess = changed.Settings.HidePanelsInGlazeShell;
 

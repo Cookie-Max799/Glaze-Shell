@@ -63,6 +63,16 @@
             <SolidColorBrush x:Key="GlazeGlassTextSecondaryBrush" Color="#C6C0EC" />
             <SolidColorBrush x:Key="GlazeGlassTextMutedBrush" Color="#918BBB" />
             <SolidColorBrush x:Key="GlazeGlassTextAccentBrush" Color="#C9BEFF" />
+            <!--
+                Подписи раскрытых панелей верхней полосы: «Центр управления», календарь,
+                результаты поиска, панели Wi-Fi и Bluetooth. Панель занимает свою область
+                экрана, и фон под ней бывает противоположен фону под полосой, поэтому схема
+                выбирается отдельно. В обычной разметке совпадает со схемой полосы.
+            -->
+            <SolidColorBrush x:Key="GlazePanelTextPrimaryBrush" Color="#F8F4FF" />
+            <SolidColorBrush x:Key="GlazePanelTextSecondaryBrush" Color="#C6C0EC" />
+            <SolidColorBrush x:Key="GlazePanelTextMutedBrush" Color="#918BBB" />
+            <SolidColorBrush x:Key="GlazePanelTextAccentBrush" Color="#C9BEFF" />
             <SolidColorBrush x:Key="GlazeSelectionBrush" Color="#33B4A4FF" />
             <!--
                 Наведение и нажатие кнопок: полупрозрачная примесь акцента. Отдельные

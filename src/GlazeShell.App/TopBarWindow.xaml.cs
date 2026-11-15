@@ -74,13 +74,6 @@ public sealed partial class TopBarWindow : Window
     private int _screenTop;
     private int _screenWidth;
     private int _windowHeightPx;
-
-    /// <summary>
-    /// Логическая высота окна: одна полоса или полоса вместе с открытой панелью. По ней
-    /// считается полный отъезд окна за край экрана.
-    /// </summary>
-    private double _windowLogicalHeight = BarHeight;
-
     private double _scale = 1.0;
     private double _reveal;
     private double _lastAppliedReveal = -1;
@@ -155,7 +148,7 @@ public sealed partial class TopBarWindow : Window
         // оставались бы пустыми: без часов, индикаторов нагрузки и иконок.
         Bindings?.Update();
 
-        _themes.ApplyFromSettings(Root);
+        _themes.ApplyFromSettings(Root, OpenPanel());
 
         ConfigureOverlay();
 
@@ -166,6 +159,11 @@ public sealed partial class TopBarWindow : Window
             UpdateOverlayBounds();
             StartRevealWatch();
             UpdateForegroundState();
+
+            // Панели Wi-Fi и Bluetooth прогреваются сразу после старта: к моменту клика
+            // их окна уже созданы и Acrylic подключён, поэтому прозрачность видна
+            // с первого кадра, а не только после повторного открытия.
+            PrepareSystemPanels();
         };
         AppPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         if (SearchHit is not null)
@@ -384,7 +382,6 @@ public sealed partial class TopBarWindow : Window
             logicalHeight = MeasurePanelHeight(CalendarPanel, CalendarWidth);
         }
 
-        _windowLogicalHeight = logicalHeight;
         _windowHeightPx = Math.Max(1, (int)Math.Round(logicalHeight * _scale));
 
         if (target is not null)
@@ -431,12 +428,11 @@ public sealed partial class TopBarWindow : Window
         // или активно окно Glaze Shell (настройка этапа 4), панель убирается полностью.
         var fullyHidden = _suppressed || _foreignForeground || (_ownForeground && _hideInOwnProcess);
 
-        // Открытая панель добавляет окну высоту ниже полосы. Убирать нужно всё окно целиком:
-        // иначе popover оставался бы на экране, когда полоса уже уехала, и «следование
-        // за полосой» не читалось бы. Кромку оставляем только у одной полосы — у высокого
-        // окна видимой оказалась бы нижняя часть popover, а не край панели.
-        var peek = fullyHidden || _windowLogicalHeight > BarHeight + 0.5 ? 0 : PeekHeight;
-        var hidden = (int)Math.Round((_windowLogicalHeight - peek) * (1.0 - _reveal) * _scale);
+        // Окно поднимается ровно на ход полосы: открытый popover едет вместе с ней, но
+        // остаётся на экране. Уезжать на высоту всего окна нельзя — тогда исчезал бы и
+        // «Центр управления», а он должен только подняться чуть выше.
+        var peek = fullyHidden ? 0 : PeekHeight;
+        var hidden = (int)Math.Round((BarHeight - peek) * (1.0 - _reveal) * _scale);
         var placement = new RectInt32(_screenLeft, _screenTop - hidden, _screenWidth, _windowHeightPx);
 
         if (placement != _placement)
@@ -511,13 +507,6 @@ public sealed partial class TopBarWindow : Window
 
         var now = DateTimeOffset.UtcNow;
         var pinned = IsPinnedOpen();
-
-        // «Центр управления» при включённой настройке не удерживает полосу, но пока курсор
-        // над popover, сворачивать нельзя: иначе ползунок и списки уезжали бы из-под мыши.
-        var quickSettingsCollapses = ViewModel.QuickSettings.IsOpen &&
-            _topBarHidesWithQuickSettings &&
-            !IsCursorOverQuickSettings();
-
         var target = 0.0;
 
         // На рабочем столе и в собственных окнах панель обычно открыта постоянно, как dock:
@@ -534,10 +523,6 @@ public sealed partial class TopBarWindow : Window
             // Панель недавно вызвана клавишей Windows (или курсором): пока идёт удержание,
             // она видна и в чужом приложении, и при автоскрытии внутри Glaze Shell.
             target = 1.0;
-        }
-        else if (quickSettingsCollapses)
-        {
-            target = 0.0;
         }
         else if (_ownForeground && _hideInOwnProcess)
         {
@@ -570,9 +555,14 @@ public sealed partial class TopBarWindow : Window
             ApplyPlacement();
         }
 
-        // Полностью убранная панель не должна удерживать клавиатуру: иначе после ухода
-        // в чужое приложение фокус оставался бы у скрытого окна.
-        if (_reveal <= 0 && _inputEnabled && !IsPinnedOpen())
+        // Полностью убранная полоса не должна удерживать клавиатуру: иначе после ухода
+        // в чужое приложение фокус оставался бы у скрытого окна. Открытый popover — другое
+        // дело: он остаётся на экране, когда полоса уехала, и должен принимать нажатия.
+        if (_reveal <= 0 &&
+            _inputEnabled &&
+            !IsPinnedOpen() &&
+            !ViewModel.QuickSettings.IsOpen &&
+            !ViewModel.Calendar.IsOpen)
         {
             if (SearchBox is { FocusState: not FocusState.Unfocused })
             {
@@ -581,16 +571,6 @@ public sealed partial class TopBarWindow : Window
 
             _inputEnabled = false;
             OverlayWindow.SetNonActivating(_hwnd, true);
-        }
-
-        // Popover вернулся вместе с полосой — возвращаем и ввод: окно в режиме без
-        // активации не получает нажатий, и ползунки «Центра управления» были бы мертвы
-        // до нового клика по индикатору, который закрыл бы панель.
-        if (!_inputEnabled &&
-            _reveal > 0.99 &&
-            (ViewModel.QuickSettings.IsOpen || ViewModel.Calendar.IsOpen))
-        {
-            EnableInput();
         }
     }
 
@@ -639,6 +619,11 @@ public sealed partial class TopBarWindow : Window
 
         _ownForeground = own;
         _foreignForeground = foreign;
+
+        // Активное окно сменилось — сменился и фон под панелью: подписи пересчитываются
+        // под него. Уход в чужое приложение и возврат на рабочий стол — это как раз те
+        // переходы, когда под прозрачной панелью оказывается другое содержимое.
+        _ = DispatcherQueue.TryEnqueue(RefreshGlassText);
 
         if (foreign)
         {
@@ -707,47 +692,17 @@ public sealed partial class TopBarWindow : Window
     }
 
     /// <summary>
-    /// Курсор над «Центром управления». Пока пользователь работает с popover, полоса
-    /// не закрывается, даже если настройка разрешает автоскрытие при открытом центре:
-    /// иначе ползунок громкости уезжал бы из-под курсора.
-    /// </summary>
-    private bool IsCursorOverQuickSettings()
-    {
-        if (QuickSettingsPanel is null ||
-            QuickSettingsPanel.ActualWidth <= 0 ||
-            QuickSettingsPanel.ActualHeight <= 0 ||
-            !OverlayWindow.TryGetCursorPosition(_hwnd, out var x, out var y))
-        {
-            return false;
-        }
-
-        var bounds = QuickSettingsPanel
-            .TransformToVisual(null)
-            .TransformBounds(new Rect(0, 0, QuickSettingsPanel.ActualWidth, QuickSettingsPanel.ActualHeight));
-
-        var left = (int)Math.Round(bounds.X * _scale);
-        var top = (int)Math.Round(bounds.Y * _scale);
-        var right = (int)Math.Round((bounds.X + bounds.Width) * _scale);
-        var bottom = (int)Math.Round((bounds.Y + bounds.Height) * _scale);
-
-        return x >= left && x < right && y >= top && y < bottom;
-    }
-
-    /// <summary>
     /// Поиск или открытый popover удерживают панель раскрытой. Пока у окна есть ввод,
     /// панель тоже не сворачивается: иначе фокус в пустом поле поиска сразу терялся бы.
     /// Исключение — «Центр управления» при включённой настройке
     /// <see cref="Core.Models.UserSettings.TopBarHidesWithQuickSettings"/>: тогда полоса
-    /// закрывается по обычным правилам, а popover следует за ней.
+    /// закрывается по обычным правилам, а popover остаётся на экране и поднимается
+    /// вместе с полосой.
     /// </summary>
     private bool IsPinnedOpen()
     {
         var quickSettings = ViewModel.QuickSettings.IsOpen;
-
-        // Пока курсор над popover, полоса удерживается при любых правилах автоскрытия:
-        // иначе ползунок громкости уезжал бы из-под мыши прямо во время работы.
-        var quickSettingsHoldsBar = quickSettings &&
-            (!_topBarHidesWithQuickSettings || IsCursorOverQuickSettings());
+        var quickSettingsHoldsBar = quickSettings && !_topBarHidesWithQuickSettings;
 
         return (ViewModel.HasQuery || ViewModel.HasResults || ViewModel.Calendar.IsOpen || quickSettingsHoldsBar) ||
             (_inputEnabled && !(quickSettings && _topBarHidesWithQuickSettings));
@@ -801,6 +756,13 @@ public sealed partial class TopBarWindow : Window
         var panelRadius = (int)Math.Round(PanelRadius * scale);
         var regions = new List<PixelRegion>(3);
 
+        // Область окна обрезает всё содержимое, включая рамку панели, а край области
+        // в GDI всегда ступенчатый: скругление радиусом 32 DIP даёт ступеньки шириной
+        // в несколько пикселей. Раздувая область на пару пикселей, мы уводим её край
+        // за пределы нарисованной рамки — видимой границей становится гладкая дуга
+        // XAML, а в получившемся зазоре остаётся только лёгкое размытие рабочего стола.
+        var regionBleed = Math.Max(1, (int)Math.Round(2 * scale));
+
         if (ViewModel.HasResults)
         {
             AddRegion(ResultsPanel, panelRadius);
@@ -837,15 +799,35 @@ public sealed partial class TopBarWindow : Window
             var width = (int)Math.Round(elementBounds.Width * scale);
             var height = (int)Math.Round(elementBounds.Height * scale);
 
-            regions.Add(new PixelRegion(new PixelRect(left, top, width, height), radius));
+            // Панель результатов примыкает к полосе верхней стороной: там скругление
+            // срезается, чтобы стекло шло непрерывно от плашки в окно. У «Центра
+            // управления» и календаря между полосой и панелью есть зазор, поэтому
+            // верхние углы остаются скруглёнными — иначе над панелью появлялся бы
+            // прямой торец. Примыкание определяется в пикселях окна: панель начинается
+            // выше низа полосы.
+            var attachedToBar = top <= barHeight + regionBleed;
 
-            // Панель примыкает к полосе верхней стороной: срезаем скругление сверху,
-            // чтобы стекло шло непрерывно от плашки в окно, а не отдельным островом.
-            var bandHeight = Math.Min(radius, height);
+            // Область раздувается наружу по нормали: прямоугольник расширяется на
+            // столько же, на сколько увеличивается радиус. Край области уходит за
+            // нарисованную рамку, и ступеньки GDI больше не режут её дугу.
+            var inflated = new PixelRect(
+                left - regionBleed,
+                Math.Max(0, top - regionBleed),
+                width + (regionBleed * 2),
+                height + (regionBleed * 2));
 
-            if (bandHeight > 0)
+            regions.Add(new PixelRegion(inflated, radius + regionBleed));
+
+            if (attachedToBar)
             {
-                regions.Add(new PixelRegion(new PixelRect(left, top, width, bandHeight), 0));
+                // Срезаем скругление сверху только у примкнутой панели: полоса идёт
+                // непрерывно в окно, отдельного острова с прямым торцом не возникает.
+                var bandHeight = Math.Min(radius + regionBleed, inflated.Height);
+
+                if (bandHeight > 0)
+                {
+                    regions.Add(new PixelRegion(new PixelRect(inflated.X, inflated.Y, inflated.Width, bandHeight), 0));
+                }
             }
         }
     }
@@ -1052,19 +1034,12 @@ public sealed partial class TopBarWindow : Window
 
     private void ShowNetworkPanel()
     {
-        // Всегда новый экземпляр: повторный Show скрытого окна WinUI ненадёжен.
+        // Панели создаются один раз на сессию и прогреваются вне экрана: Acrylic
+        // подключается до показа, поэтому прозрачность совпадает с верхней полосой
+        // с первого кадра, а не после перерисовки.
         _bluetoothPanel?.ClosePanel();
-        _bluetoothPanel = null;
-        _networkPanel?.ClosePanel();
-        var panel = new NetworkPanelWindow(_themes);
-        _networkPanel = panel;
-        panel.Closed += (_, _) =>
-        {
-            if (ReferenceEquals(_networkPanel, panel))
-            {
-                _networkPanel = null;
-            }
-        };
+
+        var panel = EnsureNetworkPanel();
 
         _ = panel.ShowNearIconAsync(
             GetIconCenterX(NetworkIcon),
@@ -1077,8 +1052,46 @@ public sealed partial class TopBarWindow : Window
     private void ShowBluetoothPanel()
     {
         _networkPanel?.ClosePanel();
-        _networkPanel = null;
-        _bluetoothPanel?.ClosePanel();
+
+        var panel = EnsureBluetoothPanel();
+
+        _ = panel.ShowNearIconAsync(
+            GetIconCenterX(BluetoothIcon),
+            GetIconTop(BluetoothIcon),
+            _screenLeft,
+            _screenWidth,
+            _scale);
+    }
+
+    /// <summary>Окно панели Wi-Fi, созданное при старте и готовое к показу.</summary>
+    private NetworkPanelWindow EnsureNetworkPanel()
+    {
+        if (_networkPanel is { } existing)
+        {
+            return existing;
+        }
+
+        var panel = new NetworkPanelWindow(_themes);
+        _networkPanel = panel;
+        panel.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_networkPanel, panel))
+            {
+                _networkPanel = null;
+            }
+        };
+
+        return panel;
+    }
+
+    /// <summary>Окно панели Bluetooth, созданное при старте и готовое к показу.</summary>
+    private BluetoothPanelWindow EnsureBluetoothPanel()
+    {
+        if (_bluetoothPanel is { } existing)
+        {
+            return existing;
+        }
+
         var panel = new BluetoothPanelWindow(_themes);
         _bluetoothPanel = panel;
         panel.Closed += (_, _) =>
@@ -1089,12 +1102,23 @@ public sealed partial class TopBarWindow : Window
             }
         };
 
-        _ = panel.ShowNearIconAsync(
-            GetIconCenterX(BluetoothIcon),
-            GetIconTop(BluetoothIcon),
-            _screenLeft,
-            _screenWidth,
-            _scale);
+        return panel;
+    }
+
+    /// <summary>
+    /// Готовит панели Wi-Fi и Bluetooth заранее: окна создаются и показываются вне экрана,
+    /// чтобы XAML и Acrylic подключились до первого клика. Иначе первый показ панели
+    /// отдавал плотный кадр без размытия, и её прозрачность не совпадала с полосой.
+    /// </summary>
+    private void PrepareSystemPanels()
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        _ = EnsureNetworkPanel().PrepareAsync(_scale);
+        _ = EnsureBluetoothPanel().PrepareAsync(_scale);
     }
 
     /// <summary>Центр индикатора по X в физических пикселях экрана.</summary>
@@ -1186,12 +1210,50 @@ public sealed partial class TopBarWindow : Window
             }
 
             UpdateOverlayBounds();
+
+            // Схема подписей панели считается по фону под ней, а он известен только
+            // после раскладки: сначала окно получает новую высоту, потом читается фон.
+            _ = DispatcherQueue.TryEnqueue(RefreshGlassText);
         }
     }
 
     /// <summary>
     /// Размер окна и регион зависят от видимости календаря.
     /// </summary>
+    /// <summary>
+    /// Раскрытая панель окна: по её области читается фон под подписями. Порядок совпадает
+    /// с порядком наложения: результаты поиска, «Центр управления», календарь.
+    /// </summary>
+    private Border? OpenPanel()
+    {
+        if (ViewModel.QuickSettings.IsOpen)
+        {
+            return QuickSettingsPanel;
+        }
+
+        if (ViewModel.Calendar.IsOpen)
+        {
+            return CalendarPanel;
+        }
+
+        return ViewModel.HasResults ? ResultsPanel : null;
+    }
+
+    /// <summary>
+    /// Пересчитывает схему подписей под изменившийся фон. Вызывается при открытии панели
+    /// и при смене активного окна: под панелью оказывается другой рабочий стол, окно
+    /// приложения или страница, и цвет подписей должен следовать за ним.
+    /// </summary>
+    private void RefreshGlassText()
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        _themes.ApplyFromSettings(Root, OpenPanel());
+    }
+
     private void OnCalendarPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(CalendarViewModel.IsOpen))
@@ -1206,6 +1268,7 @@ public sealed partial class TopBarWindow : Window
             }
 
             UpdateOverlayBounds();
+            _ = DispatcherQueue.TryEnqueue(RefreshGlassText);
         }
     }
 
@@ -1312,7 +1375,7 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
-        _themes.ApplyFromSettings(Root);
+        _themes.ApplyFromSettings(Root, OpenPanel());
         ApplyBackdrop();
         _networkPanel?.RefreshBackdrop();
         _bluetoothPanel?.RefreshBackdrop();

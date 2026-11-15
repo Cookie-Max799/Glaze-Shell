@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Window
     x:Class="GlazeShell.App.NetworkPanelWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -7,7 +7,14 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d">
 
-    <Grid x:Name="Root" Padding="20" UseLayoutRounding="True" Background="{StaticResource GlazeGlassBrush}">
+    <!--
+        Фон панели — то же стекло, что у верхней полосы: у окна свой такой же
+        Acrylic-backdrop с прозрачностью верхней панели, поэтому кисть должна совпадать
+        с полосой по альфе. Градиент GlazeGlassBrush предназначен для popover внутри
+        окна полосы и плотнее её (до 70 % прозрачности) — здесь он делал панель заметно
+        плотнее полосы.
+    -->
+    <Grid x:Name="Root" Padding="20" UseLayoutRounding="True" Background="{StaticResource GlazeTopBarGlassBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -20,7 +27,7 @@
             Margin="0,0,0,10"
             FontSize="18"
             FontWeight="SemiBold"
-            Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
+            Foreground="{StaticResource GlazePanelTextPrimaryBrush}"
             Text="Wi-Fi" />
 
         <StackPanel Grid.Row="1" Spacing="3" Margin="0,0,0,14">
@@ -28,11 +35,11 @@
                 x:Name="StatusText"
                 FontSize="13"
                 FontWeight="SemiBold"
-                Foreground="{StaticResource GlazeGlassTextPrimaryBrush}" />
+                Foreground="{StaticResource GlazePanelTextPrimaryBrush}" />
             <TextBlock
                 x:Name="SubtitleText"
                 FontSize="11"
-                Foreground="{StaticResource GlazeGlassTextSecondaryBrush}" />
+                Foreground="{StaticResource GlazePanelTextSecondaryBrush}" />
         </StackPanel>
 
         <Grid Grid.Row="2">
@@ -43,7 +50,7 @@
                             <Border
                                 Padding="12,10"
                                 Margin="0,0,0,6"
-                                Background="{StaticResource GlazeGlassBrush}"
+                                Background="{StaticResource GlazeTopBarPillBrush}"
                                 BorderBrush="{StaticResource GlazeBorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="10">
@@ -51,12 +58,12 @@
                                     <TextBlock
                                         FontSize="13"
                                         FontWeight="SemiBold"
-                                        Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
+                                        Foreground="{StaticResource GlazePanelTextPrimaryBrush}"
                                         Text="{Binding Name}"
                                         TextTrimming="CharacterEllipsis" />
                                     <TextBlock
                                         FontSize="11"
-                                        Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                                        Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                                         Text="{Binding Status}" />
                                 </StackPanel>
                             </Border>
@@ -71,7 +78,7 @@
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
                 FontSize="12"
-                Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
                 Text="Сети не найдены"
                 Visibility="Collapsed" />
         </Grid>
