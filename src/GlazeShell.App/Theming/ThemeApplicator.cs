@@ -42,6 +42,8 @@ public sealed class ThemeApplicator
     private const string GlassTextMutedKey = "GlazeGlassTextMutedBrush";
     private const string GlassTextAccentKey = "GlazeGlassTextAccentBrush";
     private const string SelectionKey = "GlazeSelectionBrush";
+    private const string HoverKey = "GlazeHoverBrush";
+    private const string PressedKey = "GlazePressedBrush";
     private const string AccentFillKey = "AccentFillColorDefaultBrush";
     private const string TextOnAccentPrimaryKey = "TextOnAccentFillColorPrimaryBrush";
     private const string TextOnAccentSecondaryKey = "TextOnAccentFillColorSecondaryBrush";
@@ -59,6 +61,13 @@ public sealed class ThemeApplicator
     private const string BrandGradientKey = "GlazeBrandGradientBrush";
 
     private const byte SelectionAlpha = 0x33;
+
+    /// <summary>
+    /// Прозрачность подсветки под курсором и нажатия. Полупрозрачная примесь акцента
+    /// читается и на тёмной поверхности, и на светлой, и на стекле панелей.
+    /// </summary>
+    private const byte HoverAlpha = 0x24;
+    private const byte PressedAlpha = 0x40;
 
     /// <summary>
     /// Высота перехода от плотности полосы к плотности всплывающей панели (DIP). Верхний
@@ -398,6 +407,8 @@ public sealed class ThemeApplicator
         SetBrush(GlassTextAccentKey, glassText.AccentForeground);
 
         SetBrush(SelectionKey, selection);
+        SetBrush(HoverKey, GlazePalette.WithAlpha(accent, HoverAlpha));
+        SetBrush(PressedKey, GlazePalette.WithAlpha(accent, PressedAlpha));
 
         // Стандартные элементы (ползунок, переключатель, флажок, подсветка списков)
         // берут цвет из системных акцентных кистей: без них акцент менял слишком мало.
@@ -455,6 +466,8 @@ public sealed class ThemeApplicator
         SetBrush(GlassTextMutedKey, muted);
         SetBrush(GlassTextAccentKey, highlight);
         SetBrush(SelectionKey, selection);
+        SetBrush(HoverKey, selection);
+        SetBrush(PressedKey, GlazePalette.WithAlpha(highlight, ContrastSelectionAlpha));
         SetBrush(TextOnAccentPrimaryKey, ToColor(palette.HighlightText));
         SetBrush(TextOnAccentSecondaryKey, ToColor(palette.HighlightText));
 

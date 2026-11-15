@@ -64,6 +64,14 @@
             <SolidColorBrush x:Key="GlazeGlassTextMutedBrush" Color="#918BBB" />
             <SolidColorBrush x:Key="GlazeGlassTextAccentBrush" Color="#C9BEFF" />
             <SolidColorBrush x:Key="GlazeSelectionBrush" Color="#33B4A4FF" />
+            <!--
+                Наведение и нажатие кнопок: полупрозрачная примесь акцента. Отдельные
+                токены нужны потому, что поверхность окна и плашек почти совпадает с
+                GlazeSurfaceBrush, и наведение поверх неё было незаметным. Значения
+                перекрашивает ThemeApplicator под текущий акцент.
+            -->
+            <SolidColorBrush x:Key="GlazeHoverBrush" Color="#24B4A4FF" />
+            <SolidColorBrush x:Key="GlazePressedBrush" Color="#40B4A4FF" />
             <SolidColorBrush x:Key="TextOnAccentFillColorPrimaryBrush" Color="#FFFFFF" />
             <SolidColorBrush x:Key="TextOnAccentFillColorSecondaryBrush" Color="#E6FFFFFF" />
 
@@ -112,8 +120,14 @@
             <StaticResource x:Key="ButtonForegroundPointerOver" ResourceKey="GlazeTextPrimaryBrush" />
             <StaticResource x:Key="ButtonForegroundPressed" ResourceKey="GlazeTextPrimaryBrush" />
             <StaticResource x:Key="ButtonBackground" ResourceKey="GlazeElevatedBrush" />
-            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="GlazeSurfaceBrush" />
-            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="GlazeElevatedBrush" />
+            <StaticResource x:Key="ButtonBackgroundPointerOver" ResourceKey="GlazeHoverBrush" />
+            <StaticResource x:Key="ButtonBackgroundPressed" ResourceKey="GlazePressedBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPointerOver" ResourceKey="GlazeBorderBrush" />
+            <StaticResource x:Key="ButtonBorderBrushPressed" ResourceKey="GlazeBorderBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundPointerOver" ResourceKey="GlazeHoverBrush" />
+            <StaticResource x:Key="ToggleButtonBackgroundPressed" ResourceKey="GlazePressedBrush" />
+            <StaticResource x:Key="RepeatButtonBackgroundPointerOver" ResourceKey="GlazeHoverBrush" />
+            <StaticResource x:Key="RepeatButtonBackgroundPressed" ResourceKey="GlazePressedBrush" />
             <StaticResource x:Key="TextControlForeground" ResourceKey="GlazeTextPrimaryBrush" />
             <StaticResource x:Key="TextControlForegroundFocused" ResourceKey="GlazeTextPrimaryBrush" />
             <StaticResource x:Key="TextControlPlaceholderForeground" ResourceKey="GlazeTextSecondaryBrush" />

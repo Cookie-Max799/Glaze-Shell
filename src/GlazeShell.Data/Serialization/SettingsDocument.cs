@@ -82,6 +82,12 @@ public sealed class SettingsDocument
     public bool? HidePanelsInGlazeShell { get; set; }
 
     /// <summary>
+    /// Разрешать верхней панели закрываться при открытом «Центре управления». Отсутствие
+    /// значения в старом документе означает выключенное поведение (панель удерживается).
+    /// </summary>
+    public bool? TopBarHidesWithQuickSettings { get; set; }
+
+    /// <summary>
     /// Старое общее значение прозрачности стекла (0–90). Сохранено для чтения документов
     /// предыдущих версий: если новые поля отсутствуют, значение переносится в оба ползунка.
     /// </summary>
@@ -125,6 +131,7 @@ public sealed class SettingsDocument
             DockTransparency = settings.DockTransparency,
             StartMenuTransparency = settings.StartMenuTransparency,
             HidePanelsInGlazeShell = settings.HidePanelsInGlazeShell,
+            TopBarHidesWithQuickSettings = settings.TopBarHidesWithQuickSettings,
             MonitorNames = settings.MonitorNames.Count == 0
                 ? null
                 : new Dictionary<string, string>(settings.MonitorNames, StringComparer.OrdinalIgnoreCase)
@@ -243,7 +250,8 @@ public static class SettingsDocumentMapper
             topBarTransparency,
             dockTransparency,
             document.HidePanelsInGlazeShell ?? true,
-            startMenuTransparency);
+            startMenuTransparency,
+            document.TopBarHidesWithQuickSettings ?? false);
         diagnostics = Array.Empty<string>();
         return true;
     }

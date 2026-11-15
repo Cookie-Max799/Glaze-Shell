@@ -739,7 +739,7 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     {
         try
         {
-            BluetoothVisible = await GlazeShell.Windows.SystemStatus.BluetoothStatusProvider.HasConnectedDevicesAsync();
+            BluetoothVisible = await GlazeShell.Windows.SystemStatus.BluetoothStatusProvider.HasAdapterAsync();
         }
         catch
         {

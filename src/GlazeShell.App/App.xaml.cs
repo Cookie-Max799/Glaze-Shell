@@ -127,6 +127,18 @@ public partial class App : Application
     /// </summary>
     private bool _safeMode;
 
+    /// <summary>
+    /// Источники системных событий: в безопасном режиме не запускаются, а кнопка
+    /// «Вернуть UI Glaze Shell» запускает их при выходе из него.
+    /// </summary>
+    private ShellEventCoordinator? _eventSources;
+
+    /// <summary>
+    /// Повторно применяет включение панелей по текущим настройкам. Нужен кнопке возврата
+    /// интерфейса: локальные функции запуска недоступны обработчикам окна.
+    /// </summary>
+    private Action? _applyUiMode;
+
     private Core.Models.UserSettings? _settingsBeforeUiRecovery;
 
     private IDisposable? _settingsChangedSubscription;
@@ -242,6 +254,7 @@ public partial class App : Application
         var windowManager = new WindowManager(eventManager);
         var monitorManager = new MonitorManager(eventManager, ReportEventFailure);
         var eventSources = new ShellEventCoordinator(eventManager, windowManager, monitorManager, errorHandler: ReportEventFailure);
+        _eventSources = eventSources;
 
         var desktopManager = new DesktopManager(eventManager, LoadLayout(store, monitorManager));
 
@@ -325,7 +338,9 @@ public partial class App : Application
         // Кнопка «Восстановить UI» в главном окне возвращает системный интерфейс на место.
         window.RecoveryRequested += (_, _) => RestoreWindowsUi("the main window");
         window.RestoreGlazeRequested += (_, _) => RestoreGlazeShellUi();
-        window.SetGlazeRestoreAvailable(!_safeMode);
+
+        // Кнопка доступна и в безопасном режиме: именно ею из него и выходят.
+        window.SetGlazeRestoreAvailable(true);
 
         // Верхняя панель создаётся до активации главного окна: панель показывается без
         // перехвата фокуса, поэтому фокус остаётся у главного окна.
@@ -454,12 +469,19 @@ public partial class App : Application
 
         // В безопасном режиме (I2) оболочка ничего не меняет в системе: ни хуков, ни
         // оверлеев, ни скрытой панели задач.
-        ApplyTopBar(!_safeMode && settings.TopBarEnabled);
-        ApplyDock(!_safeMode && settings.DockEnabled);
-        ApplyTaskbarReplacement(
-            !_safeMode &&
-            settings.DockEnabled &&
-            settings.DockReplacesTaskbar);
+        void ApplyUiMode()
+        {
+            var current = settingsManager.GetSettings();
+            ApplyTopBar(!_safeMode && current.TopBarEnabled);
+            ApplyDock(!_safeMode && current.DockEnabled);
+            ApplyTaskbarReplacement(
+                !_safeMode &&
+                current.DockEnabled &&
+                current.DockReplacesTaskbar);
+        }
+
+        _applyUiMode = ApplyUiMode;
+        ApplyUiMode();
 
         // Ctrl K открывает поиск Glance (B1). Комбинацию может занимать другая программа:
         // тогда приложение работает без неё, а причина попадает в лог.
@@ -793,9 +815,41 @@ public partial class App : Application
 
     private void RestoreGlazeShellUi()
     {
-        if (_safeMode || _settingsManager is null)
+        if (_settingsManager is null)
         {
             return;
+        }
+
+        // Безопасный режим — тоже восстановимый: кнопка возвращает панели и запускает
+        // источники событий, которые в нём не стартовали.
+        if (_safeMode)
+        {
+            _safeMode = false;
+            _window?.DispatcherQueue.TryEnqueue(() => (_window as MainWindow)?.SetGlazeRestoreAvailable(true));
+
+            // История падений сбрасывается: иначе следующий запуск снова уйдёт в безопасный
+            // режим, хотя пользователь явно вернул интерфейс.
+            _crashes = new CrashTracker();
+            try
+            {
+                _recoveryStore?.Save(new RecoverySnapshot(SessionCompleted: false, []));
+            }
+            catch (Exception exception) when (exception is PersistenceException or IOException or UnauthorizedAccessException)
+            {
+                ReportPersistence("The recovery state could not be saved.", exception);
+            }
+
+            if (_eventSources is { } sources)
+            {
+                try
+                {
+                    ReportEventStatus(sources.Start());
+                }
+                catch (Exception exception)
+                {
+                    _logger.Write(GlazeLogLevel.Error, "Recovery", "The system event sources could not be started after leaving the safe mode.", exception);
+                }
+            }
         }
 
         try
@@ -807,6 +861,7 @@ public partial class App : Application
                 dockEnabled: previous?.DockEnabled ?? true,
                 dockReplacesTaskbar: previous?.DockReplacesTaskbar ?? true));
             _settingsBeforeUiRecovery = null;
+            _applyUiMode?.Invoke();
             _logger.Write(GlazeLogLevel.Information, "Recovery", "The Glaze Shell interface was restored from the main window.");
         }
         catch (Exception exception)

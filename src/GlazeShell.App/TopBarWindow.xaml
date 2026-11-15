@@ -405,7 +405,7 @@
                             FontSize="12"
                             Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
                             Glyph="&#xE702;"
-                            ToolTipService.ToolTip="Bluetooth: подключённые устройства"
+                            ToolTipService.ToolTip="Bluetooth: состояние адаптера и устройства"
                             Visibility="{x:Bind ViewModel.BluetoothVisible, Mode=OneWay}" />
                         <FontIcon
                             VerticalAlignment="Center"
@@ -518,14 +518,14 @@
         <Border
             x:Name="QuickSettingsPanel"
             Width="380"
-            Margin="0,30,0,0"
+            Margin="0,57,0,0"
             Padding="16"
             HorizontalAlignment="Right"
             VerticalAlignment="Top"
             Background="{StaticResource GlazeGlassBrush}"
             BorderBrush="{StaticResource GlazeBorderBrush}"
-            BorderThickness="1,0,1,1"
-            CornerRadius="0,0,32,32"
+            BorderThickness="1"
+            CornerRadius="32"
             Visibility="{x:Bind ViewModel.QuickSettings.IsOpen, Mode=OneWay}">
             <StackPanel Spacing="16">
                 <TextBlock

@@ -33,6 +33,18 @@ public readonly record struct BluetoothState(bool HasAdapter, bool IsEnabled, in
 /// </remarks>
 public static class BluetoothStatusProvider
 {
+    public static async Task<bool> HasAdapterAsync()
+    {
+        try
+        {
+            return await BluetoothAdapter.GetDefaultAsync() is not null;
+        }
+        catch (Exception exception) when (IsExpected(exception))
+        {
+            return false;
+        }
+    }
+
     /// <summary>Идентификатор протокола Bluetooth в свойствах устройства.</summary>
     private const string BluetoothProtocolId = "{e0cbf06c-cd8b-4647-bb8a-263b43f0f974}";
 

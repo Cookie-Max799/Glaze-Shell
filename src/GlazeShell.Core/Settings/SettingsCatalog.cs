@@ -241,6 +241,17 @@ public static class SettingsCatalog
             (settings, value) => UserSettingsEditor.With(settings, hidePanelsInGlazeShell: AsBool(value)),
             []),
 
+        new(
+            "topBarHidesWithQuickSettings",
+            TopBarPageId,
+            "Закрывать верхнюю панель при открытом центре управления",
+            "Верхняя панель убирается по обычным правилам, даже когда открыт «Центр управления»: popover следует за ней и уезжает вместе с полосой. Когда параметр выключен, открытый центр управления удерживает панель на экране.",
+            ["центр управления", "quick settings", "панель", "автоскрытие", "popover"],
+            SettingKind.Toggle,
+            settings => settings.TopBarHidesWithQuickSettings,
+            (settings, value) => UserSettingsEditor.With(settings, topBarHidesWithQuickSettings: AsBool(value)),
+            []),
+
         // Проводник.
         new(
             "explorerViewMode",

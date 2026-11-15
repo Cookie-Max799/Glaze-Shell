@@ -52,9 +52,9 @@ public sealed partial class DockWindow : Window
     /// DESIGN §7.5, а вторая плитка — уже почти ноль. Это даёт непрерывный «горб» вокруг
     /// курсора, как в dock macOS, вместо увеличения строго одной плитки с соседями.
     /// </summary>
-    private const double MagnifySigma = TileSize * 1.2;
+    private const double MagnifySigma = TileSize * 1.45;
 
-    private static readonly TimeSpan HoverDuration = TimeSpan.FromMilliseconds(180);
+    private static readonly TimeSpan HoverDuration = TimeSpan.FromMilliseconds(220);
 
     /// <summary>Сколько dock остаётся раскрытым после нажатия клавиши Windows.</summary>
     private static readonly TimeSpan RevealHold = TimeSpan.FromMilliseconds(1500);
@@ -940,7 +940,8 @@ public sealed partial class DockWindow : Window
 
         for (var index = 0; index < count; index++)
         {
-            if (ViewModel.Items[index].IsSeparator || TileAt(index) is not { } tile)
+            var tile = MagnificationElementAt(index);
+            if (tile is null)
             {
                 continue;
             }
@@ -989,7 +990,7 @@ public sealed partial class DockWindow : Window
             var desiredLeft = center - half;
             var actualLeft = Math.Max(desiredLeft, previousRight + Gap);
 
-            _spreadOffsets[index] = actualLeft - left;
+            _spreadOffsets[index] = actualLeft - desiredLeft;
             previousRight = actualLeft + (half * 2);
             originalRight = left + width;
         }
@@ -1284,7 +1285,7 @@ public sealed partial class DockWindow : Window
         for (var index = 0; index < ViewModel.Items.Count; index++)
         {
             var tile = TileAt(index);
-            Animate(tile, 0, 1.0, 0);
+            Animate(MagnificationElementAt(index), 0, 1.0, 0);
             SetGlow(tile, false);
         }
 
@@ -1305,7 +1306,12 @@ public sealed partial class DockWindow : Window
     /// StackPanel об этом не знает. Все три свойства анимируются одной длительностью, поэтому
     /// плитка реагирует плавно и предсказуемо.
     /// </summary>
-    private void Animate(Border? tile, double lift, double scale, double offsetX)
+    private FrameworkElement? MagnificationElementAt(int index) =>
+        ViewModel.Items[index].IsSeparator
+            ? Tiles.ContainerFromIndex(index) as FrameworkElement
+            : TileAt(index);
+
+    private void Animate(FrameworkElement? tile, double lift, double scale, double offsetX)
     {
         if (tile is null)
         {
@@ -1402,7 +1408,7 @@ public sealed partial class DockWindow : Window
     /// что Storyboard адресует одно свойство за анимацию: <c>ScaleX</c> и <c>Y</c> — разные
     /// элементы группы.
     /// </summary>
-    private static (ScaleTransform Scale, TranslateTransform Translate) EnsureTransforms(Border tile)
+    private static (ScaleTransform Scale, TranslateTransform Translate) EnsureTransforms(FrameworkElement tile)
     {
         if (tile.RenderTransform is TransformGroup { Children.Count: >= 2 } group
             && group.Children[0] is ScaleTransform scale
@@ -1411,7 +1417,8 @@ public sealed partial class DockWindow : Window
             return (scale, translate);
         }
 
-        var newScale = new ScaleTransform { CenterX = 0.5, CenterY = 1.0 };
+        tile.RenderTransformOrigin = new Point(0.5, 1.0);
+        var newScale = new ScaleTransform();
         var newTranslate = new TranslateTransform();
         var newGroup = new TransformGroup();
         newGroup.Children.Add(newScale);

@@ -68,7 +68,8 @@ public sealed record UserSettings
         int topBarTransparency = DefaultTopBarTransparency,
         int dockTransparency = DefaultDockTransparency,
         bool hidePanelsInGlazeShell = true,
-        int startMenuTransparency = DefaultStartMenuTransparency)
+        int startMenuTransparency = DefaultStartMenuTransparency,
+        bool topBarHidesWithQuickSettings = false)
     {
         Language = ModelValidation.Required(language, nameof(language));
         ActiveThemeId = ModelValidation.Optional(activeThemeId, nameof(activeThemeId));
@@ -92,6 +93,7 @@ public sealed record UserSettings
         DockTransparency = NormalizeTransparency(dockTransparency);
         StartMenuTransparency = NormalizeTransparency(startMenuTransparency);
         HidePanelsInGlazeShell = hidePanelsInGlazeShell;
+        TopBarHidesWithQuickSettings = topBarHidesWithQuickSettings;
         StartWithWindows = startWithWindows;
         MinimizeToTray = minimizeToTray;
         ShowDesktopOnStartup = showDesktopOnStartup;
@@ -227,6 +229,13 @@ public sealed record UserSettings
     /// панели отнимают полезную площадь, но остаются доступны касанием кромки экрана.
     /// </summary>
     public bool HidePanelsInGlazeShell { get; }
+
+    /// <summary>
+    /// Разрешать верхней панели закрываться, пока открыт «Центр управления». Сам popover
+    /// следует за полосой всегда: он живёт в том же окне. Когда параметр выключен, открытый
+    /// центр управления удерживает панель на экране. По умолчанию выключен.
+    /// </summary>
+    public bool TopBarHidesWithQuickSettings { get; }
 
     public static UserSettings CreateDefault() => new();
 
