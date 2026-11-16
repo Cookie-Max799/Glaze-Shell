@@ -442,6 +442,7 @@
                             Visibility="{x:Bind ViewModel.BluetoothVisible, Mode=OneWay}" />
                         </Button>
                         <StackPanel
+                            x:Name="VolumeIndicator"
                             Orientation="Horizontal"
                             Spacing="1"
                             MinWidth="18"
@@ -450,8 +451,7 @@
                                 VerticalAlignment="Center"
                                 FontSize="12"
                                 Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
-                                Glyph="{x:Bind ViewModel.QuickSettings.VolumeGlyph, Mode=OneWay}"
-                                ToolTipService.ToolTip="{x:Bind ViewModel.QuickSettings.VolumeLabel, Mode=OneWay}" />
+                                Glyph="{x:Bind ViewModel.QuickSettings.VolumeGlyph, Mode=OneWay}" />
                             <TextBlock
                                 VerticalAlignment="Center"
                                 FontSize="9"

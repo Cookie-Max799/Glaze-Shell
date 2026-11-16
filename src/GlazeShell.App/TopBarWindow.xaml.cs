@@ -509,6 +509,8 @@ public sealed partial class TopBarWindow : Window
             FocusSearchCore(clearText: false);
         }
 
+        UpdateVolumeHover();
+
         var now = DateTimeOffset.UtcNow;
         var pinned = IsPinnedOpen();
         var target = 0.0;
@@ -693,6 +695,48 @@ public sealed partial class TopBarWindow : Window
         var bottom = (int)Math.Round((bounds.Y + bounds.Height) * _scale);
 
         return x >= left && x < right && y >= top && y < bottom;
+    }
+
+    /// <summary>
+    /// Курсор над значком громкости. Наведение показывается той же плашкой, что и смена
+    /// уровня: окно неактивирующее и события указателя в элементы не приходят, поэтому
+    /// область значка проверяется раз в кадр по экранным координатам курсора.
+    /// </summary>
+    private bool IsCursorOverVolumeIcon()
+    {
+        if (VolumeIndicator is null ||
+            VolumeIndicator.ActualWidth <= 0 ||
+            VolumeIndicator.ActualHeight <= 0 ||
+            !OverlayWindow.TryGetCursorPosition(_hwnd, out var x, out var y))
+        {
+            return false;
+        }
+
+        var bounds = VolumeIndicator
+            .TransformToVisual(null)
+            .TransformBounds(new Rect(0, 0, VolumeIndicator.ActualWidth, VolumeIndicator.ActualHeight));
+
+        var left = (int)Math.Round(bounds.X * _scale);
+        var top = (int)Math.Round(bounds.Y * _scale);
+        var right = (int)Math.Round((bounds.X + bounds.Width) * _scale);
+        var bottom = (int)Math.Round((bounds.Y + bounds.Height) * _scale);
+
+        return x >= left && x < right && y >= top && y < bottom;
+    }
+
+    /// <summary>
+    /// Наведение на значок громкости показывает уровень. Пока курсор остаётся на значке,
+    /// удержание продлевается каждый кадр — плашка не угасает под ним и исчезает через
+    /// обычную паузу после ухода.
+    /// </summary>
+    private void UpdateVolumeHover()
+    {
+        if (_closed || _reveal <= 0.5 || !IsCursorOverVolumeIcon())
+        {
+            return;
+        }
+
+        ShowVolumeToast();
     }
 
     /// <summary>
@@ -1010,7 +1054,14 @@ public sealed partial class TopBarWindow : Window
 
     private void ShowVolumeToast()
     {
-        if (_monitorTarget.Target is not { } monitor)
+        if (_closed || _monitorTarget.Target is not { } monitor)
+        {
+            return;
+        }
+
+        // Открытый «Центр управления» уже показывает уровень: плашка поверх popover
+        // была бы лишней, в том числе при наведении на значок.
+        if (ViewModel.QuickSettings.IsOpen)
         {
             return;
         }
