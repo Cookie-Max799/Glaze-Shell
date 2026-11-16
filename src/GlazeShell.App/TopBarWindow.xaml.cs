@@ -30,7 +30,7 @@ public sealed partial class TopBarWindow : Window
     private const int BarHeight = 30;
 
     /// <summary>Шаг громкости на одно нажатие аппаратной клавиши, в процентах.</summary>
-    private const int VolumeStep = 5;
+    private const int VolumeStep = 1;
 
     /// <summary>Высота строки содержимого полосы: с неё начинается панель результатов.</summary>
     private const int BarContentHeight = 26;
