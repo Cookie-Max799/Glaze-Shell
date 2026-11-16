@@ -318,57 +318,67 @@
                 Grid.Row="0"
                 Grid.Column="2"
                 Orientation="Horizontal"
-                Spacing="4"
+                Spacing="6"
                 VerticalAlignment="Center">
 
-                <!--  Плашка производительности: дата, питание, ЦП и ГП.  -->
+                <!--  Плашка календаря: время и дата отдельным блоком от счётчиков.  -->
+                <Border
+                    x:Name="ClockPill"
+                    Margin="0,3"
+                    Padding="10,0"
+                    AutomationProperties.Name="Часы и дата"
+                    Background="{StaticResource GlazeTopBarPillBrush}"
+                    CornerRadius="10"
+                    >
+                    <Button
+                        x:Name="ClockButton"
+                        Style="{StaticResource TopBarActionStyle}"
+                        Height="20"
+                        Padding="2,0"
+                        VerticalAlignment="Center"
+                        AutomationProperties.Name="Дата и время — открыть календарь"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Click="OnClockClick"
+                        CornerRadius="6"
+                        HorizontalContentAlignment="Center"
+                        ToolTipService.ToolTip="Календарь">
+                        <StackPanel
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            AutomationProperties.Name="Дата и время">
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="11"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
+                                Text="{x:Bind ViewModel.ClockTime, Mode=OneWay}" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="10"
+                                Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                                Text="{x:Bind ViewModel.ClockDate, Mode=OneWay}" />
+                        </StackPanel>
+                    </Button>
+                </Border>
+
+                <!--  Плашка производительности: питание, ЦП и ГП.  -->
                 <Border
                     x:Name="SystemPill"
                     Margin="0,3"
                     Padding="10,0"
-                    AutomationProperties.Name="Часы, питание и загрузка"
+                    AutomationProperties.Name="Питание и загрузка"
                     Background="{StaticResource GlazeTopBarPillBrush}"
                     CornerRadius="10"
                     >
                     <StackPanel
                         Orientation="Horizontal"
-                        Spacing="4"
+                        Spacing="10"
                         VerticalAlignment="Center">
-                        <Button
-                            x:Name="ClockButton"
-                            Style="{StaticResource TopBarActionStyle}"
-                            Height="20"
-                            Padding="2,0"
-                            VerticalAlignment="Center"
-                            AutomationProperties.Name="Дата и время — открыть календарь"
-                            Background="Transparent"
-                            BorderThickness="0"
-                            Click="OnClockClick"
-                            CornerRadius="6"
-                            HorizontalContentAlignment="Right"
-                            ToolTipService.ToolTip="Календарь">
-                            <StackPanel
-                                VerticalAlignment="Center"
-                                Orientation="Horizontal"
-                                Spacing="4"
-                                AutomationProperties.Name="Дата и время">
-                                <TextBlock
-                                    VerticalAlignment="Center"
-                                    FontSize="11"
-                                    FontWeight="SemiBold"
-                                    Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
-                                    Text="{x:Bind ViewModel.ClockTime, Mode=OneWay}" />
-                                <TextBlock
-                                    VerticalAlignment="Center"
-                                    FontSize="10"
-                                    Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
-                                    Text="{x:Bind ViewModel.ClockDate, Mode=OneWay}" />
-                            </StackPanel>
-                        </Button>
-
                         <StackPanel
                             Orientation="Horizontal"
-                            Spacing="2"
+                            Spacing="3"
                             AutomationProperties.Name="Питание"
                             ToolTipService.ToolTip="Питание"
                             Visibility="{x:Bind ViewModel.HasBattery, Mode=OneWay}">

@@ -177,6 +177,7 @@ public sealed partial class TopBarWindow : Window
             SearchHit.SizeChanged += (_, _) => UpdateOverlayBounds();
         }
         StatusPill.SizeChanged += (_, _) => UpdateOverlayBounds();
+        ClockPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         SystemPill.SizeChanged += (_, _) => UpdateOverlayBounds();
         ResultsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
         QuickSettingsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
