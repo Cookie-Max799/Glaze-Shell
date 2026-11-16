@@ -252,6 +252,17 @@ public static class SettingsCatalog
             (settings, value) => UserSettingsEditor.With(settings, topBarHidesWithQuickSettings: AsBool(value)),
             []),
 
+        new(
+            "topBarVolumePercent",
+            TopBarPageId,
+            "Цифры громкости в верхней панели",
+            "Показывать рядом со значком громкости маленькое число текущего уровня (0–100).",
+            ["громкость", "звук", "цифры", "проценты", "верхняя панель", "volume"],
+            SettingKind.Toggle,
+            settings => settings.TopBarVolumePercent,
+            (settings, value) => UserSettingsEditor.With(settings, topBarVolumePercent: AsBool(value)),
+            []),
+
         // Проводник.
         new(
             "explorerViewMode",

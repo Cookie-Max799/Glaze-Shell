@@ -26,6 +26,9 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     /// <summary>Интервал обновления часов и индикаторов — 1 секунда (требование A6).</summary>
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(1);
 
+    /// <summary>Период опроса громкости для всплывающего индикатора.</summary>
+    private static readonly TimeSpan VolumeRefreshInterval = TimeSpan.FromMilliseconds(250);
+
     /// <summary>Сколько результатов Glance показывается одновременно (B1).</summary>
     private const int MaxResults = 8;
 
@@ -53,6 +56,9 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     private readonly DispatcherQueue _dispatcher;
     private readonly IDisposable _foregroundChanged;
     private readonly DispatcherQueueTimer _timer;
+
+    /// <summary>Быстрый опрос громкости для всплывающего индикатора.</summary>
+    private readonly DispatcherQueueTimer _volumeTimer;
     private readonly int _ownProcessId = Environment.ProcessId;
 
     private string _appName = DefaultAppName;
@@ -62,6 +68,7 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     private readonly Dictionary<string, ImageSource> _iconCache = new(StringComparer.OrdinalIgnoreCase);
     private string _clockTime = string.Empty;
     private string _keyboardLanguage = string.Empty;
+    private bool _showVolumeCount;
     private bool _bluetoothVisible;
     private bool _bluetoothChecking;
     private long _nextBluetoothCheck;
@@ -71,6 +78,24 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         get => _keyboardLanguage;
         set => Set(ref _keyboardLanguage, value);
     }
+
+    /// <summary>Мелкие цифры громкости рядом со значком: включается в настройках.</summary>
+    public bool ShowVolumeCount
+    {
+        get => _showVolumeCount;
+        set
+        {
+            if (Set(ref _showVolumeCount, value))
+            {
+                OnPropertyChanged(nameof(VolumeCountVisibility));
+            }
+        }
+    }
+
+    /// <summary>Видимость мелких цифр громкости: настройка переводит готовую строку в UI.</summary>
+    public Microsoft.UI.Xaml.Visibility VolumeCountVisibility => _showVolumeCount
+        ? Microsoft.UI.Xaml.Visibility.Visible
+        : Microsoft.UI.Xaml.Visibility.Collapsed;
 
     public bool BluetoothVisible
     {
@@ -122,6 +147,14 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         };
 
         _timer.Start();
+
+        // Громкость опрашивается чаще: индикатор должен появляться сразу после
+        // нажатия клавиш мультимедиа, а не через секунду.
+        QuickSettings.TrackVolumeAlways = true;
+        _volumeTimer = _dispatcher.CreateTimer();
+        _volumeTimer.Interval = VolumeRefreshInterval;
+        _volumeTimer.Tick += (_, _) => QuickSettings.RefreshVolume();
+        _volumeTimer.Start();
 
         RefreshClockAndStatus();
     }
@@ -537,6 +570,7 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     public void Dispose()
     {
         _timer.Stop();
+        _volumeTimer.Stop();
         _foregroundChanged.Dispose();
         QuickSettings.Dispose();
         _gpu.Dispose();

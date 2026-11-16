@@ -430,6 +430,9 @@ internal static class User32
     internal const int VkTab = 0x09;
     internal const int VkS = 0x53;
     internal const int VkLeftButton = 0x01;
+    internal const int VkVolumeMute = 0xAD;
+    internal const int VkVolumeDown = 0xAE;
+    internal const int VkVolumeUp = 0xAF;
 
     /// <summary>
     /// Метка синтетического нажатия Win, которое отправляет сам Glaze Shell. По ней хук

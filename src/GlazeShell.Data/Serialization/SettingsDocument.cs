@@ -87,6 +87,9 @@ public sealed class SettingsDocument
     /// </summary>
     public bool? TopBarHidesWithQuickSettings { get; set; }
 
+    /// <summary>Мелкие цифры громкости у значка в верхней панели. По умолчанию выключены.</summary>
+    public bool? TopBarVolumePercent { get; set; }
+
     /// <summary>
     /// Старое общее значение прозрачности стекла (0–90). Сохранено для чтения документов
     /// предыдущих версий: если новые поля отсутствуют, значение переносится в оба ползунка.
@@ -132,6 +135,7 @@ public sealed class SettingsDocument
             StartMenuTransparency = settings.StartMenuTransparency,
             HidePanelsInGlazeShell = settings.HidePanelsInGlazeShell,
             TopBarHidesWithQuickSettings = settings.TopBarHidesWithQuickSettings,
+            TopBarVolumePercent = settings.TopBarVolumePercent,
             MonitorNames = settings.MonitorNames.Count == 0
                 ? null
                 : new Dictionary<string, string>(settings.MonitorNames, StringComparer.OrdinalIgnoreCase)
@@ -251,7 +255,8 @@ public static class SettingsDocumentMapper
             dockTransparency,
             document.HidePanelsInGlazeShell ?? true,
             startMenuTransparency,
-            document.TopBarHidesWithQuickSettings ?? false);
+            document.TopBarHidesWithQuickSettings ?? false,
+            document.TopBarVolumePercent ?? false);
         diagnostics = Array.Empty<string>();
         return true;
     }

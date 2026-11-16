@@ -45,6 +45,7 @@ public sealed partial class NetworkPanelWindow : Window
     private long _shownAtTick;
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _dismissTimer;
     private PanelBackdrop? _backdrop;
+    private int _showVersion;
 
     public NetworkPanelWindow(ThemeApplicator themes)
     {
@@ -96,9 +97,10 @@ public sealed partial class NetworkPanelWindow : Window
         }
 
         var previous = _backdrop;
+        SystemBackdrop = null;
+        previous?.Dispose();
         _backdrop = _themes.CreatePanelBackdrop(PanelSurface.TopBar) as PanelBackdrop;
         SystemBackdrop = _backdrop;
-        previous?.Dispose();
         _themes.ApplyFromSettings(Root, Root);
     }
 
@@ -136,6 +138,7 @@ public sealed partial class NetworkPanelWindow : Window
     /// <summary>Закрывает панель: окно уезжает за экран и остаётся готовым к следующему показу.</summary>
     public void ClosePanel()
     {
+        _showVersion++;
         _dismissTimer?.Stop();
 
         if (_closed)
@@ -200,7 +203,12 @@ public sealed partial class NetworkPanelWindow : Window
             return;
         }
 
+        var version = ++_showVersion;
         await PrepareAsync(scale);
+        if (_closed || version != _showVersion)
+        {
+            return;
+        }
 
         var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
 
@@ -218,8 +226,13 @@ public sealed partial class NetworkPanelWindow : Window
         Activate();
         OverlayWindow.ActivateForInput(hwnd);
         _dismissTimer?.Start();
+        _themes.ApplyFromSettings(Root, Root);
 
         await RefreshAsync();
+        if (!_closed && version == _showVersion)
+        {
+            _themes.ApplyFromSettings(Root, Root);
+        }
     }
 
     private async Task RefreshAsync()

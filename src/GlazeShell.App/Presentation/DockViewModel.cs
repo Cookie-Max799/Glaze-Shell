@@ -8,6 +8,7 @@ using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
 using GlazeShell.Core.Services;
+using GlazeShell.Core.Settings;
 using GlazeShell.Windows.Applications;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -535,33 +536,7 @@ public sealed class DockViewModel : IDisposable
     private void PersistPins()
     {
         var settings = _settings.GetSettings();
-
-        _settings.SetSettings(new UserSettings(
-            settings.StartWithWindows,
-            settings.MinimizeToTray,
-            settings.ShowDesktopOnStartup,
-            settings.RestoreLastLayout,
-            settings.Language,
-            settings.ActiveThemeId,
-            settings.MonitorNames,
-            settings.ThemeMode,
-            settings.AccentId,
-            settings.BaseColorId,
-            settings.TopBarEnabled,
-            settings.DockEnabled,
-            _pinnedIds,
-            settings.DockReplacesTaskbar,
-            settings.ExplorerFavorites,
-            settings.ExplorerViewMode,
-            settings.ReduceMotion,
-            settings.HighContrast,
-            settings.RecoveryHotkeyEnabled,
-            settings.RecoveryHotkeyId,
-            settings.SafeModeEnabled,
-            settings.TransparencyEnabled,
-            settings.TopBarTransparency,
-            settings.DockTransparency,
-            settings.HidePanelsInGlazeShell));
+        _settings.SetSettings(UserSettingsEditor.With(settings, dockPinnedApps: _pinnedIds));
     }
 
     private void QueueRebuild() => _ = _dispatcher.TryEnqueue(Rebuild);

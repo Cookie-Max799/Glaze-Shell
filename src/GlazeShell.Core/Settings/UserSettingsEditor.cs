@@ -38,7 +38,11 @@ public static class UserSettingsEditor
         int? dockTransparency = null,
         bool? hidePanelsInGlazeShell = null,
         int? startMenuTransparency = null,
-        bool? topBarHidesWithQuickSettings = null)
+        bool? topBarHidesWithQuickSettings = null,
+        bool? topBarVolumePercent = null,
+        IReadOnlyDictionary<string, string>? monitorNames = null,
+        IReadOnlyList<string>? dockPinnedApps = null,
+        IReadOnlyList<string>? explorerFavorites = null)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -49,15 +53,15 @@ public static class UserSettingsEditor
             restoreLastLayout: restoreLastLayout ?? source.RestoreLastLayout,
             language: language ?? source.Language,
             activeThemeId: activeThemeId ?? source.ActiveThemeId,
-            monitorNames: source.MonitorNames,
+            monitorNames: monitorNames ?? source.MonitorNames,
             themeMode: themeMode ?? source.ThemeMode,
             accentId: clearAccent ? null : accentId ?? source.AccentId,
             baseColorId: clearBaseColor ? null : baseColorId ?? source.BaseColorId,
             topBarEnabled: topBarEnabled ?? source.TopBarEnabled,
             dockEnabled: dockEnabled ?? source.DockEnabled,
-            dockPinnedApps: source.DockPinnedApps,
+            dockPinnedApps: dockPinnedApps ?? source.DockPinnedApps,
             dockReplacesTaskbar: dockReplacesTaskbar ?? source.DockReplacesTaskbar,
-            explorerFavorites: source.ExplorerFavorites,
+            explorerFavorites: explorerFavorites ?? source.ExplorerFavorites,
             explorerViewMode: explorerViewMode ?? source.ExplorerViewMode,
             reduceMotion: reduceMotion ?? source.ReduceMotion,
             highContrast: highContrast ?? source.HighContrast,
@@ -69,6 +73,7 @@ public static class UserSettingsEditor
             dockTransparency: dockTransparency ?? source.DockTransparency,
             hidePanelsInGlazeShell: hidePanelsInGlazeShell ?? source.HidePanelsInGlazeShell,
             startMenuTransparency: startMenuTransparency ?? source.StartMenuTransparency,
-            topBarHidesWithQuickSettings: topBarHidesWithQuickSettings ?? source.TopBarHidesWithQuickSettings);
+            topBarHidesWithQuickSettings: topBarHidesWithQuickSettings ?? source.TopBarHidesWithQuickSettings,
+            topBarVolumePercent: topBarVolumePercent ?? source.TopBarVolumePercent);
     }
 }

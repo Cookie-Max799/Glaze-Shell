@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Runtime.CompilerServices;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
+using GlazeShell.Core.Settings;
 using GlazeShell.Windows.Audio;
 
 namespace GlazeShell.App.Presentation;
@@ -27,6 +28,33 @@ public sealed class QuickSettingsViewModel : INotifyPropertyChanged
     private double _volumePercent;
     private bool _isMuted;
     private ThemeMode _themeMode;
+    private bool _trackVolumeAlways;
+
+    /// <summary>Уровень громкости уже прочитан: до этого индикатор не показывается.</summary>
+    private bool _volumeInitialized;
+
+    /// <summary>
+    /// Изменилась громкость устройства вывода. Поднимается только при включённом
+    /// постоянном опросе (<see cref="TrackVolumeAlways"/>), чтобы верхняя панель
+    /// показывала OSD при смене громкости извне.
+    /// </summary>
+    public event EventHandler? VolumeChangedExternally;
+
+    /// <summary>
+    /// Постоянный опрос громкости: нужен, когда в верхней панели показываются цифры
+    /// уровня или когда открыт всплывающий индикатор громкости.
+    /// </summary>
+    public bool TrackVolumeAlways
+    {
+        get => _trackVolumeAlways;
+        set
+        {
+            if (Set(ref _trackVolumeAlways, value))
+            {
+                RefreshVolume();
+            }
+        }
+    }
 
     public QuickSettingsViewModel(ISettingsManager settings, SystemVolumeProvider volume)
     {
@@ -93,6 +121,7 @@ public sealed class QuickSettingsViewModel : INotifyPropertyChanged
             {
                 OnPropertyChanged(nameof(VolumeGlyph));
                 OnPropertyChanged(nameof(VolumeLabel));
+                OnPropertyChanged(nameof(VolumeCountText));
             }
         }
     }
@@ -104,6 +133,10 @@ public sealed class QuickSettingsViewModel : INotifyPropertyChanged
     public string VolumeLabel => _isMuted
         ? "Выключен"
         : string.Create(CultureInfo.CurrentCulture, $"{(int)Math.Round(_volumePercent)}%");
+
+    /// <summary>Мелкие цифры уровня для верхней панели: «0»–«100»; без звука — «0».</summary>
+    public string VolumeCountText =>
+        ((int)Math.Round(_isMuted ? 0 : _volumePercent)).ToString(CultureInfo.CurrentCulture);
 
     public IReadOnlyList<ThemeModeOption> ThemeModeOptions { get; } = ThemeOptions.CreateThemeModes();
 
@@ -136,13 +169,52 @@ public sealed class QuickSettingsViewModel : INotifyPropertyChanged
         }
     }
 
+    /// <summary>Включает или выключает звук; возвращает <see langword="false"/>, если не удалось.</summary>
+    public bool TryToggleMute()
+    {
+        if (!_volume.TrySetMute(!_isMuted))
+        {
+            return false;
+        }
+
+        IsMuted = !_isMuted;
+        OnPropertyChanged(nameof(VolumeCountText));
+        return true;
+    }
+
+    /// <summary>
+    /// Сдвигает уровень громкости на <paramref name="delta"/> процентов. Возвращает
+    /// <see langword="false"/>, если устройства вывода нет или Core Audio отказал: тогда
+    /// вызывающий оставляет действие системе.
+    /// </summary>
+    public bool TryAdjustVolume(int delta)
+    {
+        var target = Math.Clamp((int)Math.Round(_volumePercent) + delta, 0, 100);
+
+        if (!_volume.TrySetVolume(target))
+        {
+            return false;
+        }
+
+        if (_isMuted && _volume.TrySetMute(false))
+        {
+            IsMuted = false;
+        }
+
+        _volumePercent = target;
+        OnPropertyChanged(nameof(VolumePercent));
+        OnPropertyChanged(nameof(VolumeLabel));
+        OnPropertyChanged(nameof(VolumeCountText));
+        return true;
+    }
+
     /// <summary>
     /// Перечитывает громкость устройства: вызывается раз в секунду, пока popover открыт,
     /// поэтому изменение извне (клавиши мультимедиа, системный микшер) видно в интерфейсе.
     /// </summary>
     public void RefreshVolume()
     {
-        if (!_isOpen)
+        if (!_isOpen && !_trackVolumeAlways)
         {
             return;
         }
@@ -162,9 +234,24 @@ public sealed class QuickSettingsViewModel : INotifyPropertyChanged
             _volumePercent = percent;
             OnPropertyChanged(nameof(VolumePercent));
             OnPropertyChanged(nameof(VolumeLabel));
+            OnPropertyChanged(nameof(VolumeCountText));
+
+            // Первое чтение — это исходное состояние, а не изменение: индикатор
+            // не должен всплывать при запуске оболочки.
+            if (_volumeInitialized && _trackVolumeAlways && !_isOpen)
+            {
+                VolumeChangedExternally?.Invoke(this, EventArgs.Empty);
+            }
         }
 
+        var wasMuted = _isMuted;
         IsMuted = muted;
+        if (_volumeInitialized && _trackVolumeAlways && !_isOpen && wasMuted != muted)
+        {
+            VolumeChangedExternally?.Invoke(this, EventArgs.Empty);
+        }
+
+        _volumeInitialized = true;
     }
 
     public void Dispose() => _volume.Dispose();
@@ -172,33 +259,7 @@ public sealed class QuickSettingsViewModel : INotifyPropertyChanged
     private void SaveThemeMode(ThemeMode mode)
     {
         var settings = _settings.GetSettings();
-
-        _settings.SetSettings(new UserSettings(
-            settings.StartWithWindows,
-            settings.MinimizeToTray,
-            settings.ShowDesktopOnStartup,
-            settings.RestoreLastLayout,
-            settings.Language,
-            settings.ActiveThemeId,
-            settings.MonitorNames,
-            mode,
-            settings.AccentId,
-            settings.BaseColorId,
-            settings.TopBarEnabled,
-            settings.DockEnabled,
-            settings.DockPinnedApps,
-            settings.DockReplacesTaskbar,
-            settings.ExplorerFavorites,
-            settings.ExplorerViewMode,
-            settings.ReduceMotion,
-            settings.HighContrast,
-            settings.RecoveryHotkeyEnabled,
-            settings.RecoveryHotkeyId,
-            settings.SafeModeEnabled,
-            settings.TransparencyEnabled,
-            settings.TopBarTransparency,
-            settings.DockTransparency,
-            settings.HidePanelsInGlazeShell));
+        _settings.SetSettings(UserSettingsEditor.With(settings, themeMode: mode));
     }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

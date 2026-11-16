@@ -7,6 +7,7 @@ using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
 using GlazeShell.Core.Services;
+using GlazeShell.Core.Settings;
 using Microsoft.UI.Dispatching;
 
 namespace GlazeShell.App.Presentation;
@@ -1076,32 +1077,7 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
             names[monitor.Id] = normalized;
         }
 
-        _settings.SetSettings(new UserSettings(
-            settings.StartWithWindows,
-            settings.MinimizeToTray,
-            settings.ShowDesktopOnStartup,
-            settings.RestoreLastLayout,
-            settings.Language,
-            settings.ActiveThemeId,
-            names,
-            settings.ThemeMode,
-            settings.AccentId,
-            settings.BaseColorId,
-            settings.TopBarEnabled,
-            settings.DockEnabled,
-            settings.DockPinnedApps,
-            settings.DockReplacesTaskbar,
-            settings.ExplorerFavorites,
-            settings.ExplorerViewMode,
-            settings.ReduceMotion,
-            settings.HighContrast,
-            settings.RecoveryHotkeyEnabled,
-            settings.RecoveryHotkeyId,
-            settings.SafeModeEnabled,
-            settings.TransparencyEnabled,
-            settings.TopBarTransparency,
-            settings.DockTransparency,
-            settings.HidePanelsInGlazeShell));
+        _settings.SetSettings(UserSettingsEditor.With(settings, monitorNames: names));
 
         monitor.SetNames(
             BuildDefaultMonitorNames(Monitors.Select(static item => item.Monitor).ToList()).TryGetValue(monitor.Id, out var fallback)
@@ -1152,32 +1128,14 @@ public sealed class MainViewModel : INotifyPropertyChanged, IDisposable
     {
         var settings = _settings.GetSettings();
 
-        _settings.SetSettings(new UserSettings(
-            settings.StartWithWindows,
-            settings.MinimizeToTray,
-            settings.ShowDesktopOnStartup,
-            settings.RestoreLastLayout,
-            settings.Language,
-            settings.ActiveThemeId,
-            settings.MonitorNames,
-            _themeMode,
-            _accentId,
-            settings.BaseColorId,
-            _topBarEnabled,
-            _dockEnabled,
-            settings.DockPinnedApps,
-            _dockReplacesTaskbar,
-            settings.ExplorerFavorites,
-            settings.ExplorerViewMode,
-            settings.ReduceMotion,
-            settings.HighContrast,
-            settings.RecoveryHotkeyEnabled,
-            settings.RecoveryHotkeyId,
-            settings.SafeModeEnabled,
-            settings.TransparencyEnabled,
-            settings.TopBarTransparency,
-            settings.DockTransparency,
-            settings.HidePanelsInGlazeShell));
+        _settings.SetSettings(UserSettingsEditor.With(
+            settings,
+            themeMode: _themeMode,
+            accentId: _accentId,
+            clearAccent: _accentId is null,
+            topBarEnabled: _topBarEnabled,
+            dockEnabled: _dockEnabled,
+            dockReplacesTaskbar: _dockReplacesTaskbar));
     }
 
     private static Func<string?, string?> BuildMonitorNameResolver(Dictionary<string, string> displayNames) =>

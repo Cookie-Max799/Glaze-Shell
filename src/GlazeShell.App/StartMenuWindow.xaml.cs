@@ -82,12 +82,12 @@ public sealed partial class StartMenuWindow : Window
 
         // Схема подписей читается по фону под панелью, а он известен только после показа
         // и раскладки: до этого ActualWidth ещё нулевой.
-        Root.Loaded += (_, _) => _themes.ApplyFromSettings(Root, Root);
+        Root.Loaded += (_, _) => _themes.ApplyFromSettings(Root, Root, PanelSurface.StartMenu);
         ApplyBackdrop();
 
         _settingsChanged = events.Subscribe<SettingsChanged>(_ =>
         {
-            _themes.ApplyFromSettings(Root, Root);
+            _themes.ApplyFromSettings(Root, Root, PanelSurface.StartMenu);
             ApplyBackdrop();
         });
 
@@ -377,9 +377,10 @@ public sealed partial class StartMenuWindow : Window
         }
 
         var previous = _backdrop;
+        SystemBackdrop = null;
+        previous?.Dispose();
         _backdrop = _themes.CreatePanelBackdrop(PanelSurface.StartMenu) as PanelBackdrop;
         SystemBackdrop = _backdrop;
-        previous?.Dispose();
     }
 
     /// <summary>Текст поиска изменился; владелец может дополнить выдачу.</summary>

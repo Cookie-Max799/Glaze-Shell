@@ -15,6 +15,42 @@
         Панель результатов Glance и popover живут в этом же окне.
     -->
     <Grid x:Name="Root" Background="Transparent" UseLayoutRounding="True">
+        <Grid.Resources>
+            <Style x:Key="TopBarActionStyle" TargetType="Button">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Highlight" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="{TemplateBinding CornerRadius}">
+                                <VisualStateManager.VisualStateGroups>
+                                    <VisualStateGroup x:Name="CommonStates">
+                                        <VisualStateGroup.Transitions>
+                                            <VisualTransition GeneratedDuration="0:0:0.12" />
+                                        </VisualStateGroup.Transitions>
+                                        <VisualState x:Name="Normal" />
+                                        <VisualState x:Name="PointerOver">
+                                            <VisualState.Setters>
+                                                <Setter Target="Highlight.Background" Value="{StaticResource GlazeHoverBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Pressed">
+                                            <VisualState.Setters>
+                                                <Setter Target="Highlight.Background" Value="{StaticResource GlazePressedBrush}" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                        <VisualState x:Name="Disabled">
+                                            <VisualState.Setters>
+                                                <Setter Target="Highlight.Opacity" Value="0.4" />
+                                            </VisualState.Setters>
+                                        </VisualState>
+                                    </VisualStateGroup>
+                                </VisualStateManager.VisualStateGroups>
+                                <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" Padding="{TemplateBinding Padding}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </Grid.Resources>
         <!-- Полноширинная стеклянная полоса с нижним скруглением -->
         <Border
             x:Name="BarBackground"
@@ -66,6 +102,7 @@
                             Height="20"
                             Padding="0"
                             AutomationProperties.Name="Поиск Glance"
+                            Style="{StaticResource TopBarActionStyle}"
                             Background="Transparent"
                             BorderThickness="0"
                             Click="OnGlanceClick"
@@ -81,6 +118,7 @@
                             Height="20"
                             Padding="0"
                             AutomationProperties.Name="Проводник Glaze Shell"
+                            Style="{StaticResource TopBarActionStyle}"
                             Background="Transparent"
                             BorderThickness="0"
                             Click="OnLauncherExplorerClick"
@@ -96,6 +134,7 @@
                             Height="20"
                             Padding="0"
                             AutomationProperties.Name="Показать рабочий стол"
+                            Style="{StaticResource TopBarActionStyle}"
                             Background="Transparent"
                             BorderThickness="0"
                             Click="OnShowDesktopClick"
@@ -111,6 +150,7 @@
                             Height="20"
                             Padding="0"
                             AutomationProperties.Name="Рабочие столы"
+                            Style="{StaticResource TopBarActionStyle}"
                             Background="Transparent"
                             BorderThickness="0"
                             Click="OnTaskViewClick"
@@ -289,15 +329,14 @@
                     AutomationProperties.Name="Часы, питание и загрузка"
                     Background="{StaticResource GlazeTopBarPillBrush}"
                     CornerRadius="10"
-                    IsTabStop="True"
-                    KeyDown="OnStatusKeyDown"
-                    PointerPressed="OnStatusPointerPressed">
+                    >
                     <StackPanel
                         Orientation="Horizontal"
-                        Spacing="9"
+                        Spacing="4"
                         VerticalAlignment="Center">
                         <Button
                             x:Name="ClockButton"
+                            Style="{StaticResource TopBarActionStyle}"
                             Height="20"
                             Padding="2,0"
                             VerticalAlignment="Center"
@@ -311,7 +350,7 @@
                             <StackPanel
                                 VerticalAlignment="Center"
                                 Orientation="Horizontal"
-                                Spacing="6"
+                                Spacing="4"
                                 AutomationProperties.Name="Дата и время">
                                 <TextBlock
                                     VerticalAlignment="Center"
@@ -329,7 +368,7 @@
 
                         <StackPanel
                             Orientation="Horizontal"
-                            Spacing="3"
+                            Spacing="2"
                             AutomationProperties.Name="Питание"
                             ToolTipService.ToolTip="Питание"
                             Visibility="{x:Bind ViewModel.HasBattery, Mode=OneWay}">
@@ -347,24 +386,24 @@
 
                         <TextBlock
                             x:Name="CpuBlock"
-                            MinWidth="46"
+                            MinWidth="34"
                             VerticalAlignment="Center"
                             AutomationProperties.Name="{x:Bind ViewModel.CpuText, Mode=OneWay}"
                             FontSize="11"
                             Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
                             Text="{x:Bind ViewModel.CpuText, Mode=OneWay}"
-                            TextAlignment="Right"
+                            TextAlignment="Left"
                             ToolTipService.ToolTip="Загрузка процессора" />
 
                         <TextBlock
                             x:Name="GpuBlock"
-                            MinWidth="46"
+                            MinWidth="34"
                             VerticalAlignment="Center"
                             AutomationProperties.Name="{x:Bind ViewModel.GpuText, Mode=OneWay}"
                             FontSize="11"
                             Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
                             Text="{x:Bind ViewModel.GpuText, Mode=OneWay}"
-                            TextAlignment="Right"
+                            TextAlignment="Left"
                             ToolTipService.ToolTip="Загрузка графического процессора"
                             Visibility="{x:Bind ViewModel.HasGpu, Mode=OneWay}" />
                     </StackPanel>
@@ -378,27 +417,21 @@
                     AutomationProperties.Name="Раскладка, сеть, Bluetooth и звук"
                     Background="{StaticResource GlazeTopBarPillBrush}"
                     CornerRadius="10"
-                    IsTabStop="True"
-                    KeyDown="OnStatusKeyDown"
-                    PointerPressed="OnStatusPointerPressed">
+                    >
                     <StackPanel
                         Orientation="Horizontal"
-                        Spacing="9"
+                        Spacing="2"
                         VerticalAlignment="Center">
-                        <TextBlock
-                            VerticalAlignment="Center"
-                            FontSize="11"
-                            FontWeight="SemiBold"
-                            Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
-                            Text="{x:Bind ViewModel.KeyboardLanguage, Mode=OneWay}"
-                            AutomationProperties.Name="Текущая раскладка клавиатуры" />
+                        <Button x:Name="NetworkButton" Click="OnNetworkClick" Width="16" Height="22" Padding="0" CornerRadius="6" Style="{StaticResource TopBarActionStyle}" AutomationProperties.Name="Сеть: открыть панель Wi-Fi">
                         <FontIcon
                             x:Name="NetworkIcon"
                             VerticalAlignment="Center"
                             FontSize="12"
                             Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
                             Glyph="{x:Bind ViewModel.NetworkGlyph, Mode=OneWay}"
-                            ToolTipService.ToolTip="Сеть: открыть панель Wi-Fi" />
+                             ToolTipService.ToolTip="Сеть: открыть панель Wi-Fi" />
+                        </Button>
+                        <Button x:Name="BluetoothButton" Click="OnBluetoothClick" Width="16" Height="22" Padding="0" CornerRadius="6" Style="{StaticResource TopBarActionStyle}" AutomationProperties.Name="Bluetooth: состояние адаптера и устройства" Visibility="{x:Bind ViewModel.BluetoothVisible, Mode=OneWay}">
                         <FontIcon
                             x:Name="BluetoothIcon"
                             VerticalAlignment="Center"
@@ -407,12 +440,51 @@
                             Glyph="&#xE702;"
                             ToolTipService.ToolTip="Bluetooth: состояние адаптера и устройства"
                             Visibility="{x:Bind ViewModel.BluetoothVisible, Mode=OneWay}" />
-                        <FontIcon
+                        </Button>
+                        <StackPanel
+                            Orientation="Horizontal"
+                            Spacing="1"
+                            MinWidth="16"
+                            VerticalAlignment="Center">
+                            <FontIcon
+                                VerticalAlignment="Center"
+                                FontSize="12"
+                                Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                                Glyph="{x:Bind ViewModel.QuickSettings.VolumeGlyph, Mode=OneWay}"
+                                ToolTipService.ToolTip="{x:Bind ViewModel.QuickSettings.VolumeLabel, Mode=OneWay}" />
+                            <TextBlock
+                                VerticalAlignment="Center"
+                                FontSize="9"
+                                Foreground="{StaticResource GlazeGlassTextMutedBrush}"
+                                Text="{x:Bind ViewModel.QuickSettings.VolumeCountText, Mode=OneWay}"
+                                Visibility="{x:Bind ViewModel.VolumeCountVisibility, Mode=OneWay}"
+                                AutomationProperties.Name="{x:Bind ViewModel.QuickSettings.VolumeLabel, Mode=OneWay}" />
+                        </StackPanel>
+                        <Button x:Name="VolumeButton" Click="OnVolumeClick" Width="16" Height="22" Padding="0" CornerRadius="6" Style="{StaticResource TopBarActionStyle}" AutomationProperties.Name="Открыть центр управления" ToolTipService.ToolTip="Центр управления">
+                        <Path
+                            Width="12"
+                            Height="12"
+                            Stretch="Uniform"
                             VerticalAlignment="Center"
-                            FontSize="12"
-                            Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
-                            Glyph="{x:Bind ViewModel.QuickSettings.VolumeGlyph, Mode=OneWay}"
-                            ToolTipService.ToolTip="{x:Bind ViewModel.QuickSettings.VolumeLabel, Mode=OneWay}" />
+                            HorizontalAlignment="Center"
+                            Stroke="{StaticResource GlazeGlassTextSecondaryBrush}"
+                            StrokeThickness="1.1"
+                            StrokeStartLineCap="Round"
+                            StrokeEndLineCap="Round"
+                            StrokeLineJoin="Round"
+                            Fill="Transparent"
+                            Data="M 8,1.5 C 5.2,1.5 3,3.7 3,6.5 C 3,8.1 3.8,9.4 4.8,10.4 L 5.3,11.8 L 5.3,12.5 L 10.7,12.5 L 10.7,11.8 L 11.2,10.4 C 12.2,9.4 13,8.1 13,6.5 C 13,3.7 10.8,1.5 8,1.5 Z M 5.6,14.5 L 10.4,14.5"
+                            AutomationProperties.AccessibilityView="Raw" />
+                        </Button>
+                        <TextBlock
+                            Width="16"
+                            VerticalAlignment="Center"
+                            FontSize="11"
+                            FontWeight="SemiBold"
+                            Foreground="{StaticResource GlazeGlassTextPrimaryBrush}"
+                            Text="{x:Bind ViewModel.KeyboardLanguage, Mode=OneWay}"
+                            TextAlignment="Center"
+                            AutomationProperties.Name="Текущая раскладка клавиатуры" />
                     </StackPanel>
                 </Border>
             </StackPanel>

@@ -69,7 +69,8 @@ public sealed record UserSettings
         int dockTransparency = DefaultDockTransparency,
         bool hidePanelsInGlazeShell = true,
         int startMenuTransparency = DefaultStartMenuTransparency,
-        bool topBarHidesWithQuickSettings = false)
+        bool topBarHidesWithQuickSettings = false,
+        bool topBarVolumePercent = false)
     {
         Language = ModelValidation.Required(language, nameof(language));
         ActiveThemeId = ModelValidation.Optional(activeThemeId, nameof(activeThemeId));
@@ -94,6 +95,7 @@ public sealed record UserSettings
         StartMenuTransparency = NormalizeTransparency(startMenuTransparency);
         HidePanelsInGlazeShell = hidePanelsInGlazeShell;
         TopBarHidesWithQuickSettings = topBarHidesWithQuickSettings;
+        TopBarVolumePercent = topBarVolumePercent;
         StartWithWindows = startWithWindows;
         MinimizeToTray = minimizeToTray;
         ShowDesktopOnStartup = showDesktopOnStartup;
@@ -236,6 +238,12 @@ public sealed record UserSettings
     /// центр управления удерживает панель на экране. По умолчанию выключен.
     /// </summary>
     public bool TopBarHidesWithQuickSettings { get; }
+
+    /// <summary>
+    /// Показывать рядом со значком громкости верхней панели маленькие цифры текущего
+    /// уровня (0–100). По умолчанию выключено: панель остаётся компактной.
+    /// </summary>
+    public bool TopBarVolumePercent { get; }
 
     public static UserSettings CreateDefault() => new();
 

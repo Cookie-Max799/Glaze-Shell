@@ -101,6 +101,7 @@ public sealed partial class DockWindow : Window
     private bool _cursorInside;
     private bool _closed;
     private bool _cursorWatchRunning;
+    private PanelBackdrop? _backdrop;
 
     private readonly int _ownProcessId = Environment.ProcessId;
 
@@ -198,7 +199,7 @@ public sealed partial class DockWindow : Window
         // не обновлялись бы: плитки приложений оставались бы пустыми.
         Bindings?.Update();
 
-        _themes.ApplyFromSettings(Root, Root);
+        _themes.ApplyFromSettings(Root, Root, PanelSurface.Dock);
 
         ViewModel.StartRequested += OnStartRequested;
         ViewModel.Items.CollectionChanged += OnItemsChanged;
@@ -223,6 +224,7 @@ public sealed partial class DockWindow : Window
             Tiles.SizeChanged -= OnTilesSizeChanged;
             _settingsChanged.Dispose();
             _displayChanged.Dispose();
+            _backdrop?.Dispose();
             ViewModel.Dispose();
         };
     }
@@ -565,7 +567,7 @@ public sealed partial class DockWindow : Window
             return;
         }
 
-        _themes.ApplyFromSettings(Root, Root);
+        _themes.ApplyFromSettings(Root, Root, PanelSurface.Dock);
         ApplyBackdrop();
         _hideInOwnProcess = changed.Settings.HidePanelsInGlazeShell;
 
@@ -591,7 +593,20 @@ public sealed partial class DockWindow : Window
     /// выключенной прозрачности backdrop убирается: полупрозрачный фон поверх произвольного
     /// рабочего стола нечитаем, а непрозрачный цвет берётся из темы.
     /// </summary>
-    private void ApplyBackdrop() => SystemBackdrop = _themes.CreatePanelBackdrop(PanelSurface.Dock);
+    private void ApplyBackdrop()
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        var previous = _backdrop;
+        SystemBackdrop = null;
+        previous?.Dispose();
+        _backdrop = _themes.CreatePanelBackdrop(PanelSurface.Dock) as PanelBackdrop;
+        SystemBackdrop = _backdrop;
+    }
+
 
     /// <summary>
     /// Следит за активным окном: на рабочем столе dock виден всегда, в чужом приложении

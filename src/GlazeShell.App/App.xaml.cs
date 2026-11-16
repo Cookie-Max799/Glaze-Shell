@@ -106,6 +106,12 @@ public partial class App : Application
     /// </summary>
     private WindowsKeyInterceptor? _winKeyInterceptor;
 
+    /// <summary>
+    /// Перехват аппаратных клавиш громкости: пока верхняя панель рисует собственный
+    /// индикатор, системный не должен появляться поверх стекла.
+    /// </summary>
+    private VolumeKeyInterceptor? _volumeKeyInterceptor;
+
     /// <summary>Заглушка меню «Пуск» (этап 5), открывающаяся клавишей Windows.</summary>
     private StartMenuWindow? _startMenu;
 
@@ -358,6 +364,21 @@ public partial class App : Application
                     themeApplicator,
                     window);
 
+                // Аппаратные клавиши громкости забираются у системы: иначе Windows рисует
+                // свой индикатор поверх стеклянных панелей.
+                _volumeKeyInterceptor ??= new VolumeKeyInterceptor();
+                if (_volumeKeyInterceptor.Start())
+                {
+                    _volumeKeyInterceptor.VolumeKeyPressed += OnVolumeKeyPressed;
+                    _volumeKeyInterceptor.SetEnabled(true);
+                }
+                else
+                {
+                    _volumeKeyInterceptor.Dispose();
+                    _volumeKeyInterceptor = null;
+                    _logger.Write(GlazeLogLevel.Warning, "VolumeKey", "The volume key hook was not installed; Windows shows its own indicator.");
+                }
+
                 // Команда open-explorer приходит сюда из панели: окном Explorer владеет
                 // приложение, поэтому панель только пересылает запрос.
                 _topBar.ExplorerRequested += (_, path) => OpenExplorer(path);
@@ -376,6 +397,13 @@ public partial class App : Application
             {
                 _topBar?.Close();
                 _topBar = null;
+
+                if (_volumeKeyInterceptor is not null)
+                {
+                    _volumeKeyInterceptor.VolumeKeyPressed -= OnVolumeKeyPressed;
+                    _volumeKeyInterceptor.Dispose();
+                    _volumeKeyInterceptor = null;
+                }
             }
         }
 
@@ -878,6 +906,13 @@ public partial class App : Application
         RestoreWindowsUi("the recovery hotkey");
 
     /// <summary>
+    /// Аппаратная клавиша громкости. Возвращает признак «клавиша поглощена»: если верхняя
+    /// панель не может принять запрос, клавиша уходит системе и громкость меняет Windows.
+    /// </summary>
+    private bool OnVolumeKeyPressed(VolumeKeyAction action) =>
+        _topBar?.HandleVolumeKey(action) == true;
+
+    /// <summary>
     /// Одиночное нажатие клавиши Windows (этап 5): вместо системного меню «Пуск»
     /// показываются верхняя и нижняя панели Glaze Shell. Приходит с потока хука —
     /// показ окна переводится в UI-поток.
@@ -1162,6 +1197,13 @@ public partial class App : Application
             _settingsChangedSubscription = null;
             _topBar?.Close();
             _topBar = null;
+
+            if (_volumeKeyInterceptor is not null)
+            {
+                _volumeKeyInterceptor.VolumeKeyPressed -= OnVolumeKeyPressed;
+                _volumeKeyInterceptor.Dispose();
+                _volumeKeyInterceptor = null;
+            }
         });
 
         TryShutdownStep("dock", () =>

@@ -150,7 +150,7 @@ public sealed class ThemeApplicator
     /// <see langword="null"/>, если панель закрыта. По его области читается фон под панелью:
     /// он бывает противоположен фону под полосой, и подписи панели выбираются отдельно.
     /// </param>
-    public void ApplyFromSettings(FrameworkElement root, FrameworkElement? panel)
+    public void ApplyFromSettings(FrameworkElement root, FrameworkElement? panel, PanelSurface surface = PanelSurface.TopBar)
     {
         var settings = _settings.GetSettings();
         var system = SystemAccessibilityProvider.GetInfo();
@@ -159,7 +159,7 @@ public sealed class ThemeApplicator
             system.HighContrast,
             system.AnimationsEnabled);
 
-        Apply(root, panel, settings.ThemeMode, settings.AccentId, settings.BaseColorId, settings.TransparencyEnabled, settings.TopBarTransparency, settings.DockTransparency, settings.StartMenuTransparency, accessibility, system.Palette);
+        Apply(root, panel, settings.ThemeMode, settings.AccentId, settings.BaseColorId, settings.TransparencyEnabled, settings.TopBarTransparency, settings.DockTransparency, settings.StartMenuTransparency, accessibility, system.Palette, surface);
     }
 
     /// <summary>
@@ -221,7 +221,8 @@ public sealed class ThemeApplicator
         int dockTransparency,
         int startMenuTransparency,
         AccessibilityState accessibility,
-        SystemAccessibilityPalette palette)
+        SystemAccessibilityPalette palette,
+        PanelSurface surface = PanelSurface.TopBar)
     {
         var light = ThemeModeResolver.Resolve(mode, SystemUsesLightTheme()) == ThemeMode.Light;
 
@@ -240,6 +241,7 @@ public sealed class ThemeApplicator
         if (accessibility.HighContrast)
         {
             ApplyHighContrast(palette);
+            ApplyLocalGlassText(root, theme, false, ToColor(palette.Foreground));
         }
         else
         {
@@ -260,12 +262,18 @@ public sealed class ThemeApplicator
             // под полосой и под раскрытым popover он разный, и общая схема на окно
             // делала часть подписей нечитаемой.
             var surfaceLuminance = ReadSurfaceLuminance(root, SurfaceProbe.TopBar);
+            var surfaceTransparency = surface switch
+            {
+                PanelSurface.Dock => dockTransparency,
+                PanelSurface.StartMenu => startMenuTransparency,
+                _ => topBarTransparency
+            };
 
             var glassText = ResolveGlassTextTheme(
                 light,
                 baseColorId,
                 accentId,
-                topBarTransparency,
+                surfaceTransparency,
                 backdropAvailable,
                 surfaceLuminance);
 
@@ -273,12 +281,20 @@ public sealed class ThemeApplicator
                 light,
                 baseColorId,
                 accentId,
-                topBarTransparency,
+                surfaceTransparency,
                 backdropAvailable,
                 ReadSurfaceLuminance(panel ?? root, SurfaceProbe.Panel));
 
             ApplyBrushes(theme, glassText, topBarTransparency, topBarAlpha, dockAlpha, startMenuAlpha);
             ApplyPanelGlassText(panelGlassText);
+            if (root.XamlRoot is not null)
+            {
+                ApplyLocalGlassText(root, glassText, panel == root);
+                if (panel is not null)
+                {
+                    ApplyLocalGlassText(panel, panelGlassText, true);
+                }
+            }
         }
 
         ApplyFocusVisual(accessibility.HighContrast ? ToColor(palette.Highlight) : theme.AccentForeground);
@@ -409,8 +425,9 @@ public sealed class ThemeApplicator
 
             var bounds = root.TransformToVisual(null).TransformBounds(area);
 
-            var x = (int)Math.Round(bounds.X * scale);
-            var y = (int)Math.Round(bounds.Y * scale);
+            var position = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(root.XamlRoot!.ContentIslandEnvironment.AppWindowId).Position;
+            var x = position.X + (int)Math.Round(bounds.X * scale);
+            var y = position.Y + (int)Math.Round(bounds.Y * scale);
             var width = (int)Math.Round(bounds.Width * scale);
             var height = (int)Math.Round(bounds.Height * scale);
 
@@ -535,6 +552,47 @@ public sealed class ThemeApplicator
         SetBrush(PanelTextSecondaryKey, glassText.TextSecondary);
         SetBrush(PanelTextMutedKey, glassText.TextMuted);
         SetBrush(PanelTextAccentKey, glassText.AccentForeground);
+    }
+
+    private sealed record LocalGlassText(SolidColorBrush Brush, int Role);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DependencyObject, LocalGlassText> LocalGlassBrushes = new();
+
+    private static void ApplyLocalGlassText(DependencyObject element, GlazeTheme theme, bool includeStandardText, Color? overrideColor = null)
+    {
+        var foreground = element switch
+        {
+            Microsoft.UI.Xaml.Controls.Control control => control.Foreground,
+            Microsoft.UI.Xaml.Controls.TextBlock text => text.Foreground,
+            Microsoft.UI.Xaml.Controls.IconElement icon => icon.Foreground,
+            _ => null
+        };
+        var resources = Microsoft.UI.Xaml.Application.Current.Resources;
+        var keys = includeStandardText
+            ? new[] { GlassTextPrimaryKey, GlassTextSecondaryKey, GlassTextMutedKey, GlassTextAccentKey, PanelTextPrimaryKey, PanelTextSecondaryKey, PanelTextMutedKey, PanelTextAccentKey, TextPrimaryKey, TextSecondaryKey, TextMutedKey, AccentKey }
+            : new[] { GlassTextPrimaryKey, GlassTextSecondaryKey, GlassTextMutedKey, GlassTextAccentKey, PanelTextPrimaryKey, PanelTextSecondaryKey, PanelTextMutedKey, PanelTextAccentKey };
+        var index = Array.FindIndex(keys, key => ReferenceEquals(foreground, resources[key]));
+        if (index >= 0 || LocalGlassBrushes.TryGetValue(element, out _))
+        {
+            var local = LocalGlassBrushes.GetValue(element, _ => new LocalGlassText(new SolidColorBrush(), index % 4));
+            var brush = local.Brush;
+            brush.Color = overrideColor ?? (local.Role switch
+            {
+                1 => theme.TextSecondary,
+                2 => theme.TextMuted,
+                3 => theme.AccentForeground,
+                _ => theme.TextPrimary
+            });
+            switch (element)
+            {
+                case Microsoft.UI.Xaml.Controls.Control control: control.Foreground = brush; break;
+                case Microsoft.UI.Xaml.Controls.TextBlock text: text.Foreground = brush; break;
+                case Microsoft.UI.Xaml.Controls.IconElement icon: icon.Foreground = brush; break;
+            }
+        }
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
+        {
+            ApplyLocalGlassText(VisualTreeHelper.GetChild(element, i), theme, includeStandardText, overrideColor);
+        }
     }
 
     /// <summary>

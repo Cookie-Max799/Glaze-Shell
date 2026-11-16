@@ -38,6 +38,9 @@ internal sealed class LanguageToastWindow : Window
     /// <summary>Размер «капли», из которой раскрывается плашка.</summary>
     private const int DropletDips = 22;
 
+    /// <summary>Радиус скругления плашки в DIP.</summary>
+    private const int CornerRadiusDips = 16;
+
     private const double GrowMilliseconds = 340;
     private const double HoldMilliseconds = 1150;
     private const double FadeMilliseconds = 145;
@@ -138,11 +141,11 @@ internal sealed class LanguageToastWindow : Window
             return;
         }
 
-        _themes.ApplyFromSettings(_root);
         _root.Background = (Brush)Application.Current.Resources["GlazeTopBarGlassBrush"];
         _root.BorderBrush = (Brush)Application.Current.Resources["GlazeBorderBrush"];
         _code.Foreground = (Brush)Application.Current.Resources["GlazeGlassTextPrimaryBrush"];
         _name.Foreground = (Brush)Application.Current.Resources["GlazeGlassTextSecondaryBrush"];
+        _themes.ApplyFromSettings(_root, _root);
         _code.Text = code;
         _name.Text = name;
 
@@ -168,9 +171,26 @@ internal sealed class LanguageToastWindow : Window
         _timer.Start();
     }
 
-    private void OnTick(DispatcherQueueTimer sender, object args)
+    /// <summary>
+    /// Верхняя панель сдвинулась по вертикали: плашка едет вместе с ней тем же шагом,
+    /// поэтому при автоскрытии не остаётся висеть отдельно от полосы.
+    /// </summary>
+    public void ShiftBy(int deltaPixels)
     {
-        var elapsed = _watch.Elapsed;
+        if (_closed || deltaPixels == 0)
+        {
+            return;
+        }
+
+        var position = AppWindow.Position;
+        AppWindow.Move(new PointInt32(position.X, position.Y + deltaPixels));
+
+        _target = new RectInt32(_target.X, _target.Y + deltaPixels, _target.Width, _target.Height);
+        _droplet = new RectInt32(_droplet.X, _droplet.Y + deltaPixels, _droplet.Width, _droplet.Height);
+    }
+
+    private void OnTick(DispatcherQueueTimer sender, object args)
+    {        var elapsed = _watch.Elapsed;
 
         if (elapsed >= TotalTime)
         {
@@ -195,10 +215,21 @@ internal sealed class LanguageToastWindow : Window
             ? 1
             : Math.Clamp(progress / 0.6, 0, 1) * (1 - fading);
 
+        // Регион считается от фактического размера окна, а не от желаемого: после
+        // MoveAndResize клиентская область может отличаться на пиксель, и маска,
+        // посчитанная «вслепую», показывала прямые углы с одной стороны.
+        if (!OverlayWindow.TryGetClientSize(_hwnd, out var clientWidth, out var clientHeight))
+        {
+            return;
+        }
+
+        var width = Math.Clamp(rect.Width, 1, clientWidth);
+        var height = Math.Clamp(rect.Height, 1, clientHeight);
+
         OverlayWindow.ApplyRoundedRegions(
             _hwnd,
-            [new PixelRect(_target.Width - rect.Width, 0, rect.Width, rect.Height)],
-            (int)Math.Round(16 * scale));
+            [new PixelRect(clientWidth - width, 0, width, height)],
+            (int)Math.Round(CornerRadiusDips * scale));
     }
 
     /// <summary>
@@ -245,8 +276,9 @@ internal sealed class LanguageToastWindow : Window
         }
 
         var previous = _backdrop;
+        SystemBackdrop = null;
+        previous?.Dispose();
         _backdrop = _themes.CreatePanelBackdrop(PanelSurface.TopBar) as PanelBackdrop;
         SystemBackdrop = _backdrop;
-        previous?.Dispose();
     }
 }

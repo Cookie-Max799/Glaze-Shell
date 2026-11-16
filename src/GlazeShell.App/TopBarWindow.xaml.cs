@@ -29,6 +29,9 @@ public sealed partial class TopBarWindow : Window
 {
     private const int BarHeight = 30;
 
+    /// <summary>Шаг громкости на одно нажатие аппаратной клавиши, в процентах.</summary>
+    private const int VolumeStep = 5;
+
     /// <summary>Высота строки содержимого полосы: с неё начинается панель результатов.</summary>
     private const int BarContentHeight = 26;
 
@@ -100,6 +103,7 @@ public sealed partial class TopBarWindow : Window
     private LanguageToastWindow? _languageToast;
     private int? _lastLanguageId;
     private long _nextLanguageCheck;
+    private VolumeToastWindow? _volumeToast;
     private BluetoothPanelWindow? _bluetoothPanel;
     private NetworkPanelWindow? _networkPanel;
 
@@ -138,6 +142,8 @@ public sealed partial class TopBarWindow : Window
             settings,
             events,
             DispatcherQueue);
+
+        ViewModel.ShowVolumeCount = settings.GetSettings().TopBarVolumePercent;
 
         InitializeComponent();
         AppWindow.IsShownInSwitchers = false;
@@ -178,6 +184,7 @@ public sealed partial class TopBarWindow : Window
 
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         ViewModel.QuickSettings.PropertyChanged += OnQuickSettingsPropertyChanged;
+        ViewModel.QuickSettings.VolumeChangedExternally += OnVolumeChangedExternally;
         ViewModel.Calendar.PropertyChanged += OnCalendarPropertyChanged;
         ViewModel.ActivateRequested += OnActivateRequested;
         ViewModel.ExplorerRequested += OnExplorerRequested;
@@ -190,6 +197,8 @@ public sealed partial class TopBarWindow : Window
             _closed = true;
             _languageToast?.Close();
             _languageToast = null;
+            _volumeToast?.Close();
+            _volumeToast = null;
             _bluetoothPanel?.Close();
             _bluetoothPanel = null;
             _networkPanel?.Close();
@@ -198,12 +207,14 @@ public sealed partial class TopBarWindow : Window
             _revealWatch.Tick -= OnRevealWatchTick;
             ViewModel.PropertyChanged -= OnViewModelPropertyChanged;
             ViewModel.QuickSettings.PropertyChanged -= OnQuickSettingsPropertyChanged;
+            ViewModel.QuickSettings.VolumeChangedExternally -= OnVolumeChangedExternally;
             ViewModel.Calendar.PropertyChanged -= OnCalendarPropertyChanged;
             ViewModel.ActivateRequested -= OnActivateRequested;
             ViewModel.ExplorerRequested -= OnExplorerRequested;
             ViewModel.Dispose();
             _settingsChanged.Dispose();
             _displayChanged.Dispose();
+            _backdrop?.Dispose();
         };
     }
 
@@ -405,15 +416,6 @@ public sealed partial class TopBarWindow : Window
         // изменения размера, может не совпасть с новым прямоугольником окна, и тогда
         // стекло на мгновение заливает всю его площадь. Повторяем маску после раскладки.
         _ = DispatcherQueue.TryEnqueue(UpdateWindowRegion);
-
-        // После уменьшения высоты Acrylic иногда перестаёт рисоваться: при закрытии
-        // popover окно становится ниже, и полоса до следующего ресайза остаётся без
-        // размытия (визуально прозрачность «слетает»). Пересоздание backdrop возвращает
-        // стекло сразу, не дожидаясь следующего изменения размера.
-        if (_windowHeightPx < previousHeight)
-        {
-            _ = DispatcherQueue.TryEnqueue(ApplyBackdrop);
-        }
     }
 
     /// <summary>Применяет текущий прогресс выезда к положению окна.</summary>
@@ -447,6 +449,8 @@ public sealed partial class TopBarWindow : Window
             {
                 _networkPanel?.ShiftBy(shift);
                 _bluetoothPanel?.ShiftBy(shift);
+                _languageToast?.ShiftBy(shift);
+                _volumeToast?.ShiftBy(shift);
             }
         }
     }
@@ -566,7 +570,7 @@ public sealed partial class TopBarWindow : Window
         {
             if (SearchBox is { FocusState: not FocusState.Unfocused })
             {
-                _ = SearchBox.Focus(FocusState.Unfocused);
+                _ = ClockButton.Focus(FocusState.Programmatic);
             }
 
             _inputEnabled = false;
@@ -877,6 +881,8 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void EnableInput()
     {
+        _networkPanel?.ClosePanel();
+        _bluetoothPanel?.ClosePanel();
         if (_hwnd == 0)
         {
             return;
@@ -928,7 +934,7 @@ public sealed partial class TopBarWindow : Window
 
         if (SearchBox is { FocusState: not FocusState.Unfocused })
         {
-            _ = SearchBox.Focus(FocusState.Unfocused);
+            _ = ClockButton.Focus(FocusState.Programmatic);
         }
 
         var previous = _previousForegroundHwnd;
@@ -945,6 +951,78 @@ public sealed partial class TopBarWindow : Window
     /// потому что в popover есть ползунок и другие элементы управления. Клик по индикаторам
     /// сети и Bluetooth открывает их собственные панели.
     /// </summary>
+    private void OnNetworkClick(object sender, RoutedEventArgs e) => ShowNetworkPanel();
+
+    private void OnBluetoothClick(object sender, RoutedEventArgs e) => ShowBluetoothPanel();
+
+    private void OnVolumeClick(object sender, RoutedEventArgs e)
+    {
+        EnableInput();
+        ViewModel.ClearSearch();
+        ViewModel.ToggleQuickSettings();
+        HoldRevealed();
+    }
+
+    /// <summary>
+    /// Аппаратная клавиша громкости перехвачена: уровень меняется через Core Audio, а
+    /// рядом появляется собственная плашка. Возвращает <see langword="false"/>, если
+    /// запрос принять нельзя, и тогда клавишу обрабатывает Windows.
+    /// </summary>
+    public bool HandleVolumeKey(VolumeKeyAction action)
+    {
+        if (_closed)
+        {
+            return false;
+        }
+
+        return DispatcherQueue.TryEnqueue(() => ApplyVolumeKey(action));
+    }
+
+    private void ApplyVolumeKey(VolumeKeyAction action)
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        var applied = action switch
+        {
+            VolumeKeyAction.Up => ViewModel.QuickSettings.TryAdjustVolume(VolumeStep),
+            VolumeKeyAction.Down => ViewModel.QuickSettings.TryAdjustVolume(-VolumeStep),
+            VolumeKeyAction.Mute => ViewModel.QuickSettings.TryToggleMute(),
+            _ => false,
+        };
+
+        if (!applied)
+        {
+            return;
+        }
+
+        // Когда открыт «Центр управления», его ползунок уже показывает уровень:
+        // плашка поверх popover была бы лишней.
+        if (ViewModel.QuickSettings.IsOpen)
+        {
+            return;
+        }
+
+        ShowVolumeToast();
+    }
+
+    private void ShowVolumeToast()
+    {
+        if (_monitorTarget.Target is not { } monitor)
+        {
+            return;
+        }
+
+        _volumeToast ??= new VolumeToastWindow(_themes);
+        _volumeToast.ShowVolume(
+            (int)Math.Round(ViewModel.QuickSettings.VolumePercent),
+            ViewModel.QuickSettings.IsMuted,
+            monitor,
+            IsRevealed);
+    }
+
     private void OnStatusPointerPressed(object sender, PointerRoutedEventArgs e)
     {
         // Клик по часам открывает календарь (D4), а не «Центр управления».
@@ -953,17 +1031,18 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
-        if (IsWithin(e.OriginalSource as DependencyObject, NetworkIcon))
+        if (IsWithin(e.OriginalSource as DependencyObject, NetworkButton))
         {
-            ShowNetworkPanel();
-            e.Handled = true;
             return;
         }
 
-        if (IsWithin(e.OriginalSource as DependencyObject, BluetoothIcon))
+        if (IsWithin(e.OriginalSource as DependencyObject, BluetoothButton))
         {
-            ShowBluetoothPanel();
-            e.Handled = true;
+            return;
+        }
+
+        if (IsWithin(e.OriginalSource as DependencyObject, VolumeButton))
+        {
             return;
         }
 
@@ -979,6 +1058,13 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void OnStatusKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (IsWithin(e.OriginalSource as DependencyObject, NetworkButton) ||
+            IsWithin(e.OriginalSource as DependencyObject, BluetoothButton) ||
+            IsWithin(e.OriginalSource as DependencyObject, VolumeButton))
+        {
+            return;
+        }
+
         if (e.Key is not (VirtualKey.Enter or VirtualKey.Space))
         {
             return;
@@ -1034,6 +1120,9 @@ public sealed partial class TopBarWindow : Window
 
     private void ShowNetworkPanel()
     {
+        ViewModel.ClearSearch();
+        ViewModel.CloseQuickSettings();
+        ViewModel.CloseCalendar();
         // Панели создаются один раз на сессию и прогреваются вне экрана: Acrylic
         // подключается до показа, поэтому прозрачность совпадает с верхней полосой
         // с первого кадра, а не после перерисовки.
@@ -1051,6 +1140,9 @@ public sealed partial class TopBarWindow : Window
 
     private void ShowBluetoothPanel()
     {
+        ViewModel.ClearSearch();
+        ViewModel.CloseQuickSettings();
+        ViewModel.CloseCalendar();
         _networkPanel?.ClosePanel();
 
         var panel = EnsureBluetoothPanel();
@@ -1218,6 +1310,32 @@ public sealed partial class TopBarWindow : Window
     }
 
     /// <summary>
+    /// Громкость изменилась вне панели (клавиши мультимедиа, системный микшер, колесо
+    /// мыши): показывается всплывающий индикатор под верхней панелью — так же, как
+    /// Windows показывает свой.
+    /// </summary>
+    private void OnVolumeChangedExternally(object? sender, EventArgs e)
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        if (!DispatcherQueue.HasThreadAccess)
+        {
+            _ = DispatcherQueue.TryEnqueue(() => OnVolumeChangedExternally(sender, e));
+            return;
+        }
+
+        if (ViewModel.QuickSettings.IsOpen)
+        {
+            return;
+        }
+
+        ShowVolumeToast();
+    }
+
+    /// <summary>
     /// Размер окна и регион зависят от видимости календаря.
     /// </summary>
     /// <summary>
@@ -1381,6 +1499,7 @@ public sealed partial class TopBarWindow : Window
         _bluetoothPanel?.RefreshBackdrop();
         _hideInOwnProcess = changed.Settings.HidePanelsInGlazeShell;
         _topBarHidesWithQuickSettings = changed.Settings.TopBarHidesWithQuickSettings;
+        ViewModel.ShowVolumeCount = changed.Settings.TopBarVolumePercent;
         _lastAppliedReveal = -1;
         _ = DispatcherQueue.TryEnqueue(() => UpdateOverlayBounds());
     }
@@ -1407,9 +1526,11 @@ public sealed partial class TopBarWindow : Window
         {
             return;
         }
+
         var previous = _backdrop;
+        SystemBackdrop = null;
+        previous?.Dispose();
         _backdrop = _themes.CreatePanelBackdrop(PanelSurface.TopBar) as PanelBackdrop;
         SystemBackdrop = _backdrop;
-        previous?.Dispose();
     }
 }

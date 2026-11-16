@@ -51,14 +51,20 @@ public sealed class PanelBackdrop : SystemBackdrop, IDisposable
     /// <summary>Освобождает системный контроллер, если окно закрылось без отключения цели.</summary>
     public void Dispose()
     {
-        if (_controller is not null)
-        {
-            _controller.RemoveAllSystemBackdropTargets();
-            _controller.Dispose();
-            _controller = null;
-        }
-
+        var controller = _controller;
+        _controller = null;
         _configuration = null;
+        if (controller is not null)
+        {
+            try
+            {
+                controller.RemoveAllSystemBackdropTargets();
+            }
+            finally
+            {
+                controller.Dispose();
+            }
+        }
     }
 
     protected override void OnTargetConnected(
@@ -102,19 +108,14 @@ public sealed class PanelBackdrop : SystemBackdrop, IDisposable
     {
         if (_controller is not null && _configuration is not null)
         {
+            _configuration.IsInputActive = true;
             _controller.SetSystemBackdropConfiguration(_configuration);
         }
     }
 
     protected override void OnTargetDisconnected(ICompositionSupportsSystemBackdrop disconnectedTarget)
     {
-        if (_controller is not null)
-        {
-            _controller.RemoveSystemBackdropTarget(disconnectedTarget);
-            _controller.Dispose();
-            _controller = null;
-        }
-
-        _configuration = null;
+        Dispose();
+        base.OnTargetDisconnected(disconnectedTarget);
     }
 }

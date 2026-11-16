@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using GlazeShell.Core.Files;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
+using GlazeShell.Core.Settings;
 using GlazeShell.Windows.Applications;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -549,40 +550,18 @@ public sealed class ExplorerViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Сохраняет избранное и вид списка, копируя остальные поля настроек. Список полей
-    /// дублируется намеренно: <see cref="UserSettings"/> — неизменяемая запись, и частичное
-    /// обновление возможно только пересозданием.
+    /// Сохраняет избранное и вид списка, копируя остальные поля настроек через
+    /// <see cref="UserSettingsEditor"/>: частичное обновление неизменяемой записи
+    /// не должно терять поля, которых нет в этом вызове.
     /// </summary>
     private void SaveExplorerState(IReadOnlyList<string>? favorites, ExplorerViewMode? viewMode)
     {
         var settings = _settings.GetSettings();
 
-        _settings.SetSettings(new UserSettings(
-            settings.StartWithWindows,
-            settings.MinimizeToTray,
-            settings.ShowDesktopOnStartup,
-            settings.RestoreLastLayout,
-            settings.Language,
-            settings.ActiveThemeId,
-            settings.MonitorNames,
-            settings.ThemeMode,
-            settings.AccentId,
-            settings.BaseColorId,
-            settings.TopBarEnabled,
-            settings.DockEnabled,
-            settings.DockPinnedApps,
-            settings.DockReplacesTaskbar,
-            favorites ?? settings.ExplorerFavorites,
-            viewMode ?? settings.ExplorerViewMode,
-            settings.ReduceMotion,
-            settings.HighContrast,
-            settings.RecoveryHotkeyEnabled,
-            settings.RecoveryHotkeyId,
-            settings.SafeModeEnabled,
-            settings.TransparencyEnabled,
-            settings.TopBarTransparency,
-            settings.DockTransparency,
-            settings.HidePanelsInGlazeShell));
+        _settings.SetSettings(UserSettingsEditor.With(
+            settings,
+            explorerFavorites: favorites,
+            explorerViewMode: viewMode));
     }
 
     private string ResolveStartPath(string? requested)
