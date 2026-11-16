@@ -35,15 +35,28 @@ public static class ShellForeground
         "TaskListThumbnailWnd",
     };
 
+    private static readonly HashSet<string> SearchProcessNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SearchHost",
+        "SearchUI",
+        "SearchApp",
+        "Cortana",
+    };
+
     /// <summary>
     /// Активное окно — поиск Windows. Такое окно Glaze Shell закрывает: жест «три пальца»
     /// по тачпаду на части машин открывает поиск в обход клавиатурного хука, и вместо
     /// него должен появиться интерфейс оболочки.
     /// </summary>
+    /// <remarks>
+    /// Имена различаются по версиям: в Windows 11 поиск живёт в <c>SearchHost.exe</c>,
+    /// в Windows 10 — в <c>SearchUI.exe</c> (Cortana). Проверяются оба, иначе на десятке
+    /// поиск оставался на экране поверх панелей.
+    /// </remarks>
     public static bool IsSystemSearchUi(uint processId)
     {
         var name = GetProcessName(processId);
-        return string.Equals(name, "SearchHost", StringComparison.OrdinalIgnoreCase);
+        return name is not null && SearchProcessNames.Contains(name);
     }
 
     /// <summary>

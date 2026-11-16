@@ -62,9 +62,9 @@ public sealed class WindowsKeyInterceptor : IDisposable
     public event EventHandler? Pressed;
 
     /// <summary>
-    /// Жест «три пальца» по тачпаду: Windows превращает его в Win+S (поиск) или Win+Tab
-    /// (представление задач). Событие приходит с потока хука вместо <see cref="Pressed"/>,
-    /// чтобы приложение показало меню Glaze Shell, а не только панели.
+    /// Жест «три пальца» по тачпаду: Windows превращает его в Win+S (поиск). Событие
+    /// приходит с потока хука вместо <see cref="Pressed"/>, чтобы приложение показало
+    /// меню Glaze Shell, а не только панели.
     /// </summary>
     public event EventHandler? GesturePressed;
 
@@ -261,12 +261,13 @@ public sealed class WindowsKeyInterceptor : IDisposable
             return User32.LlhcBlocked;
         }
 
-        if (_winHeld && !_winForwarded && input.VkCode is User32.VkTab or User32.VkS)
+        if (_winHeld && !_winForwarded && input.VkCode == User32.VkS)
         {
-            // Win+Tab и Win+S: жест тачпада «три пальца» Windows превращает в одно из этих
-            // сочетаний (по умолчанию — в поиск). Ни Task View, ни поиск Windows не открываем:
-            // Win остаётся «не пересланной», поэтому на её отпускании придёт GesturePressed,
-            // и приложение покажет меню Glaze Shell вместо системного интерфейса.
+            // Win+S: жест тачпада «три пальца» Windows превращает в поиск. Ни поиск
+            // Windows, ни представление задач не открываем: Win остаётся «не пересланной»,
+            // поэтому на её отпускании придёт GesturePressed, и приложение покажет меню
+            // Glaze Shell вместо системного интерфейса. Win+Tab намеренно не перехватывается:
+            // замену переключателя окон сделаем отдельным этапом.
             _gestureSuppressed = true;
             return User32.LlhcBlocked;
         }

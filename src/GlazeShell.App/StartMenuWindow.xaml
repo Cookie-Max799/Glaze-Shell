@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Window
     x:Class="GlazeShell.App.StartMenuWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -18,7 +18,7 @@
             BorderBrush="{StaticResource GlazeBorderBrush}"
             BorderThickness="1"
             CornerRadius="20">
-            <Grid Padding="28,26,26,20">
+            <Grid x:Name="PanelContent" Padding="28,26,26,20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />

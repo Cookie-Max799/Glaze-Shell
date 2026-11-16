@@ -38,8 +38,17 @@ public sealed partial class StartMenuWindow : Window
     /// <summary>Минимальный отступ сверху и снизу от рабочей области.</summary>
     private const int VerticalMarginDips = 24;
 
-    private const double SlideInMilliseconds = 300;
-    private const double SlideOutMilliseconds = 180;
+    private const double SlideInMilliseconds = 340;
+    private const double SlideOutMilliseconds = 190;
+
+    /// <summary>На сколько DIP меню выезжает из-за левого края при появлении.</summary>
+    private const int SlideInDips = 64;
+
+    /// <summary>На сколько DIP меню уезжает при скрытии.</summary>
+    private const int SlideOutDips = 44;
+
+    /// <summary>На сколько DIP содержимое поднимается, пока меню выезжает.</summary>
+    private const int ContentRiseDips = 14;
 
     private readonly ThemeApplicator _themes;
     private readonly IMonitorManager _monitors;
@@ -113,6 +122,9 @@ public sealed partial class StartMenuWindow : Window
     /// <summary>Открыта ли панель сейчас (учитывая анимацию закрытия).</summary>
     public bool IsShown => !_closed && AppWindow.IsVisible;
 
+    /// <summary>Играется анимация ухода: повторный жест должен дождаться её конца.</summary>
+    public bool IsClosing => _closing;
+
     /// <summary>Заполняет список приложений и сразу применяет текущий поиск.</summary>
     public void SetItems(IReadOnlyList<StartMenuItemViewModel> items)
     {
@@ -148,7 +160,8 @@ public sealed partial class StartMenuWindow : Window
         var y = area.Y + ((area.Height - height) / 2);
 
         _shownBounds = new RectInt32(area.X + margin, y, width, height);
-        _animationFrom = new RectInt32(_shownBounds.X - (int)Math.Round(32 * scale), y, width, height);
+        var slideIn = (int)Math.Round(SlideInDips * scale);
+        _animationFrom = new RectInt32(_shownBounds.X - slideIn, y, width, height);
         _animationTo = _shownBounds;
         _slidingIn = true;
         _closing = false;
@@ -169,7 +182,15 @@ public sealed partial class StartMenuWindow : Window
 
         SearchBox.Text = string.Empty;
         ApplyFilter(string.Empty);
-        Root.Opacity = _themes.ReduceMotion ? 1 : 0.65;
+
+        // Двухслойное появление: полоса выезжает из-за края, содержимое одновременно
+        // поднимается и проявляется. Так меню «собирается» на месте, а не просто
+        // сдвигается прямоугольником.
+        Root.Opacity = _themes.ReduceMotion ? 1 : 0;
+        PanelContent.Opacity = _themes.ReduceMotion ? 1 : 0;
+        PanelContent.Translation = _themes.ReduceMotion
+            ? System.Numerics.Vector3.Zero
+            : new System.Numerics.Vector3(0, ContentRiseDips, 0);
 
         Activate();
         SearchBox.Focus(FocusState.Programmatic);
@@ -217,10 +238,16 @@ public sealed partial class StartMenuWindow : Window
             _closing = false;
             AppWindow.Hide();
             _animation.Stop();
+            Hidden?.Invoke(this, EventArgs.Empty);
             return;
         }
 
-        _animationTo = new RectInt32(_shownBounds.X - (int)Math.Round(24 * OverlayWindow.GetScaleFactor(_hwnd)), _shownBounds.Y, _shownBounds.Width, _shownBounds.Height);
+        var scale = OverlayWindow.GetScaleFactor(_hwnd);
+        _animationTo = new RectInt32(
+            _shownBounds.X - (int)Math.Round(SlideOutDips * scale),
+            _shownBounds.Y,
+            _shownBounds.Width,
+            _shownBounds.Height);
         var position = AppWindow.Position;
         _animationFrom = new RectInt32(position.X, position.Y, _shownBounds.Width, _shownBounds.Height);
         _animating = true;
@@ -229,6 +256,19 @@ public sealed partial class StartMenuWindow : Window
         _closing = true;
         _watch.Restart();
         _animation.Start();
+    }
+
+    /// <summary>
+    /// Мягкое замедление с небольшим перелётом (ease-out back): панель проскакивает
+    /// конечную точку на пару DIP и «прищёлкивается» назад. Перелёт намеренно мал,
+    /// чтобы окно не выходило за пределы своего прямоугольника заметно.
+    /// </summary>
+    private static double EaseOutBack(double progress)
+    {
+        const double c1 = 1.25;
+        const double c3 = c1 + 1;
+        var p = progress - 1;
+        return 1 + (c3 * p * p * p) + (c1 * p * p);
     }
 
     private void OnAnimationTick(Microsoft.UI.Dispatching.DispatcherQueueTimer sender, object args)
@@ -246,16 +286,37 @@ public sealed partial class StartMenuWindow : Window
         }
         var length = _slidingIn ? SlideInMilliseconds : SlideOutMilliseconds;
         var progress = Math.Clamp(_watch.Elapsed.TotalMilliseconds / length, 0, 1);
+
+        // Выезд с мягким «дотормаживанием» и лёгким перелётом у края, уход — с ускорением:
+        // появление читается живым, закрытие остаётся быстрым.
         var eased = _slidingIn
-            ? (progress < 0.5
-                ? 4 * progress * progress * progress
-                : 1 - (Math.Pow(-2 * progress + 2, 3) / 2))
-            : 1 - Math.Pow(1 - progress, 3);
-        Root.Opacity = _slidingIn ? 0.65 + (0.35 * eased) : 1 - (0.35 * eased);
+            ? EaseOutBack(progress)
+            : progress * progress;
 
         var x = (int)Math.Round(_animationFrom.X + ((_animationTo.X - _animationFrom.X) * eased));
 
         AppWindow.MoveAndResize(new RectInt32(x, _animationFrom.Y, _animationFrom.Width, _animationFrom.Height));
+
+        if (_themes.ReduceMotion)
+        {
+            Root.Opacity = 1;
+            PanelContent.Opacity = 1;
+        }
+        else if (_slidingIn)
+        {
+            // Стекло проявляется за первые 60 % пути, содержимое — с небольшой задержкой:
+            // меню сначала «въезжает» поверхностью, затем на ней собираются элементы.
+            Root.Opacity = Math.Clamp(progress / 0.6, 0, 1);
+            PanelContent.Opacity = Math.Clamp((progress - 0.15) / 0.55, 0, 1);
+            PanelContent.Translation = new System.Numerics.Vector3(
+                0,
+                (float)((1 - eased) * ContentRiseDips),
+                0);
+        }
+        else
+        {
+            Root.Opacity = 1 - Math.Clamp((progress - 0.2) / 0.8, 0, 1);
+        }
 
         if (progress < 1)
         {
@@ -267,6 +328,9 @@ public sealed partial class StartMenuWindow : Window
         if (_slidingIn)
         {
             AppWindow.MoveAndResize(_shownBounds);
+            PanelContent.Translation = System.Numerics.Vector3.Zero;
+            PanelContent.Opacity = 1;
+            Root.Opacity = 1;
             OverlayWindow.ApplyRoundedRegions(
                 _hwnd,
                 [new PixelRect(0, 0, _shownBounds.Width, _shownBounds.Height)],
@@ -278,12 +342,12 @@ public sealed partial class StartMenuWindow : Window
             _closing = false;
             AppWindow.Hide();
             _animation.Stop();
+            Hidden?.Invoke(this, EventArgs.Empty);
         }
     }
 
     private void OnActivated(object sender, WindowActivatedEventArgs args)
-    {
-        if (args.WindowActivationState == WindowActivationState.Deactivated)
+    {        if (args.WindowActivationState == WindowActivationState.Deactivated)
         {
             HideMenu();
         }
@@ -385,6 +449,9 @@ public sealed partial class StartMenuWindow : Window
 
     /// <summary>Текст поиска изменился; владелец может дополнить выдачу.</summary>
     public event EventHandler<string>? SearchFilterRequested;
+
+    /// <summary>Меню скрылось (после анимации ухода или мгновенно).</summary>
+    public event EventHandler? Hidden;
 
     /// <summary>Пользователь выбрал приложение.</summary>
     public event EventHandler<StartMenuItemViewModel>? ItemActivated;

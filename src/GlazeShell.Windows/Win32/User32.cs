@@ -427,7 +427,6 @@ internal static class User32
 
     internal const int VkLeftWindows = 0x5B;
     internal const int VkRightWindows = 0x5C;
-    internal const int VkTab = 0x09;
     internal const int VkS = 0x53;
     internal const int VkLeftButton = 0x01;
     internal const int VkVolumeMute = 0xAD;

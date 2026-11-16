@@ -41,6 +41,15 @@ public partial class App : Application
     /// </summary>
     private static readonly TimeSpan SystemSearchDismissRetry = TimeSpan.FromMilliseconds(350);
 
+    /// <summary>
+    /// Замок на один жест тачпада: он приходит и с клавиатурного хука, и событием
+    /// системного поиска, поэтому повторная обработка в этом окне игнорируется.
+    /// </summary>
+    private const long GestureDebounceMilliseconds = 900;
+
+    /// <summary>Момент последней обработки жеста (мс с запуска системы).</summary>
+    private long _lastGestureTick;
+
     private readonly FileLogger _logger;
     private readonly RecoveryCommandLineOptions _commandLine;
     private Window? _window;
@@ -466,6 +475,7 @@ public partial class App : Application
                         _startMenu.SettingsRequested += (_, _) => OpenSettings();
                         _startMenu.ExplorerRequested += (_, _) => OpenExplorer(null);
                         _startMenu.MainWindowRequested += (_, _) => window.ShowFromTray();
+                        _startMenu.Hidden += OnStartMenuHidden;
                         _winKeyInterceptor.SetEnabled(true);
                         _ = LoadStartMenuItemsAsync();
                     }
@@ -931,15 +941,11 @@ public partial class App : Application
         });
 
     /// <summary>
-    /// Жест «три пальца» по тачпаду (Win+S или Win+Tab): вместо системного поиска и
-    /// представления задач открывается меню «Пуск» Glaze Shell с поиском и кнопкой
-    /// главного окна. Приходит с потока хука.
+    /// Жест «три пальца» по тачпаду (Win+S): вместо системного поиска открывается меню
+    /// «Пуск» Glaze Shell с поиском и кнопкой главного окна. Приходит с потока хука.
     /// </summary>
     private void OnWindowsKeyGesture(object? sender, EventArgs e) =>
-        RunOnUiThread(() =>
-        {
-            ToggleGestureMenu();
-        });
+        RunOnUiThread(HandleGestureMenu);
 
     /// <summary>
     /// Системный поиск вышел на передний план в обход клавиатурного хука: закрываем его
@@ -961,8 +967,7 @@ public partial class App : Application
 
         RunOnUiThread(() =>
         {
-            ToggleGestureMenu();
-            var reopen = _startMenu?.IsShown == true;
+            HandleGestureMenu();
 
             // Поиск доигрывает анимацию открытия и пропускает первое WM_CLOSE: повторяем
             // закрытие, когда окно уже готово его принять.
@@ -979,7 +984,7 @@ public partial class App : Application
                         GlazeLogLevel.Information,
                         "Shell",
                         $"Retried dismissing the system search window {window.Id}: {retried}.");
-                    if (reopen && _startMenu?.IsShown == true)
+                    if (_startMenu?.IsShown == true)
                     {
                         _startMenu.Activate();
                     }
@@ -987,6 +992,29 @@ public partial class App : Application
                 timer.Start();
             }
         });
+    }
+
+    /// <summary>
+    /// Один жест может прийти двумя путями сразу: как Win+S через хук и как системный
+    /// поиск, открытый драйвером тачпада в обход клавиатуры. Первый путь открывает меню,
+    /// второй закрывает поиск; без общего «замка» второй обработчик тут же переключал бы
+    /// меню обратно и панели оставались бы скрытыми.
+    /// </summary>
+    private void HandleGestureMenu()
+    {
+        if (_startMenu is null)
+        {
+            return;
+        }
+
+        var now = Environment.TickCount64;
+        if (now - _lastGestureTick < GestureDebounceMilliseconds)
+        {
+            return;
+        }
+
+        _lastGestureTick = now;
+        ToggleGestureMenu();
     }
 
     /// <summary>Выполняет действие в потоке интерфейса, откуда бы его ни вызвали.</summary>
@@ -1011,9 +1039,30 @@ public partial class App : Application
 
     private void ToggleGestureMenu()
     {
+        if (_startMenu is null)
+        {
+            return;
+        }
+
+        if (_startMenu.IsShown && !_startMenu.IsClosing)
+        {
+            _startMenu.HideMenu();
+            return;
+        }
+
         _topBar?.SetSuppressed(true);
         _dock?.SetSuppressed(true);
-        _startMenu?.Toggle();
+        _startMenu.ShowNearTaskbar();
+    }
+
+    /// <summary>
+    /// Меню закрылось любым путём (повторный жест, Esc, клик мимо): панели возвращаются
+    /// на место. Иначе жест оставлял бы их скрытыми до следующего нажатия клавиши Windows.
+    /// </summary>
+    private void OnStartMenuHidden(object? sender, EventArgs e)
+    {
+        _topBar?.SetSuppressed(false);
+        _dock?.SetSuppressed(false);
     }
 
     private void OnDockStartRequested(object? sender, EventArgs e) => ShowStartMenu();
