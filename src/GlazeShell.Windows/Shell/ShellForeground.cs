@@ -60,6 +60,22 @@ public static class ShellForeground
     }
 
     /// <summary>
+    /// Активное окно — поверхность рабочего стола (<c>Progman</c>/<c>WorkerW</c>).
+    /// Панель задач и меню «Пуск» сюда не входят: это не «пустой» рабочий стол.
+    /// </summary>
+    public static bool IsDesktop(nint hwnd, uint processId)
+    {
+        var windowClass = User32.GetWindowClassName(hwnd);
+
+        if (windowClass is not ("Progman" or "WorkerW"))
+        {
+            return false;
+        }
+
+        return string.Equals(GetProcessName(processId), "explorer", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
     /// Активное окно — рабочий стол или системная поверхность (меню «Пуск», поиск,
     /// уведомления). Представление задач и переключатель окон сюда не входят: панели
     /// должны убираться, чтобы не закрывать список.

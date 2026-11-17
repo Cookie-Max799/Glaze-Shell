@@ -231,7 +231,7 @@
             <Grid
                 x:Name="SearchHit"
                 Grid.Row="0"
-                Grid.Column="1"
+                Grid.ColumnSpan="3"
                 Height="20"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Center"
@@ -502,17 +502,17 @@
             <!--  Панель результатов Glance (B1) под строкой поиска: та же колонка, что и поиск.  -->
             <Border
                 x:Name="ResultsPanel"
-                Grid.Row="1"
-                Grid.Column="1"
+                Grid.RowSpan="2"
+                Grid.ColumnSpan="3"
                 Width="440"
-                Margin="0,4,0,0"
+                Margin="0,57,0,0"
                 Padding="6"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
                 Background="{StaticResource GlazeGlassBrush}"
                 BorderBrush="{StaticResource GlazeBorderBrush}"
-                BorderThickness="1,0,1,1"
-                CornerRadius="0,0,32,32"
+                BorderThickness="1"
+                CornerRadius="32"
                 Visibility="{x:Bind ViewModel.HasResults, Mode=OneWay}">
                 <Grid>
                     <ListView
@@ -748,19 +748,21 @@
         </Border>
 
         <!--  Popover часов и календаря (D4): тот же слой, что и «Центр управления», и та же
-              геометрия (ширина 380, радиус 32, отступ 56 сверху). Открывается кликом по
-              часам в правом pill; поиск и «Центр управления» при этом закрываются.  -->
+              геометрия (ширина 380, радиус 32, отступ 57 сверху). Календарь не примыкает
+              к полосе: между ними остаётся зазор, как у панелей Wi-Fi и Bluetooth, поэтому
+              он «висит» под панелью отдельным островом. Открывается кликом по часам
+              в правом pill; поиск и «Центр управления» при этом закрываются.  -->
         <Border
             x:Name="CalendarPanel"
             Width="380"
-            Margin="0,30,0,0"
+            Margin="0,57,0,0"
             Padding="16"
             HorizontalAlignment="Right"
             VerticalAlignment="Top"
             Background="{StaticResource GlazeGlassBrush}"
             BorderBrush="{StaticResource GlazeBorderBrush}"
-            BorderThickness="1,0,1,1"
-            CornerRadius="0,0,32,32"
+            BorderThickness="1"
+            CornerRadius="32"
             Visibility="{x:Bind ViewModel.Calendar.IsOpen, Mode=OneWay}">
             <StackPanel Spacing="12">
                 <Grid ColumnSpacing="8">

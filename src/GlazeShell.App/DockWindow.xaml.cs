@@ -252,6 +252,13 @@ public sealed partial class DockWindow : Window
 
     private bool _suppressed;
 
+    /// <summary>
+    /// Панель держится раскрытой независимо от активного окна. Нужно меню «Пуск» на
+    /// рабочем столе: оно не перекрывает нижнюю панель, и та остаётся частью оболочки,
+    /// хотя фокус формально ушёл в собственное окно.
+    /// </summary>
+    private bool _pinned;
+
     public void SetSuppressed(bool suppressed)
     {
         _suppressed = suppressed;
@@ -260,6 +267,22 @@ public sealed partial class DockWindow : Window
             _revealUntil = DateTimeOffset.MinValue;
             _cursorExitUntil = DateTimeOffset.MinValue;
         }
+        UpdateReveal();
+    }
+
+    /// <summary>
+    /// Удерживает панель раскрытой, пока поверх рабочего стола открыто меню «Пуск».
+    /// Настройка «скрывать панели в Glaze Shell» относится к большим окнам оболочки:
+    /// меню их не перекрывает, поэтому нижняя панель остаётся видимой.
+    /// </summary>
+    public void SetPinned(bool pinned)
+    {
+        if (_pinned == pinned)
+        {
+            return;
+        }
+
+        _pinned = pinned;
         UpdateReveal();
     }
 
@@ -668,6 +691,14 @@ public sealed partial class DockWindow : Window
     private void UpdateReveal()
     {
         var now = DateTimeOffset.UtcNow;
+
+        // Пока открыто меню «Пуск» на рабочем столе, панель не зависит ни от активного
+        // окна, ни от курсора: она остаётся частью оболочки под меню.
+        if (_pinned)
+        {
+            SetRevealTarget(_suppressed ? 0 : 1);
+            return;
+        }
 
         // Пока курсор внутри видимого контура панели или у самой кромки экрана,
         // она держится открытой. Проверка идёт по реальному положению окна,

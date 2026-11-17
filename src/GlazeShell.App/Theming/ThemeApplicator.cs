@@ -242,6 +242,7 @@ public sealed class ThemeApplicator
         {
             ApplyHighContrast(palette);
             ApplyLocalGlassText(root, theme, false, ToColor(palette.Foreground));
+            RememberLocalText(root, theme, false, ToColor(palette.Foreground));
         }
         else
         {
@@ -287,13 +288,21 @@ public sealed class ThemeApplicator
 
             ApplyBrushes(theme, glassText, topBarTransparency, topBarAlpha, dockAlpha, startMenuAlpha);
             ApplyPanelGlassText(panelGlassText);
-            if (root.XamlRoot is not null)
+
+            // Локальные кисти вешаются на элементы каждого окна: общие токены лежат
+            // в Application.Resources, а они одни на процесс. Любое другое окно
+            // перекрашивает их под свой фон, и без собственных кистей подписи полосы
+            // зависели бы от того, какое окно применило тему последним.
+            //
+            // Когда корень окна сам является панелью (Wi-Fi, Bluetooth, dock, плашки),
+            // подписи лежат на поверхности панели: им нужна схема панели, а не полосы.
+            var surfaceText = surface == PanelSurface.TopBar && panel != root ? theme : panel == root ? panelGlassText : glassText;
+            ApplyLocalGlassText(root, surfaceText, panel == root);
+            RememberLocalText(root, surfaceText, panel == root, null);
+            if (panel is not null && panel != root)
             {
-                ApplyLocalGlassText(root, glassText, panel == root);
-                if (panel is not null)
-                {
-                    ApplyLocalGlassText(panel, panelGlassText, true);
-                }
+                ApplyLocalGlassText(panel, panelGlassText, true);
+                RememberLocalText(panel, panelGlassText, true, null);
             }
         }
 
@@ -504,7 +513,7 @@ public sealed class ThemeApplicator
         SetBrush(TopBarGlassKey, GlazePalette.WithAlpha(theme.Glass, topBarAlpha));
         SetBrush(DockGlassKey, GlazePalette.WithAlpha(theme.Glass, dockAlpha));
         SetBrush(StartMenuGlassKey, GlazePalette.WithAlpha(theme.Glass, startMenuAlpha));
-        SetBrush(PillKey, GlazePalette.WithAlpha(glassText.Elevated, pillAlpha));
+        SetBrush(PillKey, GlazePalette.WithAlpha(theme.Elevated, Math.Max(pillAlpha, (byte)0xE6)));
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         SetBrush(TextPrimaryKey, theme.TextPrimary);
@@ -557,6 +566,31 @@ public sealed class ThemeApplicator
     private sealed record LocalGlassText(SolidColorBrush Brush, int Role);
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<DependencyObject, LocalGlassText> LocalGlassBrushes = new();
 
+    private sealed record LocalTextState(GlazeTheme Theme, bool IncludeStandardText, Color? OverrideColor);
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FrameworkElement, LocalTextState> LocalTextStates = new();
+
+    /// <summary>
+    /// Перекрашивает элементы окна в схему подписей, вычисленную при последнем
+    /// <see cref="Apply"/>. Нужно спискам с шаблонами: их контейнеры создаются во время
+    /// раскладки, уже после применения темы, и берут общие кисти. К этому моменту общие
+    /// кисти могло перекрасить соседнее окно под свой фон, поэтому список получал цвет
+    /// чужой поверхности. Повторный проход возвращает подписям схему своего окна.
+    /// </summary>
+    public static void RefreshLocalText(FrameworkElement root)
+    {
+        if (LocalTextStates.TryGetValue(root, out var state))
+        {
+            ApplyLocalGlassText(root, state.Theme, state.IncludeStandardText, state.OverrideColor);
+        }
+    }
+
+    private static void RememberLocalText(
+        FrameworkElement root,
+        GlazeTheme theme,
+        bool includeStandardText,
+        Color? overrideColor) =>
+        LocalTextStates.AddOrUpdate(root, new LocalTextState(theme, includeStandardText, overrideColor));
+
     private static void ApplyLocalGlassText(DependencyObject element, GlazeTheme theme, bool includeStandardText, Color? overrideColor = null)
     {
         var foreground = element switch
@@ -564,6 +598,9 @@ public sealed class ThemeApplicator
             Microsoft.UI.Xaml.Controls.Control control => control.Foreground,
             Microsoft.UI.Xaml.Controls.TextBlock text => text.Foreground,
             Microsoft.UI.Xaml.Controls.IconElement icon => icon.Foreground,
+            // Лампочка громкости и другие значки-контуры рисуются Path: у фигур цвет
+            // задаёт обводка, и без неё они оставались бы цветом чужого окна.
+            Microsoft.UI.Xaml.Shapes.Shape shape => shape.Stroke,
             _ => null
         };
         var resources = Microsoft.UI.Xaml.Application.Current.Resources;
@@ -587,6 +624,22 @@ public sealed class ThemeApplicator
                 case Microsoft.UI.Xaml.Controls.Control control: control.Foreground = brush; break;
                 case Microsoft.UI.Xaml.Controls.TextBlock text: text.Foreground = brush; break;
                 case Microsoft.UI.Xaml.Controls.IconElement icon: icon.Foreground = brush; break;
+                case Microsoft.UI.Xaml.Shapes.Shape shape: shape.Stroke = brush; break;
+            }
+        }
+        if (element is Microsoft.UI.Xaml.Controls.TextBox textBox)
+        {
+            var primary = new SolidColorBrush(overrideColor ?? theme.TextPrimary);
+            var secondary = new SolidColorBrush(overrideColor ?? theme.TextSecondary);
+            textBox.Foreground = primary;
+            textBox.PlaceholderForeground = secondary;
+            foreach (var key in new[] { "TextControlForeground", "TextControlForegroundPointerOver", "TextControlForegroundFocused" })
+            {
+                textBox.Resources[key] = primary;
+            }
+            foreach (var key in new[] { "TextControlPlaceholderForeground", "TextControlPlaceholderForegroundPointerOver", "TextControlPlaceholderForegroundFocused" })
+            {
+                textBox.Resources[key] = secondary;
             }
         }
         for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)

@@ -68,6 +68,9 @@ public sealed partial class StartMenuWindow : Window
     private bool _pointerDown;
     private PanelBackdrop? _backdrop;
 
+    /// <summary>Нужен повторный проход по подписям: сетку пересобрали.</summary>
+    private bool _needsTextRefresh;
+
     public StartMenuWindow(
         ThemeApplicator themes,
         IMonitorManager monitors,
@@ -103,6 +106,28 @@ public sealed partial class StartMenuWindow : Window
         _animation = DispatcherQueue.CreateTimer();
         _animation.Interval = TimeSpan.FromMilliseconds(16);
         _animation.Tick += OnAnimationTick;
+
+        // Плитки приложений создаются шаблоном во время раскладки, то есть уже после
+        // применения темы. Их подписи берут общие кисти панели, а те к этому моменту
+        // могло перекрасить соседнее окно под свой фон. Проход по готовой сетке
+        // возвращает подписям схему меню.
+        AppsGrid.ContainerContentChanging += (_, args) =>
+        {
+            if (!args.InRecycleQueue)
+            {
+                _needsTextRefresh = true;
+            }
+        };
+        AppsGrid.LayoutUpdated += (_, _) =>
+        {
+            if (!_needsTextRefresh)
+            {
+                return;
+            }
+
+            _needsTextRefresh = false;
+            ThemeApplicator.RefreshLocalText(Root);
+        };
 
         Activated += OnActivated;
         Closed += (_, _) =>
@@ -368,6 +393,10 @@ public sealed partial class StartMenuWindow : Window
                 AppsGrid.Items.Add(item);
             }
         }
+
+        // Сетка пересобрана: контейнеры создаются заново и получают общие кисти,
+        // поэтому подписи нужно перекрасить ещё раз после раскладки.
+        _needsTextRefresh = true;
 
         EmptyText.Visibility = AppsGrid.Items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
     }

@@ -47,6 +47,9 @@ public sealed partial class BluetoothPanelWindow : Window
     private PanelBackdrop? _backdrop;
     private int _showVersion;
 
+    /// <summary>Панель сейчас на экране: по этому признаку плашки встают ниже неё.</summary>
+    public bool IsPresented => _presented;
+
     public BluetoothPanelWindow(ThemeApplicator themes)
     {
         _themes = themes ?? throw new ArgumentNullException(nameof(themes));

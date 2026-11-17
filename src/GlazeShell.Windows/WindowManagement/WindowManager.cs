@@ -1,5 +1,6 @@
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
+using GlazeShell.Windows.Shell;
 using GlazeShell.Windows.SystemEvents;
 using GlazeShell.Windows.Win32;
 
@@ -78,6 +79,49 @@ public sealed class WindowManager : IWindowManager, IWindowsEventSource
 
         _ = User32.PostMessage(handle, User32.WmClose, 0, 0);
         return User32.ShowWindow(handle, User32.SwHide);
+    }
+
+    /// <summary>
+    /// Убирает все видимые окна системного поиска Windows, чей бы процесс их ни держал.
+    /// Жест тачпада может открыть поиск не только в <c>SearchHost.exe</c>, но и в
+    /// <c>SearchUI.exe</c>/<c>Cortana.exe</c>, и окно к моменту проверки бывает уже
+    /// другим: перечисление всех окон поиска закрывает и те, что не пришли событием.
+    /// </summary>
+    /// <returns>Сколько окон удалось скрыть.</returns>
+    public static int DismissSystemSearch()
+    {
+        var dismissed = 0;
+
+        if (!User32.EnumWindows(Dismiss, 0))
+        {
+            return dismissed;
+        }
+
+        return dismissed;
+
+        bool Dismiss(nint handle, nint parameter)
+        {
+            if (handle == 0 || !User32.IsWindowVisible(handle))
+            {
+                return true;
+            }
+
+            _ = User32.GetWindowThreadProcessId(handle, out var processId);
+
+            if (!ShellForeground.IsSystemSearchUi(processId))
+            {
+                return true;
+            }
+
+            _ = User32.PostMessage(handle, User32.WmClose, 0, 0);
+
+            if (User32.ShowWindow(handle, User32.SwHide))
+            {
+                dismissed++;
+            }
+
+            return true;
+        }
     }
 
     public void Dispose()

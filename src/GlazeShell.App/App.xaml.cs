@@ -39,7 +39,13 @@ public partial class App : Application
     /// Пауза перед повторным закрытием поиска Windows: во время анимации открытия окно
     /// игнорирует <c>WM_CLOSE</c>, и первое сообщение пропадает.
     /// </summary>
-    private static readonly TimeSpan SystemSearchDismissRetry = TimeSpan.FromMilliseconds(350);
+    private static readonly TimeSpan SystemSearchDismissRetry = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>
+    /// Сколько раз повторить закрытие поиска Windows: окно доигрывает анимацию открытия
+    /// и может появиться снова, если процесс пересоздал его после первого закрытия.
+    /// </summary>
+    private const int SystemSearchDismissAttempts = 5;
 
     /// <summary>
     /// Замок на один жест тачпада: он приходит и с клавиатурного хука, и событием
@@ -944,8 +950,22 @@ public partial class App : Application
     /// Жест «три пальца» по тачпаду (Win+S): вместо системного поиска открывается меню
     /// «Пуск» Glaze Shell с поиском и кнопкой главного окна. Приходит с потока хука.
     /// </summary>
-    private void OnWindowsKeyGesture(object? sender, EventArgs e) =>
-        RunOnUiThread(HandleGestureMenu);
+    private void OnWindowsKeyGesture(object? sender, EventArgs e)
+    {
+        // Признак рабочего стола читается сразу, на потоке хука: системный поиск может
+        // выйти на передний план раньше, чем отработает UI-поток, и тогда рабочий стол
+        // выглядел бы чужим окном, а панели прятались бы без причины.
+        var desktopForeground = IsDesktopForeground();
+        RunOnUiThread(() => HandleGestureMenu(desktopForeground));
+    }
+
+    /// <summary>
+    /// Активное окно — рабочий стол. На нём жест «три пальца» не должен прятать
+    /// верхнюю и нижнюю панели: меню «Пуск» открывается поверх них.
+    /// </summary>
+    private static bool IsDesktopForeground() =>
+        OverlayWindow.TryGetForegroundWindow(out var hwnd, out var processId) &&
+        ShellForeground.IsDesktop(hwnd, processId);
 
     /// <summary>
     /// Системный поиск вышел на передний план в обход клавиатурного хука: закрываем его
@@ -959,38 +979,52 @@ public partial class App : Application
             return;
         }
 
-        var dismissed = WindowManager.DismissWindow(window.Id);
+        var dismissed = WindowManager.DismissSystemSearch();
         _logger.Write(
             GlazeLogLevel.Information,
             "Shell",
-            $"The system search came to the foreground; dismissing window {window.Id} returned {dismissed}.");
+            $"The system search came to the foreground; hid {dismissed} search window(s), foreground was {window.Id}.");
 
         RunOnUiThread(() =>
         {
-            HandleGestureMenu();
+            HandleGestureMenu(desktopForeground: false);
 
             // Поиск доигрывает анимацию открытия и пропускает первое WM_CLOSE: повторяем
-            // закрытие, когда окно уже готово его принять.
+            // закрытие несколько раз, пока окно не перестанет всплывать. Перечисление
+            // всех окон поиска закрывает и то, которое успело появиться заново.
             _searchDismissTimer?.Stop();
             _searchDismissTimer = _window?.DispatcherQueue.CreateTimer();
-            if (_searchDismissTimer is { } timer)
+            if (_searchDismissTimer is not { } timer)
             {
-                timer.Interval = SystemSearchDismissRetry;
-                timer.IsRepeating = false;
-                timer.Tick += (_, _) =>
+                return;
+            }
+
+            var attempts = 0;
+            timer.Interval = SystemSearchDismissRetry;
+            timer.IsRepeating = true;
+            timer.Tick += (_, _) =>
+            {
+                var hidden = WindowManager.DismissSystemSearch();
+
+                if (hidden > 0)
                 {
-                    var retried = WindowManager.DismissWindow(window.Id);
                     _logger.Write(
                         GlazeLogLevel.Information,
                         "Shell",
-                        $"Retried dismissing the system search window {window.Id}: {retried}.");
-                    if (_startMenu?.IsShown == true)
-                    {
-                        _startMenu.Activate();
-                    }
-                };
-                timer.Start();
-            }
+                        $"Retried dismissing the system search: hid {hidden} window(s).");
+                }
+
+                if (++attempts >= SystemSearchDismissAttempts)
+                {
+                    timer.Stop();
+                }
+
+                if (_startMenu?.IsShown == true)
+                {
+                    _startMenu.Activate();
+                }
+            };
+            timer.Start();
         });
     }
 
@@ -1000,7 +1034,7 @@ public partial class App : Application
     /// второй закрывает поиск; без общего «замка» второй обработчик тут же переключал бы
     /// меню обратно и панели оставались бы скрытыми.
     /// </summary>
-    private void HandleGestureMenu()
+    private void HandleGestureMenu(bool desktopForeground)
     {
         if (_startMenu is null)
         {
@@ -1014,7 +1048,7 @@ public partial class App : Application
         }
 
         _lastGestureTick = now;
-        ToggleGestureMenu();
+        ToggleGestureMenu(desktopForeground);
     }
 
     /// <summary>Выполняет действие в потоке интерфейса, откуда бы его ни вызвали.</summary>
@@ -1037,7 +1071,7 @@ public partial class App : Application
         _dock?.Reveal();
     }
 
-    private void ToggleGestureMenu()
+    private void ToggleGestureMenu(bool desktopForeground)
     {
         if (_startMenu is null)
         {
@@ -1050,8 +1084,22 @@ public partial class App : Application
             return;
         }
 
-        _topBar?.SetSuppressed(true);
-        _dock?.SetSuppressed(true);
+        // На рабочем столе панели — часть оболочки, и меню «Пуск» открывается поверх них.
+        // Прятать полосы нужно только ради чужого окна, которое меню перекрывает.
+        if (desktopForeground)
+        {
+            // Настройка «скрывать панели в Glaze Shell» относится к большим окнам
+            // (настройки, проводник). Меню «Пуск» их не перекрывает, поэтому панели
+            // остаются на месте, хотя активным стало собственное окно.
+            _topBar?.SetHeldOpen(true);
+            _dock?.SetPinned(true);
+        }
+        else
+        {
+            _topBar?.SetSuppressed(true);
+            _dock?.SetSuppressed(true);
+        }
+
         _startMenu.ShowNearTaskbar();
     }
 
@@ -1063,6 +1111,8 @@ public partial class App : Application
     {
         _topBar?.SetSuppressed(false);
         _dock?.SetSuppressed(false);
+        _dock?.SetPinned(false);
+        _topBar?.SetHeldOpen(false);
     }
 
     private void OnDockStartRequested(object? sender, EventArgs e) => ShowStartMenu();

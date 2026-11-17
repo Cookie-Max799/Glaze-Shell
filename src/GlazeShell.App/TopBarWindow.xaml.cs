@@ -166,6 +166,11 @@ public sealed partial class TopBarWindow : Window
             StartRevealWatch();
             UpdateForegroundState();
 
+            // Схема подписей считается по фону под полосой, а он известен только после
+            // раскладки. Без пересчёта подписи оставались бы в цветах темы, пока
+            // активное окно не сменится.
+            _ = DispatcherQueue.TryEnqueue(RefreshGlassText);
+
             // Панели Wi-Fi и Bluetooth прогреваются сразу после старта: к моменту клика
             // их окна уже созданы и Acrylic подключён, поэтому прозрачность видна
             // с первого кадра, а не только после повторного открытия.
@@ -182,6 +187,9 @@ public sealed partial class TopBarWindow : Window
         ResultsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
         QuickSettingsPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
         CalendarPanel.SizeChanged += (_, _) => UpdateOverlayBounds();
+
+        ResultsList.ContainerContentChanging += (_, _) =>
+            _ = DispatcherQueue.TryEnqueue(() => ThemeApplicator.RefreshLocalText(ResultsPanel));
 
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
         ViewModel.QuickSettings.PropertyChanged += OnQuickSettingsPropertyChanged;
@@ -278,6 +286,32 @@ public sealed partial class TopBarWindow : Window
         (_reveal > 0.5 || DateTimeOffset.UtcNow < _collapseAt);
 
     private bool _suppressed;
+
+    /// <summary>
+    /// Полоса держится раскрытой, пока поверх рабочего стола открыто меню «Пуск».
+    /// Настройка «скрывать панели в Glaze Shell» относится к большим окнам оболочки,
+    /// а меню полосу не перекрывает — прятать её незачем.
+    /// </summary>
+    private bool _heldOpen;
+
+    /// <summary>
+    /// Удерживает полосу раскрытой независимо от того, что фокус ушёл в собственное
+    /// окно оболочки. Нужно меню «Пуск» на рабочем столе.
+    /// </summary>
+    public void SetHeldOpen(bool held)
+    {
+        if (_heldOpen == held)
+        {
+            return;
+        }
+
+        _heldOpen = held;
+
+        if (held)
+        {
+            _collapseAt = DateTimeOffset.UtcNow + CollapseDelay;
+        }
+    }
 
     public void SetSuppressed(bool suppressed)
     {
@@ -380,7 +414,7 @@ public sealed partial class TopBarWindow : Window
 
             // Панель живёт во второй строке сетки, а её DesiredSize уже включает
             // собственное верхнее поле: складываем строку и измерение без лишнего зазора.
-            logicalHeight = BarContentHeight + MeasurePanelHeight(ResultsPanel, constraint);
+            logicalHeight = MeasurePanelHeight(ResultsPanel, constraint);
         }
         else if (ViewModel.QuickSettings.IsOpen)
         {
@@ -429,7 +463,10 @@ public sealed partial class TopBarWindow : Window
 
         // В покое над краем экрана остаётся кромка панели; когда работает чужая программа
         // или активно окно Glaze Shell (настройка этапа 4), панель убирается полностью.
-        var fullyHidden = _suppressed || _foreignForeground || (_ownForeground && _hideInOwnProcess);
+        // Пока открыто меню «Пуск» на рабочем столе, полоса остаётся на месте: меню
+        // её не перекрывает.
+        var fullyHidden = !_heldOpen &&
+            (_suppressed || _foreignForeground || (_ownForeground && _hideInOwnProcess));
 
         // Окно поднимается ровно на ход полосы: открытый popover едет вместе с ней, но
         // остаётся на экране. Уезжать на высоту всего окна нельзя — тогда исчезал бы и
@@ -496,7 +533,7 @@ public sealed partial class TopBarWindow : Window
                 if (showToast && _monitorTarget.Target is { } monitor)
                 {
                     _languageToast ??= new LanguageToastWindow(_themes);
-                    _languageToast.ShowLanguage(code, culture.NativeName, monitor, IsRevealed);
+                    _languageToast.ShowLanguage(code, culture.NativeName, monitor, ToastTopDips());
                 }
             }
         }
@@ -520,7 +557,7 @@ public sealed partial class TopBarWindow : Window
         // прятать её есть смысл только когда работает чужая программа. Если включено
         // автоскрытие внутри Glaze Shell, собственное окно тоже убирает панель — но касание
         // верхней кромки по-прежнему возвращает её.
-        if (pinned || IsCursorOverHotZone())
+        if (pinned || _heldOpen || IsCursorOverHotZone())
         {
             _collapseAt = now + CollapseDelay;
             target = 1.0;
@@ -829,8 +866,12 @@ public sealed partial class TopBarWindow : Window
 
         OverlayWindow.ApplyBottomRoundedRegions(
             _hwnd,
-            new PixelRect(-1, 0, clientWidth + 2, barHeight),
-            barRadius,
+            new PixelRect(
+                -regionBleed,
+                0,
+                clientWidth + (regionBleed * 2),
+                barHeight + regionBleed),
+            barRadius + regionBleed,
             regions);
 
         void AddRegion(FrameworkElement element, int radius)
@@ -1043,13 +1084,8 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
-        // Когда открыт «Центр управления», его ползунок уже показывает уровень:
-        // плашка поверх popover была бы лишней.
-        if (ViewModel.QuickSettings.IsOpen)
-        {
-            return;
-        }
-
+        // Плашка встаёт под открытой панелью, поэтому её можно показывать и при
+        // раскрытом «Центре управления»: она не перекрывает popover.
         ShowVolumeToast();
     }
 
@@ -1060,19 +1096,12 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
-        // Открытый «Центр управления» уже показывает уровень: плашка поверх popover
-        // была бы лишней, в том числе при наведении на значок.
-        if (ViewModel.QuickSettings.IsOpen)
-        {
-            return;
-        }
-
         _volumeToast ??= new VolumeToastWindow(_themes);
         _volumeToast.ShowVolume(
             (int)Math.Round(ViewModel.QuickSettings.VolumePercent),
             ViewModel.QuickSettings.IsMuted,
             monitor,
-            IsRevealed);
+            ToastTopDips());
     }
 
     private void OnStatusPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -1263,7 +1292,54 @@ public sealed partial class TopBarWindow : Window
 
         _ = EnsureNetworkPanel().PrepareAsync(_scale);
         _ = EnsureBluetoothPanel().PrepareAsync(_scale);
+
+        // Плашки громкости и раскладки прогреваются так же: Acrylic подключается
+        // до первого показа, и появление начинается со стекла, а не с плотного кадра.
+        _volumeToast ??= new VolumeToastWindow(_themes);
+        _volumeToast.Prewarm(_scale);
+        _languageToast ??= new LanguageToastWindow(_themes);
+        _languageToast.Prewarm(_scale);
     }
+
+    /// <summary>
+    /// Верх плашек громкости и раскладки в DIP от верхнего края монитора. Если открыта
+    /// панель верхней полосы (Wi-Fi, Bluetooth, «Центр управления», календарь, результаты
+    /// поиска), плашка встаёт под ней: иначе она оказывалась за окном панели. Иначе —
+    /// сразу под полосой.
+    /// </summary>
+    private double ToastTopDips()
+    {
+        const double gap = 8;
+
+        var bottom = 0.0;
+
+        if (ViewModel.HasResults || ViewModel.QuickSettings.IsOpen || ViewModel.Calendar.IsOpen)
+        {
+            bottom = (AppWindow.Position.Y + AppWindow.Size.Height - _screenTop) / _scale;
+        }
+
+        bottom = Math.Max(bottom, PanelBottomDips(_networkPanel));
+        bottom = Math.Max(bottom, PanelBottomDips(_bluetoothPanel));
+
+        if (bottom > 0)
+        {
+            return bottom + gap;
+        }
+
+        // Полоса убрана за край экрана: плашка живёт ближе к кромке и не висит в воздухе.
+        return IsRevealed ? BarHeight + 6 : 8;
+    }
+
+    /// <summary>Нижняя кромка открытой панели Wi-Fi или Bluetooth в DIP от края монитора.</summary>
+    private double PanelBottomDips(NetworkPanelWindow? panel) =>
+        panel is { IsPresented: true }
+            ? (panel.AppWindow.Position.Y + panel.AppWindow.Size.Height - _screenTop) / _scale
+            : 0;
+
+    private double PanelBottomDips(BluetoothPanelWindow? panel) =>
+        panel is { IsPresented: true }
+            ? (panel.AppWindow.Position.Y + panel.AppWindow.Size.Height - _screenTop) / _scale
+            : 0;
 
     /// <summary>Центр индикатора по X в физических пикселях экрана.</summary>
     private int GetIconCenterX(FrameworkElement icon)
@@ -1325,6 +1401,7 @@ public sealed partial class TopBarWindow : Window
     {
         if (e.PropertyName is nameof(TopBarViewModel.HasResults) or nameof(TopBarViewModel.HasQuery))
         {
+            _ = DispatcherQueue.TryEnqueue(RefreshGlassText);
             if (ViewModel.HasResults || ViewModel.HasQuery)
             {
                 HoldRevealed();
@@ -1376,11 +1453,6 @@ public sealed partial class TopBarWindow : Window
         if (!DispatcherQueue.HasThreadAccess)
         {
             _ = DispatcherQueue.TryEnqueue(() => OnVolumeChangedExternally(sender, e));
-            return;
-        }
-
-        if (ViewModel.QuickSettings.IsOpen)
-        {
             return;
         }
 

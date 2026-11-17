@@ -523,15 +523,47 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
 
     private void ApplyResults(IEnumerable<GlanceResultViewModel> results)
     {
-        Results.Clear();
-
-        foreach (var result in results)
+        var hadResults = HasResults;
+        var selected = SelectedResult;
+        var next = results.ToList();
+        for (var index = Results.Count - 1; index >= 0; index--)
         {
-            Results.Add(result);
+            if (!next.Any(item => item.Result.Kind == Results[index].Result.Kind && item.Result.Id == Results[index].Result.Id))
+            {
+                Results.RemoveAt(index);
+            }
         }
 
-        SelectedResult = Results.Count > 0 ? Results[0] : null;
-        OnPropertyChanged(nameof(HasResults));
+        for (var index = 0; index < next.Count; index++)
+        {
+            var existing = Results.FirstOrDefault(item => item.Result.Kind == next[index].Result.Kind && item.Result.Id == next[index].Result.Id);
+            if (existing is null)
+            {
+                Results.Insert(index, next[index]);
+            }
+            else
+            {
+                var previousIndex = Results.IndexOf(existing);
+                if (previousIndex != index)
+                {
+                    Results.Move(previousIndex, index);
+                }
+                if (existing.Result != next[index].Result)
+                {
+                    Results[index] = next[index];
+                    if (selected == existing)
+                    {
+                        selected = next[index];
+                    }
+                }
+            }
+        }
+
+        SelectedResult = selected is not null && Results.Contains(selected) ? selected : Results.FirstOrDefault();
+        if (hadResults != HasResults)
+        {
+            OnPropertyChanged(nameof(HasResults));
+        }
         OnPropertyChanged(nameof(ShowEmptyState));
     }
 

@@ -17,12 +17,13 @@ namespace GlazeShell.App;
 /// из точки-«капли» до полного размера.
 /// </summary>
 /// <remarks>
-/// Плашка живёт под верхней панелью (на 36 DIP ниже кромки экрана), поэтому не перекрывает
-/// её элементы, и использует тот же Acrylic-фон с той же прозрачностью, что и панель.
-/// Окно не активируется: смена языка не должна забирать фокус у активного приложения.
-/// Анимация — рост прямоугольника окна от квадрата 22×22 DIP с привязкой к правому
-/// верхнему углу; содержимое прижато вправо, поэтому плашка раскрывается справа налево,
-/// а не «заливается» слева направо.
+/// Плашка живёт под верхней панелью (или под открытой панелью верхней полосы), поэтому
+/// не перекрывает её элементы, и использует тот же Acrylic-фон с той же прозрачностью,
+/// что и панель. Окно не активируется: смена языка не должна забирать фокус у активного
+/// приложения. Анимация — рост прямоугольника окна от квадрата 22×22 DIP с привязкой
+/// к правому верхнему углу; содержимое прижато вправо, поэтому плашка раскрывается
+/// справа налево, а не «заливается» слева направо. Скругление задаёт система (DWM):
+/// она сглаживает углы, тогда как региональная маска рисовала бы ступеньки.
 /// </remarks>
 internal sealed class LanguageToastWindow : Window
 {
@@ -32,14 +33,11 @@ internal sealed class LanguageToastWindow : Window
     /// <summary>Отступ от правого края рабочей области.</summary>
     private const int MarginDips = 12;
 
-    /// <summary>Отступ сверху: верхняя панель занимает 30 DIP, плашка идёт сразу под ней.</summary>
-    private const int TopDips = 36;
-
     /// <summary>Размер «капли», из которой раскрывается плашка.</summary>
     private const int DropletDips = 22;
 
-    /// <summary>Радиус скругления плашки в DIP.</summary>
-    private const int CornerRadiusDips = 16;
+    private const int OffscreenX = -30000;
+    private const int OffscreenY = -30000;
 
     private const double GrowMilliseconds = 340;
     private const double HoldMilliseconds = 1150;
@@ -60,8 +58,8 @@ internal sealed class LanguageToastWindow : Window
 
     private RectInt32 _droplet;
     private RectInt32 _target;
-    private PanelBackdrop? _backdrop;
     private bool _closed;
+    private bool _preloaded;
 
     public LanguageToastWindow(ThemeApplicator themes)
     {
@@ -98,7 +96,7 @@ internal sealed class LanguageToastWindow : Window
             Width = WidthDips,
             Height = HeightDips,
             Padding = new Thickness(16, 8, 16, 8),
-            CornerRadius = new CornerRadius(16),
+            CornerRadius = new CornerRadius(8),
             BorderThickness = new Thickness(1),
             Child = text,
         };
@@ -119,6 +117,12 @@ internal sealed class LanguageToastWindow : Window
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
         OverlayWindow.MakeTopMostToolWindow(_hwnd);
         OverlayWindow.SetNonActivating(_hwnd, true);
+        OverlayWindow.UseRoundedCorners(_hwnd);
+
+        // Backdrop создаётся один раз: пересоздание на каждом показе перезапускало
+        // подключение Acrylic, и первый кадр появлялся плотным.
+        var backdrop = _themes.CreatePanelBackdrop(PanelSurface.TopBar) as PanelBackdrop;
+        SystemBackdrop = backdrop;
 
         _timer = DispatcherQueue.CreateTimer();
         _timer.Interval = TimeSpan.FromMilliseconds(16);
@@ -129,12 +133,35 @@ internal sealed class LanguageToastWindow : Window
             _closed = true;
             _timer.Stop();
             _timer.Tick -= OnTick;
-            _backdrop?.Dispose();
-            _backdrop = null;
+            backdrop?.Dispose();
         };
     }
 
-    public void ShowLanguage(string code, string name, MonitorInfo monitor, bool topBarVisible = true)
+    /// <summary>
+    /// Прогревает окно вне экрана: XAML и Acrylic подключаются до первого показа,
+    /// поэтому плашка раскрывается сразу со стеклом.
+    /// </summary>
+    public void Prewarm(double scale)
+    {
+        if (_closed || _preloaded)
+        {
+            return;
+        }
+
+        _preloaded = true;
+        _root.Opacity = 0;
+
+        var width = Math.Max(1, (int)Math.Round(WidthDips * scale));
+        var height = Math.Max(1, (int)Math.Round(HeightDips * scale));
+        AppWindow.MoveAndResize(new RectInt32(OffscreenX, OffscreenY, width, height));
+        OverlayWindow.ShowWithoutActivation(_hwnd);
+    }
+
+    /// <param name="topOffsetDips">
+    /// Верх плашки в DIP от края монитора: под открытой панелью верхней полосы,
+    /// чтобы плашка не оказывалась за её окном.
+    /// </param>
+    public void ShowLanguage(string code, string name, MonitorInfo monitor, double topOffsetDips)
     {
         if (_closed)
         {
@@ -149,13 +176,10 @@ internal sealed class LanguageToastWindow : Window
         _code.Text = code;
         _name.Text = name;
 
-        ApplyBackdrop();
-
         var scale = monitor.ScaleFactor;
         var area = monitor.Bounds;
         var right = area.X + area.Width - (int)Math.Round(MarginDips * scale);
-        var topOffset = topBarVisible ? TopDips : 8;
-        var top = area.Y + (int)Math.Round(topOffset * scale);
+        var top = area.Y + (int)Math.Round(Math.Max(0, topOffsetDips) * scale);
         var width = (int)Math.Round(WidthDips * scale);
         var height = (int)Math.Round(HeightDips * scale);
         var droplet = (int)Math.Round(DropletDips * scale);
@@ -190,7 +214,8 @@ internal sealed class LanguageToastWindow : Window
     }
 
     private void OnTick(DispatcherQueueTimer sender, object args)
-    {        var elapsed = _watch.Elapsed;
+    {
+        var elapsed = _watch.Elapsed;
 
         if (elapsed >= TotalTime)
         {
@@ -206,7 +231,6 @@ internal sealed class LanguageToastWindow : Window
     {
         var progress = _themes.ReduceMotion ? 1 : GrowProgress(elapsed);
         var rect = Interpolate(_droplet, _target, progress);
-        var scale = OverlayWindow.GetScaleFactor(_hwnd);
 
         // Содержимое проявляется на первой трети роста: в размере «капли» текст всё равно
         // не читается, а резкое появление букв в маленьком окне выглядело бы рывком.
@@ -215,21 +239,7 @@ internal sealed class LanguageToastWindow : Window
             ? 1
             : Math.Clamp(progress / 0.6, 0, 1) * (1 - fading);
 
-        // Регион считается от фактического размера окна, а не от желаемого: после
-        // MoveAndResize клиентская область может отличаться на пиксель, и маска,
-        // посчитанная «вслепую», показывала прямые углы с одной стороны.
-        if (!OverlayWindow.TryGetClientSize(_hwnd, out var clientWidth, out var clientHeight))
-        {
-            return;
-        }
-
-        var width = Math.Clamp(rect.Width, 1, clientWidth);
-        var height = Math.Clamp(rect.Height, 1, clientHeight);
-
-        OverlayWindow.ApplyRoundedRegions(
-            _hwnd,
-            [new PixelRect(clientWidth - width, 0, width, height)],
-            (int)Math.Round(CornerRadiusDips * scale));
+        AppWindow.MoveAndResize(rect);
     }
 
     /// <summary>
@@ -266,19 +276,4 @@ internal sealed class LanguageToastWindow : Window
 
     private static int Lerp(int from, int to, double progress) =>
         Math.Max(1, (int)Math.Round(from + ((to - from) * progress)));
-
-    /// <summary>Тот же Acrylic-фон, что у верхней панели: плашка следует её прозрачности.</summary>
-    private void ApplyBackdrop()
-    {
-        if (_closed)
-        {
-            return;
-        }
-
-        var previous = _backdrop;
-        SystemBackdrop = null;
-        previous?.Dispose();
-        _backdrop = _themes.CreatePanelBackdrop(PanelSurface.TopBar) as PanelBackdrop;
-        SystemBackdrop = _backdrop;
-    }
 }
