@@ -261,13 +261,15 @@ public sealed class WindowsKeyInterceptor : IDisposable
             return User32.LlhcBlocked;
         }
 
-        if (_winHeld && !_winForwarded && input.VkCode == User32.VkS)
+        if (_winHeld && !_winForwarded &&
+            (input.VkCode == User32.VkS || input.VkCode == User32.VkTab || input.VkCode == User32.VkW))
         {
-            // Win+S: жест тачпада «три пальца» Windows превращает в поиск. Ни поиск
-            // Windows, ни представление задач не открываем: Win остаётся «не пересланной»,
-            // поэтому на её отпускании придёт GesturePressed, и приложение покажет меню
-            // Glaze Shell вместо системного интерфейса. Win+Tab намеренно не перехватывается:
-            // замену переключателя окон сделаем отдельным этапом.
+            // Win+S, Win+Tab и Win+W: жест тачпада «три пальца» Windows превращает то в
+            // поиск, то в представление задач, то в панель Widgets. Ни одно из этих
+            // системных окон открываться не должно: Win остаётся «не пересланной»,
+            // поэтому на её отпускании придёт GesturePressed, и приложение покажет
+            // меню Glaze Shell. Замену переключателя окон (Alt+Tab) сделаем отдельным
+            // этапом — пока эти сочетания просто съедаются.
             _gestureSuppressed = true;
             return User32.LlhcBlocked;
         }

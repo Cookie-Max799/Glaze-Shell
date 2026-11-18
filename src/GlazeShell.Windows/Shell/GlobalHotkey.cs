@@ -33,6 +33,7 @@ public sealed class GlobalHotkey : IDisposable
         Control = User32.ModControl,
         Shift = User32.ModShift,
         Windows = User32.ModWin,
+        NoRepeat = User32.ModNoRepeat,
     }
 
     private const string WindowClassNamePrefix = "GlazeShellHotkey";

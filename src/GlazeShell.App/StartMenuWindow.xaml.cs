@@ -27,28 +27,32 @@ namespace GlazeShell.App;
 /// </remarks>
 public sealed partial class StartMenuWindow : Window
 {
-    private const int WidthDips = 420;
+    private const int WidthDips = 460;
+    private const int TileIconDips = 32;
 
     /// <summary>
     /// Высота меню: не на весь экран, а прямоугольник по центру левого края. Небольшие
     /// экраны ужимают его, чтобы сверху и снизу остались одинаковые отступы.
     /// </summary>
-    private const int HeightDips = 560;
+    private const int HeightDips = 600;
 
     /// <summary>Минимальный отступ сверху и снизу от рабочей области.</summary>
     private const int VerticalMarginDips = 24;
 
-    private const double SlideInMilliseconds = 340;
-    private const double SlideOutMilliseconds = 190;
+    private const double SlideInMilliseconds = 420;
+    private const double SlideOutMilliseconds = 200;
 
     /// <summary>На сколько DIP меню выезжает из-за левого края при появлении.</summary>
-    private const int SlideInDips = 64;
+    private const int SlideInDips = 88;
 
     /// <summary>На сколько DIP меню уезжает при скрытии.</summary>
-    private const int SlideOutDips = 44;
+    private const int SlideOutDips = 48;
 
     /// <summary>На сколько DIP содержимое поднимается, пока меню выезжает.</summary>
-    private const int ContentRiseDips = 14;
+    private const int ContentRiseDips = 18;
+
+    /// <summary>Начальный масштаб содержимого: меню «вырастает» из чуть уменьшенного состояния.</summary>
+    private const float ContentStartScale = 0.96f;
 
     private readonly ThemeApplicator _themes;
     private readonly IMonitorManager _monitors;
@@ -150,6 +154,11 @@ public sealed partial class StartMenuWindow : Window
     /// <summary>Играется анимация ухода: повторный жест должен дождаться её конца.</summary>
     public bool IsClosing => _closing;
 
+    internal bool OwnsWindow(nint hwnd) => !_closed && hwnd != 0 && hwnd == _hwnd;
+
+    internal int IconRequestPixels => Math.Clamp(
+        (int)Math.Ceiling(TileIconDips * (_monitors.GetPrimaryMonitor()?.ScaleFactor ?? 1) * 2), 96, 256);
+
     /// <summary>Заполняет список приложений и сразу применяет текущий поиск.</summary>
     public void SetItems(IReadOnlyList<StartMenuItemViewModel> items)
     {
@@ -167,9 +176,8 @@ public sealed partial class StartMenuWindow : Window
         }
 
         _hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
-        OverlayWindow.MakeTopMostToolWindow(_hwnd);
-        OverlayWindow.UseRoundedCorners(_hwnd);
-
+        var useDwmCorners = OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000);
+        OverlayWindow.MakeTopMostToolWindow(_hwnd, useRedirectionBitmap: useDwmCorners);
         var monitor = _monitors.GetPrimaryMonitor();
 
         if (monitor is null)
@@ -177,11 +185,11 @@ public sealed partial class StartMenuWindow : Window
             return;
         }
 
-        var scale = OverlayWindow.GetScaleFactor(_hwnd);
-        var width = (int)Math.Round(WidthDips * scale);
+        var scale = monitor.ScaleFactor;
         var area = monitor.WorkingArea ?? monitor.Bounds;
         var margin = (int)Math.Round(VerticalMarginDips * scale);
-        var height = Math.Min((int)Math.Round(HeightDips * scale), area.Height - (margin * 2));
+        var width = Math.Max(1, Math.Min((int)Math.Round(WidthDips * scale), area.Width - (margin * 2)));
+        var height = Math.Max(1, Math.Min((int)Math.Round(HeightDips * scale), area.Height - (margin * 2)));
         var y = area.Y + ((area.Height - height) / 2);
 
         _shownBounds = new RectInt32(area.X + margin, y, width, height);
@@ -193,14 +201,14 @@ public sealed partial class StartMenuWindow : Window
         _animation.Stop();
 
         AppWindow.MoveAndResize(_animationFrom);
-        OverlayWindow.ApplyRoundedRegions(_hwnd, [new PixelRect(0, 0, width, height)], (int)Math.Round(20 * scale));
-        _ = DispatcherQueue.TryEnqueue(() =>
+        if (useDwmCorners)
         {
-            if (!_closed)
-            {
-                OverlayWindow.ApplyRoundedRegions(_hwnd, [new PixelRect(0, 0, width, height)], (int)Math.Round(20 * scale));
-            }
-        });
+            OverlayWindow.UseRoundedCorners(_hwnd);
+        }
+        else
+        {
+            OverlayWindow.ApplyRoundedRegions(_hwnd, [new PixelRect(0, 0, width, height)], (int)Math.Round(8 * scale));
+        }
         _pointerDown = OverlayWindow.IsLeftButtonDown();
         _animating = true;
         _animation.Interval = TimeSpan.FromMilliseconds(16);
@@ -208,16 +216,25 @@ public sealed partial class StartMenuWindow : Window
         SearchBox.Text = string.Empty;
         ApplyFilter(string.Empty);
 
-        // Двухслойное появление: полоса выезжает из-за края, содержимое одновременно
-        // поднимается и проявляется. Так меню «собирается» на месте, а не просто
-        // сдвигается прямоугольником.
+        // Трёхслойное появление: полоса выезжает из-за края, стекло проявляется,
+        // содержимое одновременно поднимается, проявляется и «вырастает» из чуть
+        // уменьшенного масштаба. Меню собирается на месте с ощущением глубины.
         Root.Opacity = _themes.ReduceMotion ? 1 : 0;
         PanelContent.Opacity = _themes.ReduceMotion ? 1 : 0;
         PanelContent.Translation = _themes.ReduceMotion
             ? System.Numerics.Vector3.Zero
             : new System.Numerics.Vector3(0, ContentRiseDips, 0);
+        PanelContent.Scale = _themes.ReduceMotion
+            ? new System.Numerics.Vector3(1, 1, 1)
+            : new System.Numerics.Vector3(ContentStartScale, ContentStartScale, 1);
 
+        AppWindow.Show();
         Activate();
+        if (!OverlayWindow.TryGetForegroundWindow(out var foreground, out _) || foreground != _hwnd)
+        {
+            _ = OverlayWindow.ActivateForInput(_hwnd);
+        }
+
         SearchBox.Focus(FocusState.Programmatic);
 
         if (_themes.ReduceMotion)
@@ -284,13 +301,13 @@ public sealed partial class StartMenuWindow : Window
     }
 
     /// <summary>
-    /// Мягкое замедление с небольшим перелётом (ease-out back): панель проскакивает
-    /// конечную точку на пару DIP и «прищёлкивается» назад. Перелёт намеренно мал,
-    /// чтобы окно не выходило за пределы своего прямоугольника заметно.
+    /// Мягкое замедление с заметным перелётом (ease-out back): панель проскакивает
+    /// конечную точку на несколько DIP и «прищёлкивается» назад — движение читается
+    /// упругим, а не линейным.
     /// </summary>
     private static double EaseOutBack(double progress)
     {
-        const double c1 = 1.25;
+        const double c1 = 1.7;
         const double c3 = c1 + 1;
         var p = progress - 1;
         return 1 + (c3 * p * p * p) + (c1 * p * p);
@@ -329,18 +346,24 @@ public sealed partial class StartMenuWindow : Window
         }
         else if (_slidingIn)
         {
-            // Стекло проявляется за первые 60 % пути, содержимое — с небольшой задержкой:
-            // меню сначала «въезжает» поверхностью, затем на ней собираются элементы.
-            Root.Opacity = Math.Clamp(progress / 0.6, 0, 1);
-            PanelContent.Opacity = Math.Clamp((progress - 0.15) / 0.55, 0, 1);
+            // Стекло проявляется за первые 55 % пути; содержимое — с задержкой, подъемом
+            // и ростом масштаба до единицы: меню сначала «въезжает» поверхностью,
+            // затем на ней собираются элементы.
+            Root.Opacity = Math.Clamp(progress / 0.55, 0, 1);
+            PanelContent.Opacity = Math.Clamp((progress - 0.12) / 0.5, 0, 1);
             PanelContent.Translation = new System.Numerics.Vector3(
                 0,
                 (float)((1 - eased) * ContentRiseDips),
                 0);
+            PanelContent.Scale = new System.Numerics.Vector3(
+                (float)(ContentStartScale + ((1 - ContentStartScale) * Math.Clamp(progress / 0.7, 0, 1))),
+                (float)(ContentStartScale + ((1 - ContentStartScale) * Math.Clamp(progress / 0.7, 0, 1))),
+                1);
         }
         else
         {
             Root.Opacity = 1 - Math.Clamp((progress - 0.2) / 0.8, 0, 1);
+            PanelContent.Opacity = Root.Opacity;
         }
 
         if (progress < 1)
@@ -354,12 +377,9 @@ public sealed partial class StartMenuWindow : Window
         {
             AppWindow.MoveAndResize(_shownBounds);
             PanelContent.Translation = System.Numerics.Vector3.Zero;
+            PanelContent.Scale = new System.Numerics.Vector3(1, 1, 1);
             PanelContent.Opacity = 1;
             Root.Opacity = 1;
-            OverlayWindow.ApplyRoundedRegions(
-                _hwnd,
-                [new PixelRect(0, 0, _shownBounds.Width, _shownBounds.Height)],
-                (int)Math.Round(20 * OverlayWindow.GetScaleFactor(_hwnd)));
             _animation.Interval = TimeSpan.FromMilliseconds(50);
         }
         else
@@ -372,10 +392,22 @@ public sealed partial class StartMenuWindow : Window
     }
 
     private void OnActivated(object sender, WindowActivatedEventArgs args)
-    {        if (args.WindowActivationState == WindowActivationState.Deactivated)
+    {
+        if (args.WindowActivationState != WindowActivationState.Deactivated)
         {
-            HideMenu();
+            return;
         }
+
+        _ = DispatcherQueue.TryEnqueue(() =>
+        {
+            if (OverlayWindow.TryGetForegroundWindow(out var hwnd, out var processId) &&
+                (OwnsWindow(hwnd) || (Application.Current as App)?.IsReplacedSystemMenu(processId) == true))
+            {
+                return;
+            }
+
+            HideMenu();
+        });
     }
 
     private void ApplyFilter(string? query)
@@ -418,7 +450,11 @@ public sealed partial class StartMenuWindow : Window
 
     private void OnMainWindowClick(object sender, RoutedEventArgs e)
     {
-        HideMenu();
+        _animation.Stop();
+        _animating = false;
+        _closing = false;
+        AppWindow.Hide();
+        Hidden?.Invoke(this, EventArgs.Empty);
         MainWindowRequested?.Invoke(this, EventArgs.Empty);
     }
 

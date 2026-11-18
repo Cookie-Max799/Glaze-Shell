@@ -11,13 +11,12 @@
         Меню «Пуск»: панель, выезжающая из левого края экрана. Открывается одиночным
         нажатием клавиши Windows, повторное нажатие, Esc или потеря фокуса скрывают её.
     -->
-    <Grid x:Name="Root" KeyDown="OnKeyDown">
+    <Grid x:Name="Root" KeyDown="OnKeyDown" UseLayoutRounding="True">
         <Border
             x:Name="Panel"
             Background="{StaticResource GlazeStartMenuGlassBrush}"
             BorderBrush="{StaticResource GlazeBorderBrush}"
-            BorderThickness="1"
-            CornerRadius="20">
+            BorderThickness="0">
             <Grid x:Name="PanelContent" Padding="28,26,26,20">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto" />
@@ -89,7 +88,17 @@
                             IsSpellCheckEnabled="False"
                             PlaceholderForeground="{StaticResource GlazePanelTextSecondaryBrush}"
                             PlaceholderText="Поиск приложений"
-                            TextChanged="OnSearchTextChanged" />
+                            TextChanged="OnSearchTextChanged"
+                            UseSystemFocusVisuals="False">
+                            <TextBox.Resources>
+                                <SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+                                <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+                                <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+                                <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+                                <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+                                <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+                            </TextBox.Resources>
+                        </TextBox>
                     </Grid>
                 </Border>
 
@@ -102,10 +111,10 @@
                     Text="ПРИЛОЖЕНИЯ" />
 
                 <Grid Grid.Row="3">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <GridView
+                    <GridView
                             x:Name="AppsGrid"
                             Padding="0,0,4,8"
+                            ScrollViewer.VerticalScrollBarVisibility="Auto"
                             SelectionMode="None"
                             IsItemClickEnabled="True"
                             ItemClick="OnAppItemClick">
@@ -128,8 +137,8 @@
                                             BorderBrush="{StaticResource GlazeBorderBrush}"
                                             BorderThickness="1">
                                             <Image
-                                                Width="26"
-                                                Height="26"
+                                                Width="32"
+                                                Height="32"
                                                 Source="{Binding Icon}"
                                                 Stretch="Uniform" />
                                         </Border>
@@ -144,7 +153,6 @@
                                 </DataTemplate>
                             </GridView.ItemTemplate>
                         </GridView>
-                    </ScrollViewer>
 
                     <TextBlock
                         x:Name="EmptyText"

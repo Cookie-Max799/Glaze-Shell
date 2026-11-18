@@ -63,7 +63,7 @@
             CornerRadius="0,0,24,24"
             IsHitTestVisible="False" />
 
-        <Grid x:Name="Layout" Margin="12,0" ColumnSpacing="8">
+        <Grid x:Name="Layout" Height="26" VerticalAlignment="Top" Margin="12,0" ColumnSpacing="8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
@@ -276,9 +276,31 @@
                             LostFocus="OnSearchLostFocus"
                             PlaceholderForeground="{StaticResource GlazeGlassTextSecondaryBrush}"
                             PlaceholderText="Поиск приложений, файлов, настроек…"
-                            PointerPressed="OnSearchPointerPressed"
                             Text="{x:Bind ViewModel.SearchText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                             UseSystemFocusVisuals="False">
+                            <TextBox.Template>
+                                <ControlTemplate TargetType="TextBox">
+                                    <Grid Background="Transparent" MinHeight="18">
+                                        <ScrollViewer
+                                            x:Name="ContentElement"
+                                            Padding="0"
+                                            VerticalAlignment="Center"
+                                            HorizontalScrollBarVisibility="Hidden"
+                                            VerticalScrollBarVisibility="Disabled"
+                                            HorizontalScrollMode="Enabled"
+                                            VerticalScrollMode="Disabled"
+                                            IsTabStop="False"
+                                            ZoomMode="Disabled" />
+                                        <TextBlock
+                                            x:Name="PlaceholderTextContentPresenter"
+                                            VerticalAlignment="Center"
+                                            IsHitTestVisible="False"
+                                            FontSize="{TemplateBinding FontSize}"
+                                            Foreground="{TemplateBinding PlaceholderForeground}"
+                                            Text="{TemplateBinding PlaceholderText}" />
+                                    </Grid>
+                                </ControlTemplate>
+                            </TextBox.Template>
                             <TextBox.Resources>
                                 <!--  Поле поиска рисуется без собственной рамки и фона:
                                       стекло панели остаётся единственной поверхностью.  -->
@@ -499,11 +521,10 @@
                 </Border>
             </StackPanel>
 
-            <!--  Панель результатов Glance (B1) под строкой поиска: та же колонка, что и поиск.  -->
+        </Grid>
+
             <Border
                 x:Name="ResultsPanel"
-                Grid.RowSpan="2"
-                Grid.ColumnSpan="3"
                 Width="440"
                 Margin="0,57,0,0"
                 Padding="6"
@@ -527,9 +548,48 @@
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem">
                                 <Setter Property="MinHeight" Value="44" />
-                                <Setter Property="Padding" Value="8,4" />
-                                <Setter Property="CornerRadius" Value="14" />
+                                <Setter Property="Padding" Value="0" />
                                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListViewItem">
+                                            <!--
+                                                Стандартный ListViewItemPresenter рисует подсветку и
+                                                выделение прямоугольником и не учитывает CornerRadius:
+                                                строки результатов выглядели острыми плитками. Собственный
+                                                шаблон кладёт контент на скруглённую подложку и красит её
+                                                системными кистями состояний, которые ThemeApplicator
+                                                перекрашивает под тему.
+                                            -->
+                                            <Grid x:Name="ContentBorder" Background="Transparent" CornerRadius="14" Margin="2,1">
+                                                <VisualStateManager.VisualStateGroups>
+                                                    <VisualStateGroup x:Name="CommonStates">
+                                                        <VisualState x:Name="Normal" />
+                                                        <VisualState x:Name="PointerOver">
+                                                            <VisualState.Setters>
+                                                                <Setter Target="ContentBorder.Background" Value="{ThemeResource ListViewItemBackgroundPointerOver}" />
+                                                            </VisualState.Setters>
+                                                        </VisualState>
+                                                        <VisualState x:Name="Pressed">
+                                                            <VisualState.Setters>
+                                                                <Setter Target="ContentBorder.Background" Value="{ThemeResource ListViewItemBackgroundPressed}" />
+                                                            </VisualState.Setters>
+                                                        </VisualState>
+                                                    </VisualStateGroup>
+                                                    <VisualStateGroup x:Name="SelectionStates">
+                                                        <VisualState x:Name="Unselected" />
+                                                        <VisualState x:Name="Selected">
+                                                            <VisualState.Setters>
+                                                                <Setter Target="ContentBorder.Background" Value="{ThemeResource ListViewItemBackgroundSelected}" />
+                                                            </VisualState.Setters>
+                                                        </VisualState>
+                                                    </VisualStateGroup>
+                                                </VisualStateManager.VisualStateGroups>
+                                                <ContentPresenter Padding="8,4" Margin="{TemplateBinding Padding}" ContentTemplate="{TemplateBinding ContentTemplate}" ContentTransitions="{TemplateBinding ContentTransitions}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
                             </Style>
                         </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
@@ -592,7 +652,6 @@
                         Visibility="{x:Bind ViewModel.ShowEmptyState, Mode=OneWay}" />
                 </Grid>
             </Border>
-        </Grid>
 
         <!--  Popover «Центр управления» (D1): слой поверх сетки, прижат к правому краю
               (под правым pill). Отдельный слой нужен потому, что колонка статуса имеет

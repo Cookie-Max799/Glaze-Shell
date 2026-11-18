@@ -22,7 +22,7 @@ internal static class IconBitmap
 
             using (var stream = bitmap.PixelBuffer.AsStream())
             {
-                stream.Write(Premultiply(pixels.Bgra), 0, pixels.Bgra.Length);
+                stream.Write(Premultiply(pixels), 0, pixels.Bgra.Length);
             }
 
             bitmap.Invalidate();
@@ -41,13 +41,20 @@ internal static class IconBitmap
     /// отдаёт цвет без умножения. Без этого полупрозрачные края значков светятся
     /// (светлые «звёзды» и рваная кромка поверх тёмной панели).
     /// </summary>
-    private static byte[] Premultiply(byte[] bgra)
+    private static byte[] Premultiply(IconPixels pixels)
     {
-        var result = (byte[])bgra.Clone();
+        var result = (byte[])pixels.Bgra.Clone();
+        var radius = Math.Min(pixels.Width, pixels.Height) * 0.22;
 
         for (var i = 0; i < result.Length; i += 4)
         {
-            var alpha = result[i + 3];
+            var x = (i / 4) % pixels.Width + 0.5;
+            var y = (i / 4) / pixels.Width + 0.5;
+            var dx = Math.Max(Math.Max(radius - x, x - (pixels.Width - radius)), 0);
+            var dy = Math.Max(Math.Max(radius - y, y - (pixels.Height - radius)), 0);
+            var coverage = Math.Clamp(radius + 0.5 - Math.Sqrt(dx * dx + dy * dy), 0, 1);
+            var alpha = (byte)Math.Round(result[i + 3] * coverage);
+            result[i + 3] = alpha;
 
             if (alpha == 255)
             {

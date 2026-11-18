@@ -32,9 +32,6 @@ namespace GlazeShell.App;
 #pragma warning disable CA1001 // App не IDisposable, ресурсы высвобождаются в Shutdown()
 public partial class App : Application
 {
-    /// <summary>Размер значка плитки меню «Пуск» в физических пикселях.</summary>
-    private const int StartMenuIconPixels = 48;
-
     /// <summary>
     /// Пауза перед повторным закрытием поиска Windows: во время анимации открытия окно
     /// игнорирует <c>WM_CLOSE</c>, и первое сообщение пропадает.
@@ -48,13 +45,13 @@ public partial class App : Application
     private const int SystemSearchDismissAttempts = 5;
 
     /// <summary>
-    /// Замок на один жест тачпада: он приходит и с клавиатурного хука, и событием
-    /// системного поиска, поэтому повторная обработка в этом окне игнорируется.
+    /// Интервал дедупликации резервных событий системного окна.
     /// </summary>
-    private const long GestureDebounceMilliseconds = 900;
+    private const long GestureDebounceMilliseconds = 200;
 
     /// <summary>Момент последней обработки жеста (мс с запуска системы).</summary>
-    private long _lastGestureTick;
+    private long? _lastGestureTick;
+    private bool _lastGestureWasFallback;
 
     private readonly FileLogger _logger;
     private readonly RecoveryCommandLineOptions _commandLine;
@@ -454,6 +451,45 @@ public partial class App : Application
             }
         }
 
+        void ApplyStartMenu(bool enabled)
+        {
+            if (!enabled)
+            {
+                _gestureHotkey?.Dispose();
+                _gestureHotkey = null;
+                _searchDismissTimer?.Stop();
+                _startMenu?.HideMenu();
+                _lastGestureTick = null;
+                return;
+            }
+
+            if (_startMenu is null)
+            {
+                _startMenu = new StartMenuWindow(themeApplicator, monitorManager, settingsManager, eventManager);
+                _startMenu.ItemActivated += OnStartMenuItemActivated;
+                _startMenu.SettingsRequested += (_, _) => OpenSettings();
+                _startMenu.ExplorerRequested += (_, _) => OpenExplorer(null);
+                _startMenu.MainWindowRequested += (_, _) => window.ShowFromTray();
+                _ = LoadStartMenuItemsAsync();
+            }
+
+            if (_gestureHotkey is null)
+            {
+                _gestureHotkey = GlobalHotkey.TryRegister(
+                    GlobalHotkey.Modifier.Control | GlobalHotkey.Modifier.Alt | GlobalHotkey.Modifier.NoRepeat,
+                    (uint)'G',
+                    exception => _logger.Write(GlazeLogLevel.Error, "Gesture", "The gesture hotkey handler failed.", exception));
+                if (_gestureHotkey is not null)
+                {
+                    _gestureHotkey.Pressed += OnGestureHotkeyPressed;
+                }
+                else
+                {
+                    _logger.Write(GlazeLogLevel.Warning, "Gesture", "Ctrl+Alt+G could not be registered.");
+                }
+            }
+        }
+
         // Панель задач скрывается только вместе с dock: без него переключение окон
         // осталось бы без штатной панели. Скрытие обратимо и повторяется после
         // перезапуска Explorer; при выходе панель возвращается на место.
@@ -476,14 +512,7 @@ public partial class App : Application
 
                     if (_winKeyInterceptor.Start())
                     {
-                        _startMenu = new StartMenuWindow(themeApplicator, monitorManager, settingsManager, eventManager);
-                        _startMenu.ItemActivated += OnStartMenuItemActivated;
-                        _startMenu.SettingsRequested += (_, _) => OpenSettings();
-                        _startMenu.ExplorerRequested += (_, _) => OpenExplorer(null);
-                        _startMenu.MainWindowRequested += (_, _) => window.ShowFromTray();
-                        _startMenu.Hidden += OnStartMenuHidden;
                         _winKeyInterceptor.SetEnabled(true);
-                        _ = LoadStartMenuItemsAsync();
                     }
                     else
                     {
@@ -500,7 +529,7 @@ public partial class App : Application
             else
             {
                 _winKeyInterceptor?.SetEnabled(false);
-                _startMenu?.HideMenu();
+                _searchDismissTimer?.Stop();
                 _taskbarHider?.Dispose();
                 _taskbarHider = null;
             }
@@ -518,6 +547,7 @@ public partial class App : Application
             var current = settingsManager.GetSettings();
             ApplyTopBar(!_safeMode && current.TopBarEnabled);
             ApplyDock(!_safeMode && current.DockEnabled);
+            ApplyStartMenu(!_safeMode && (current.TopBarEnabled || current.DockEnabled));
             ApplyTaskbarReplacement(
                 !_safeMode &&
                 current.DockEnabled &&
@@ -527,15 +557,12 @@ public partial class App : Application
         _applyUiMode = ApplyUiMode;
         ApplyUiMode();
 
-        // Ctrl K открывает поиск Glance (B1). Комбинацию может занимать другая программа:
-        // тогда приложение работает без неё, а причина попадает в лог.
-        _gestureHotkey = GlobalHotkey.TryRegister(
-            GlobalHotkey.Modifier.Control | GlobalHotkey.Modifier.Alt,
-            (uint)'G',
-            exception => _logger.Write(GlazeLogLevel.Error, "Gesture", "The gesture hotkey handler failed.", exception));
-        if (_gestureHotkey is not null)
+        // Автонастройка жеста «тап тремя пальцами» (Windows 11): выполняется один раз
+        // до регистрации горячих клавиш, чтобы жест сразу открывал меню Glaze Shell
+        // вместо системного поиска. Безопасный режим ничего не меняет в системе.
+        if (!_safeMode)
         {
-            _gestureHotkey.Pressed += OnWindowsKeyGesture;
+            new PrecisionTouchpadConfigurator(_logger).ConfigureIfNeeded();
         }
 
         _hotkey = GlobalHotkey.TryRegister(
@@ -561,17 +588,11 @@ public partial class App : Application
         StartWatchdog();
 
         _settingsChangedSubscription = eventManager.Subscribe<SettingsChanged>(
-            changed =>
+            changed => RunOnUiThread(() =>
             {
-                ApplyTopBar(!_safeMode && changed.Settings.TopBarEnabled);
-                ApplyDock(!_safeMode && changed.Settings.DockEnabled);
-                ApplyTaskbarReplacement(
-                    !_safeMode &&
-                    changed.Settings.DockEnabled &&
-                    changed.Settings.DockReplacesTaskbar);
-
+                ApplyUiMode();
                 RegisterRecoveryHotkey(changed.Settings);
-            });
+            }));
 
         if (_safeMode)
         {
@@ -936,36 +957,44 @@ public partial class App : Application
     private void OnWindowsKeyPressed(object? sender, EventArgs e) =>
         RunOnUiThread(() =>
         {
-            var currentlyVisible = _topBar?.IsRevealed == true ||
-                                   _dock?.IsRevealed == true;
-            _topBar?.SetSuppressed(currentlyVisible);
-            _dock?.SetSuppressed(currentlyVisible);
-            if (!currentlyVisible)
+            if (!IsShellUiActive || _taskbarHider is null)
             {
-                RevealPanels();
+                return;
+            }
+
+            // Нажатие Windows всегда показывает панели: прежний toggle по «видим ли сейчас»
+            // ошибался во время анимаций (IsRevealed ещё старое) и оставлял панели
+            // навсегда скрытыми — верхняя и нижняя полосы переставали отзываться.
+            // Скрытие выполняют штатные пути: клик мимо, уход курсора, чужое окно.
+            _topBar?.SetSuppressed(false);
+            _dock?.SetSuppressed(false);
+            RevealPanels();
+        });
+
+    private bool IsShellUiActive => !_safeMode && (_topBar is not null || _dock is not null);
+
+    internal bool IsStartMenuWindow(nint hwnd) => _startMenu?.OwnsWindow(hwnd) == true;
+
+    internal bool IsReplacedSystemMenu(uint processId) =>
+        IsShellUiActive && _taskbarHider is not null && ShellForeground.IsGestureSystemUi(processId);
+
+    private void OnGestureHotkeyPressed(object? sender, EventArgs e) =>
+        RunOnUiThread(() =>
+        {
+            if (IsShellUiActive)
+            {
+                _startMenu?.Toggle();
             }
         });
 
-    /// <summary>
-    /// Жест «три пальца» по тачпаду (Win+S): вместо системного поиска открывается меню
-    /// «Пуск» Glaze Shell с поиском и кнопкой главного окна. Приходит с потока хука.
-    /// </summary>
-    private void OnWindowsKeyGesture(object? sender, EventArgs e)
-    {
-        // Признак рабочего стола читается сразу, на потоке хука: системный поиск может
-        // выйти на передний план раньше, чем отработает UI-поток, и тогда рабочий стол
-        // выглядел бы чужим окном, а панели прятались бы без причины.
-        var desktopForeground = IsDesktopForeground();
-        RunOnUiThread(() => HandleGestureMenu(desktopForeground));
-    }
-
-    /// <summary>
-    /// Активное окно — рабочий стол. На нём жест «три пальца» не должен прятать
-    /// верхнюю и нижнюю панели: меню «Пуск» открывается поверх них.
-    /// </summary>
-    private static bool IsDesktopForeground() =>
-        OverlayWindow.TryGetForegroundWindow(out var hwnd, out var processId) &&
-        ShellForeground.IsDesktop(hwnd, processId);
+    private void OnWindowsKeyGesture(object? sender, EventArgs e) =>
+        RunOnUiThread(() =>
+        {
+            if (IsShellUiActive && _taskbarHider is not null)
+            {
+                HandleGestureMenu(fromFallback: false);
+            }
+        });
 
     /// <summary>
     /// Системный поиск вышел на передний план в обход клавиатурного хука: закрываем его
@@ -973,25 +1002,26 @@ public partial class App : Application
     /// </summary>
     private void OnSystemSearchOpened(ForegroundWindowChanged changed)
     {
-        if (_safeMode || _winKeyInterceptor is null || _taskbarHider is null ||
-            changed.Window is not { } window || !ShellForeground.IsSystemSearchUi((uint)window.ProcessId))
+        if (changed.Window is not { } window || !ShellForeground.IsGestureSystemUi((uint)window.ProcessId))
         {
             return;
         }
 
-        var dismissed = WindowManager.DismissSystemSearch();
-        _logger.Write(
-            GlazeLogLevel.Information,
-            "Shell",
-            $"The system search came to the foreground; hid {dismissed} search window(s), foreground was {window.Id}.");
-
         RunOnUiThread(() =>
         {
-            HandleGestureMenu(desktopForeground: false);
+            if (!IsShellUiActive || _taskbarHider is null)
+            {
+                return;
+            }
 
-            // Поиск доигрывает анимацию открытия и пропускает первое WM_CLOSE: повторяем
-            // закрытие несколько раз, пока окно не перестанет всплывать. Перечисление
-            // всех окон поиска закрывает и то, которое успело появиться заново.
+            if (!WindowManager.TryGetGestureSystemWindow(window.Id, (uint)window.ProcessId, out var hwnd))
+            {
+                return;
+            }
+
+            WindowManager.DismissGestureSystemWindow(hwnd, (uint)window.ProcessId);
+            HandleGestureMenu(fromFallback: true);
+
             _searchDismissTimer?.Stop();
             _searchDismissTimer = _window?.DispatcherQueue.CreateTimer();
             if (_searchDismissTimer is not { } timer)
@@ -1004,24 +1034,11 @@ public partial class App : Application
             timer.IsRepeating = true;
             timer.Tick += (_, _) =>
             {
-                var hidden = WindowManager.DismissSystemSearch();
-
-                if (hidden > 0)
-                {
-                    _logger.Write(
-                        GlazeLogLevel.Information,
-                        "Shell",
-                        $"Retried dismissing the system search: hid {hidden} window(s).");
-                }
+                WindowManager.DismissGestureSystemWindow(hwnd, (uint)window.ProcessId);
 
                 if (++attempts >= SystemSearchDismissAttempts)
                 {
                     timer.Stop();
-                }
-
-                if (_startMenu?.IsShown == true)
-                {
-                    _startMenu.Activate();
                 }
             };
             timer.Start();
@@ -1034,7 +1051,7 @@ public partial class App : Application
     /// второй закрывает поиск; без общего «замка» второй обработчик тут же переключал бы
     /// меню обратно и панели оставались бы скрытыми.
     /// </summary>
-    private void HandleGestureMenu(bool desktopForeground)
+    private void HandleGestureMenu(bool fromFallback)
     {
         if (_startMenu is null)
         {
@@ -1042,13 +1059,20 @@ public partial class App : Application
         }
 
         var now = Environment.TickCount64;
-        if (now - _lastGestureTick < GestureDebounceMilliseconds)
+        if (_lastGestureTick is { } last && now - last < GestureDebounceMilliseconds &&
+            (fromFallback || _lastGestureWasFallback))
         {
+            if (!fromFallback)
+            {
+                _lastGestureWasFallback = false;
+            }
+
             return;
         }
 
         _lastGestureTick = now;
-        ToggleGestureMenu(desktopForeground);
+        _lastGestureWasFallback = fromFallback;
+        _startMenu.Toggle();
     }
 
     /// <summary>Выполняет действие в потоке интерфейса, откуда бы его ни вызвали.</summary>
@@ -1069,50 +1093,6 @@ public partial class App : Application
     {
         _topBar?.Reveal();
         _dock?.Reveal();
-    }
-
-    private void ToggleGestureMenu(bool desktopForeground)
-    {
-        if (_startMenu is null)
-        {
-            return;
-        }
-
-        if (_startMenu.IsShown && !_startMenu.IsClosing)
-        {
-            _startMenu.HideMenu();
-            return;
-        }
-
-        // На рабочем столе панели — часть оболочки, и меню «Пуск» открывается поверх них.
-        // Прятать полосы нужно только ради чужого окна, которое меню перекрывает.
-        if (desktopForeground)
-        {
-            // Настройка «скрывать панели в Glaze Shell» относится к большим окнам
-            // (настройки, проводник). Меню «Пуск» их не перекрывает, поэтому панели
-            // остаются на месте, хотя активным стало собственное окно.
-            _topBar?.SetHeldOpen(true);
-            _dock?.SetPinned(true);
-        }
-        else
-        {
-            _topBar?.SetSuppressed(true);
-            _dock?.SetSuppressed(true);
-        }
-
-        _startMenu.ShowNearTaskbar();
-    }
-
-    /// <summary>
-    /// Меню закрылось любым путём (повторный жест, Esc, клик мимо): панели возвращаются
-    /// на место. Иначе жест оставлял бы их скрытыми до следующего нажатия клавиши Windows.
-    /// </summary>
-    private void OnStartMenuHidden(object? sender, EventArgs e)
-    {
-        _topBar?.SetSuppressed(false);
-        _dock?.SetSuppressed(false);
-        _dock?.SetPinned(false);
-        _topBar?.SetHeldOpen(false);
     }
 
     private void OnDockStartRequested(object? sender, EventArgs e) => ShowStartMenu();
@@ -1139,6 +1119,7 @@ public partial class App : Application
     {
         try
         {
+            var iconPixels = _startMenu?.IconRequestPixels ?? 96;
             var applications = _applications is null
                 ? []
                 : await _applications.DiscoverAsync();
@@ -1160,7 +1141,7 @@ public partial class App : Application
                         continue;
                     }
 
-                    var pixels = ShellIconProvider.TryGetIcon(item.ExecutablePath, StartMenuIconPixels);
+                    var pixels = ShellIconProvider.TryGetIcon(item.ExecutablePath, iconPixels);
 
                     if (pixels is null)
                     {

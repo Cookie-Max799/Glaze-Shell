@@ -44,6 +44,17 @@ public static class ShellForeground
     };
 
     /// <summary>
+    /// Процессы панели Widgets. Жест «три пальца» на части машин открывает именно её
+    /// (<c>Win+W</c>), и она выглядит как отдельное окно поверх оболочки: Glaze Shell
+    /// закрывает её так же, как поиск.
+    /// </summary>
+    private static readonly HashSet<string> WidgetsProcessNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Widgets",
+        "WidgetService",
+    };
+
+    /// <summary>
     /// Активное окно — поиск Windows. Такое окно Glaze Shell закрывает: жест «три пальца»
     /// по тачпаду на части машин открывает поиск в обход клавиатурного хука, и вместо
     /// него должен появиться интерфейс оболочки.
@@ -57,6 +68,27 @@ public static class ShellForeground
     {
         var name = GetProcessName(processId);
         return name is not null && SearchProcessNames.Contains(name);
+    }
+
+    /// <summary>
+    /// Активное окно — панель Widgets. Жест «три пальца» открывает её как <c>Win+W</c>,
+    /// и она появляется поверх оболочки отдельным окном, поэтому её нужно закрыть.
+    /// </summary>
+    public static bool IsWidgetsUi(uint processId)
+    {
+        var name = GetProcessName(processId);
+        return name is not null && WidgetsProcessNames.Contains(name);
+    }
+
+    /// <summary>
+    /// Системная поверхность, которую Glaze Shell закрывает по жесту «три пальца»:
+    /// поиск Windows и панель Widgets.
+    /// </summary>
+    public static bool IsGestureSystemUi(uint processId)
+    {
+        var name = GetProcessName(processId);
+        return name is not null && (SearchProcessNames.Contains(name) || WidgetsProcessNames.Contains(name) ||
+            string.Equals(name, "StartMenuExperienceHost", StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

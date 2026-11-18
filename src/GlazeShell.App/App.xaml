@@ -38,7 +38,7 @@
             <SolidColorBrush x:Key="GlazeDockGlassBrush" Color="#8C211B45" />
             <SolidColorBrush x:Key="GlazeStartMenuGlassBrush" Color="#8C211B45" />
             <!--  Плашки верхней панели: следуют её прозрачности и растворяются в полосе.  -->
-            <SolidColorBrush x:Key="GlazeTopBarPillBrush" Color="#33221C48" />
+            <SolidColorBrush x:Key="GlazeTopBarPillBrush" Color="#FF2B2B2B" />
             <SolidColorBrush x:Key="GlazeBlackBrush" Color="#000000" />
             <SolidColorBrush x:Key="GlazeWhiteBrush" Color="#FFFFFF" />
 

@@ -146,6 +146,9 @@ public sealed partial class TopBarWindow : Window
         ViewModel.ShowVolumeCount = settings.GetSettings().TopBarVolumePercent;
 
         InitializeComponent();
+        SearchHit.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnSearchPointerPressed), true);
+        SearchBox.TextChanged += (_, _) => UpdateSearchPlaceholder();
+        SearchBox.Loaded += (_, _) => UpdateSearchPlaceholder();
         AppWindow.IsShownInSwitchers = false;
         Title = "Glaze Shell — Верхняя панель";
 
@@ -635,7 +638,12 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
-        if (hwnd == _foregroundHwnd)
+        if (hwnd == _foregroundHwnd || (Application.Current as App)?.IsStartMenuWindow(hwnd) == true)
+        {
+            return;
+        }
+
+        if (processId != _ownProcessId && (Application.Current as App)?.IsReplacedSystemMenu(processId) == true)
         {
             return;
         }
@@ -812,12 +820,8 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private static double MeasurePanelHeight(FrameworkElement panel, double width)
     {
-        var visibility = panel.Visibility;
-        panel.Visibility = Visibility.Visible;
         panel.Measure(new Size(Math.Max(1, width), double.PositiveInfinity));
-        var height = panel.DesiredSize.Height;
-        panel.Visibility = visibility;
-        return height;
+        return panel.DesiredSize.Height;
     }
 
     /// <summary>
@@ -944,6 +948,16 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private void OnSearchGotFocus(object sender, RoutedEventArgs e) => HoldRevealed();
 
+    private void UpdateSearchPlaceholder()
+    {
+        if (VisualTreeHelper.GetChildrenCount(SearchBox) > 0 &&
+            VisualTreeHelper.GetChild(SearchBox, 0) is FrameworkElement templateRoot &&
+            templateRoot.FindName("PlaceholderTextContentPresenter") is UIElement placeholder)
+        {
+            placeholder.Visibility = SearchBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
     private void OnSearchLostFocus(object sender, RoutedEventArgs e)
     {
         // Режим без активации возвращается, когда клавиатура панели больше не нужна:
@@ -1007,10 +1021,7 @@ public sealed partial class TopBarWindow : Window
             return;
         }
 
-        // Пока в поле есть запрос, клавиатура остаётся у панели: иначе набор обрывался
-        // бы на полуслове. Пустое поле ввода не требует, даже если в нём остался фокус
-        // после клика по часам или статусу.
-        if (SearchBox is { FocusState: not FocusState.Unfocused } && ViewModel.HasQuery)
+        if (SearchBox is { FocusState: not FocusState.Unfocused })
         {
             return;
         }
@@ -1522,15 +1533,6 @@ public sealed partial class TopBarWindow : Window
     {
         try
         {
-            var appWindow = AppWindow.GetFromWindowId(Microsoft.UI.Win32Interop.GetWindowIdFromWindow(
-                WinRT.Interop.WindowNative.GetWindowHandle(_owner)));
-
-            if (appWindow.Presenter is OverlappedPresenter presenter &&
-                presenter.State == OverlappedPresenterState.Minimized)
-            {
-                presenter.Restore();
-            }
-
             if (_owner is MainWindow mainWindow)
             {
                 mainWindow.ShowFromTray();

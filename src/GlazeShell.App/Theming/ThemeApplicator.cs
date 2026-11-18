@@ -286,7 +286,7 @@ public sealed class ThemeApplicator
                 backdropAvailable,
                 ReadSurfaceLuminance(panel ?? root, SurfaceProbe.Panel));
 
-            ApplyBrushes(theme, glassText, topBarTransparency, topBarAlpha, dockAlpha, startMenuAlpha);
+            ApplyBrushes(theme, glassText, light, topBarTransparency, topBarAlpha, dockAlpha, startMenuAlpha);
             ApplyPanelGlassText(panelGlassText);
 
             // Локальные кисти вешаются на элементы каждого окна: общие токены лежат
@@ -487,7 +487,7 @@ public sealed class ThemeApplicator
         }
     }
 
-    private static void ApplyBrushes(GlazeTheme theme, GlazeTheme glassText, int topBarTransparency, byte topBarAlpha, byte dockAlpha, byte startMenuAlpha)
+    private static void ApplyBrushes(GlazeTheme theme, GlazeTheme glassText, bool light, int topBarTransparency, byte topBarAlpha, byte dockAlpha, byte startMenuAlpha)
     {
         var accent = theme.DefaultAccent;
         var accentForeground = theme.AccentForeground;
@@ -499,9 +499,8 @@ public sealed class ThemeApplicator
         // поэтому панель переливается в неё без резкой границы.
         var overlayAlpha = Math.Max(topBarAlpha, GlazePalette.OverlayAlphaFor(topBarTransparency));
 
-        // Плашки панели следуют её прозрачности: на плотной полосе это заметная подложка,
-        // на предельно прозрачной — лёгкая примесь, которая не отделяет pill от полосы.
-        var pillAlpha = GlazePalette.SurfaceAlphaFor(topBarTransparency);
+        var pillShade = light ? (byte)0xF0 : (byte)0x2B;
+        var pill = Color.FromArgb(0xFF, pillShade, pillShade, pillShade);
 
         SetBrush(BackgroundKey, theme.Background);
         SetBrush(SurfaceKey, theme.Surface);
@@ -513,7 +512,7 @@ public sealed class ThemeApplicator
         SetBrush(TopBarGlassKey, GlazePalette.WithAlpha(theme.Glass, topBarAlpha));
         SetBrush(DockGlassKey, GlazePalette.WithAlpha(theme.Glass, dockAlpha));
         SetBrush(StartMenuGlassKey, GlazePalette.WithAlpha(theme.Glass, startMenuAlpha));
-        SetBrush(PillKey, GlazePalette.WithAlpha(theme.Elevated, Math.Max(pillAlpha, (byte)0xE6)));
+        SetBrush(PillKey, pill);
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         SetBrush(TextPrimaryKey, theme.TextPrimary);

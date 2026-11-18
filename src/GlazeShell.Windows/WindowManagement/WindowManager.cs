@@ -64,65 +64,32 @@ public sealed class WindowManager : IWindowManager, IWindowsEventSource
         User32.IsWindow(handle) &&
         User32.PostMessage(handle, User32.WmClose, 0, 0);
 
-    /// <summary>
-    /// Убирает окно системной поверхности (поиск Windows), пришедшее на передний план
-    /// в обход клавиатурного хука. <c>WM_CLOSE</c> очищает состояние приложения, а
-    /// немедленное скрытие убирает окно с экрана, даже если приложение ещё доигрывает
-    /// анимацию открытия и сообщение пока не обработано.
-    /// </summary>
-    public static bool DismissWindow(string windowId)
+    public static bool TryGetGestureSystemWindow(string windowId, uint expectedProcessId, out nint hwnd)
     {
-        if (!NativeWindowEnumerator.TryParseId(windowId, out var handle) || !User32.IsWindow(handle))
-        {
-            return false;
-        }
-
-        _ = User32.PostMessage(handle, User32.WmClose, 0, 0);
-        return User32.ShowWindow(handle, User32.SwHide);
+        return NativeWindowEnumerator.TryParseId(windowId, out hwnd) &&
+            IsGestureSystemWindow(hwnd, expectedProcessId) &&
+            User32.GetForegroundWindow() == hwnd;
     }
 
     /// <summary>
-    /// Убирает все видимые окна системного поиска Windows, чей бы процесс их ни держал.
-    /// Жест тачпада может открыть поиск не только в <c>SearchHost.exe</c>, но и в
-    /// <c>SearchUI.exe</c>/<c>Cortana.exe</c>, и окно к моменту проверки бывает уже
-    /// другим: перечисление всех окон поиска закрывает и те, что не пришли событием.
+    /// Запрашивает скрытие и закрытие обнаруженного системного окна без ожидания его потока.
     /// </summary>
-    /// <returns>Сколько окон удалось скрыть.</returns>
-    public static int DismissSystemSearch()
+    public static void DismissGestureSystemWindow(nint hwnd, uint expectedProcessId)
     {
-        var dismissed = 0;
-
-        if (!User32.EnumWindows(Dismiss, 0))
+        if (!IsGestureSystemWindow(hwnd, expectedProcessId) || !User32.IsWindowVisible(hwnd))
         {
-            return dismissed;
+            return;
         }
 
-        return dismissed;
-
-        bool Dismiss(nint handle, nint parameter)
-        {
-            if (handle == 0 || !User32.IsWindowVisible(handle))
-            {
-                return true;
-            }
-
-            _ = User32.GetWindowThreadProcessId(handle, out var processId);
-
-            if (!ShellForeground.IsSystemSearchUi(processId))
-            {
-                return true;
-            }
-
-            _ = User32.PostMessage(handle, User32.WmClose, 0, 0);
-
-            if (User32.ShowWindow(handle, User32.SwHide))
-            {
-                dismissed++;
-            }
-
-            return true;
-        }
+        _ = User32.SetWindowPos(hwnd, 0, 0, 0, 0, 0,
+            User32.SwpHideWindow | User32.SwpNoActivate | User32.SwpNoMove |
+            User32.SwpNoSize | User32.SwpNoZOrder | User32.SwpAsyncWindowPos);
+        _ = User32.PostMessage(hwnd, User32.WmClose, 0, 0);
     }
+
+    private static bool IsGestureSystemWindow(nint hwnd, uint expectedProcessId) =>
+        User32.GetWindowThreadProcessId(hwnd, out var processId) != 0 &&
+        processId == expectedProcessId && ShellForeground.IsGestureSystemUi(processId);
 
     public void Dispose()
     {

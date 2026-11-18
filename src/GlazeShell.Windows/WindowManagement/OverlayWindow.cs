@@ -28,7 +28,7 @@ public static class OverlayWindow
     /// всегда остаётся поверх остальных и не перекрашивается при переключении. Убираются флаги,
     /// которые могут включать DWM shadow.
     /// </summary>
-    public static void MakeTopMostToolWindow(nint hwnd)
+    public static void MakeTopMostToolWindow(nint hwnd, bool useRedirectionBitmap = false)
     {
         if (hwnd == 0)
         {
@@ -41,7 +41,10 @@ public static class OverlayWindow
         style &= (nint)~(User32.WsExWindowEdge | User32.WsExDlgModalFrame);
         
         // Устанавливаем нужные флаги
-        style |= (nint)(User32.WsExToolWindow | User32.WsExTopmost | User32.WsExNoRedirectionBitmap);
+        style |= (nint)(User32.WsExToolWindow | User32.WsExTopmost);
+        style = useRedirectionBitmap
+            ? style & (nint)~User32.WsExNoRedirectionBitmap
+            : style | (nint)User32.WsExNoRedirectionBitmap;
         
         User32.SetWindowLongPtr(hwnd, User32.GwlExStyle, style);
 

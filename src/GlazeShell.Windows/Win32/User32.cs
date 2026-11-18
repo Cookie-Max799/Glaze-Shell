@@ -250,6 +250,7 @@ internal static class User32
     internal const uint SwpHideWindow = 0x0080;
     internal const uint SwpNoActivate = 0x0010;
     internal const uint SwpFrameChanged = 0x0020;
+    internal const uint SwpAsyncWindowPos = 0x4000;
 
     internal const uint EventSystemForeground = 0x0003;
 
@@ -428,6 +429,12 @@ internal static class User32
     internal const int VkLeftWindows = 0x5B;
     internal const int VkRightWindows = 0x5C;
     internal const int VkS = 0x53;
+
+    /// <summary>Виртуальная клавиша Tab: с Windows образует переключатель окон.</summary>
+    internal const int VkTab = 0x09;
+
+    /// <summary>Виртуальная клавиша W: с Windows открывает панель Widgets.</summary>
+    internal const int VkW = 0x57;
     internal const int VkLeftButton = 0x01;
     internal const int VkVolumeMute = 0xAD;
     internal const int VkVolumeDown = 0xAE;

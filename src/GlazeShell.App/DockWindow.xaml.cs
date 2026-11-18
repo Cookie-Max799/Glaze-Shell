@@ -554,15 +554,6 @@ public sealed partial class DockWindow : Window
     {
         try
         {
-            var appWindow = AppWindow.GetFromWindowId(Microsoft.UI.Win32Interop.GetWindowIdFromWindow(
-                WinRT.Interop.WindowNative.GetWindowHandle(_owner)));
-
-            if (appWindow.Presenter is OverlappedPresenter presenter &&
-                presenter.State == OverlappedPresenterState.Minimized)
-            {
-                presenter.Restore();
-            }
-
             if (_owner is MainWindow mainWindow)
             {
                 mainWindow.ShowFromTray();
@@ -646,7 +637,12 @@ public sealed partial class DockWindow : Window
             return;
         }
 
-        if (hwnd == _foregroundHwnd)
+        if (hwnd == _foregroundHwnd || (Application.Current as App)?.IsStartMenuWindow(hwnd) == true)
+        {
+            return;
+        }
+
+        if (processId != _ownProcessId && (Application.Current as App)?.IsReplacedSystemMenu(processId) == true)
         {
             return;
         }
