@@ -117,7 +117,8 @@
                             ScrollViewer.VerticalScrollBarVisibility="Auto"
                             SelectionMode="None"
                             IsItemClickEnabled="True"
-                            ItemClick="OnAppItemClick">
+                            ItemClick="OnAppItemClick"
+                            RightTapped="OnAppItemRightTapped">
                             <GridView.ItemsPanel>
                                 <ItemsPanelTemplate>
                                     <ItemsWrapGrid Orientation="Horizontal" />

@@ -32,6 +32,9 @@ public static class SettingsCatalog
     /// <summary>Идентификатор страницы «Восстановление».</summary>
     public const string RecoveryPageId = "recovery";
 
+    /// <summary>Идентификатор страницы «Оформление Windows».</summary>
+    public const string WindowsPageId = "windows";
+
     /// <summary>Идентификатор страницы «О программе».</summary>
     public const string AboutPageId = "about";
     /// <summary>Все страницы настроек в порядке сайдбара.</summary>
@@ -42,6 +45,7 @@ public static class SettingsCatalog
         new(DockPageId, "Dock", "\uE8FC", "Интерфейс"),
         new(TopBarPageId, "Верхняя панель", "\uE7C4", "Интерфейс"),
         new(ExplorerPageId, "Проводник", "\uE8B7", "Интерфейс"),
+        new(WindowsPageId, "Оформление Windows", "\uE771", "Система"),
         new(AccessibilityPageId, "Доступность", "\uE776", "Система"),
         new(RecoveryPageId, "Восстановление", "\uE90F", "Система"),
         new(AboutPageId, "О программе", "\uE946", "Система"),
@@ -277,6 +281,41 @@ public static class SettingsCatalog
                 new(ExplorerViewMode.Icons.ToString(), "Иконки"),
                 new(ExplorerViewMode.List.ToString(), "Список"),
             ]),
+
+        // Оформление Windows: перенос темы Glaze на систему. Записи идут в реестр
+        // пользователя и не требуют прав администратора.
+        new(
+            "systemAppearanceEnabled",
+            WindowsPageId,
+            "Оформление Windows",
+            "Красить акцент, светлый или тёмный режим приложений и прозрачность Windows так же, как Glaze Shell. Системные приложения и рамки окон подхватывают цвета оболочки.",
+            ["windows", "система", "акцент", "accent", "тёмная тема", "светлая тема", "рамки", "проводник", "параметры"],
+            SettingKind.Toggle,
+            settings => settings.SystemAppearanceEnabled,
+            (settings, value) => UserSettingsEditor.With(settings, systemAppearanceEnabled: AsBool(value)),
+            []),
+
+        new(
+            "glazeWallpaperEnabled",
+            WindowsPageId,
+            "Обои рабочего стола Glaze",
+            "Заменять обои градиентом из основного цвета и акцента Glaze. Исходные обои возвращаются при выключении.",
+            ["обои", "wallpaper", "рабочий стол", "desktop", "фон", "градиент"],
+            SettingKind.Toggle,
+            settings => settings.GlazeWallpaperEnabled,
+            (settings, value) => UserSettingsEditor.With(settings, glazeWallpaperEnabled: AsBool(value)),
+            []),
+
+        new(
+            "glazeDesktopLayerEnabled",
+            WindowsPageId,
+            "Слой рабочего стола Glaze",
+            "Показывать значки приложений Glaze на рабочем столе отдельным слоем. Explorer не заменяется, обычные окна остаются поверх.",
+            ["рабочий стол", "desktop", "значки", "иконки", "слой", "layer"],
+            SettingKind.Toggle,
+            settings => settings.GlazeDesktopLayerEnabled,
+            (settings, value) => UserSettingsEditor.With(settings, glazeDesktopLayerEnabled: AsBool(value)),
+            []),
 
         // Доступность (I5).
         new(

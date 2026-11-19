@@ -91,6 +91,18 @@ public sealed class SettingsDocument
     public bool? TopBarVolumePercent { get; set; }
 
     /// <summary>
+    /// Переносить оформление Glaze на Windows. Отсутствие значения в старом документе
+    /// означает включённое поведение.
+    /// </summary>
+    public bool? SystemAppearanceEnabled { get; set; }
+
+    /// <summary>Заменять обои рабочего стола градиентом Glaze. По умолчанию выключено.</summary>
+    public bool? GlazeWallpaperEnabled { get; set; }
+
+    /// <summary>Показывать безопасный слой рабочего стола Glaze. По умолчанию выключено.</summary>
+    public bool? GlazeDesktopLayerEnabled { get; set; }
+
+    /// <summary>
     /// Старое общее значение прозрачности стекла (0–90). Сохранено для чтения документов
     /// предыдущих версий: если новые поля отсутствуют, значение переносится в оба ползунка.
     /// </summary>
@@ -136,6 +148,9 @@ public sealed class SettingsDocument
             HidePanelsInGlazeShell = settings.HidePanelsInGlazeShell,
             TopBarHidesWithQuickSettings = settings.TopBarHidesWithQuickSettings,
             TopBarVolumePercent = settings.TopBarVolumePercent,
+            SystemAppearanceEnabled = settings.SystemAppearanceEnabled,
+            GlazeWallpaperEnabled = settings.GlazeWallpaperEnabled,
+            GlazeDesktopLayerEnabled = settings.GlazeDesktopLayerEnabled,
             MonitorNames = settings.MonitorNames.Count == 0
                 ? null
                 : new Dictionary<string, string>(settings.MonitorNames, StringComparer.OrdinalIgnoreCase)
@@ -256,7 +271,10 @@ public static class SettingsDocumentMapper
             document.HidePanelsInGlazeShell ?? true,
             startMenuTransparency,
             document.TopBarHidesWithQuickSettings ?? false,
-            document.TopBarVolumePercent ?? false);
+            document.TopBarVolumePercent ?? false,
+            document.SystemAppearanceEnabled ?? true,
+            document.GlazeWallpaperEnabled ?? false,
+            document.GlazeDesktopLayerEnabled ?? false);
         diagnostics = Array.Empty<string>();
         return true;
     }

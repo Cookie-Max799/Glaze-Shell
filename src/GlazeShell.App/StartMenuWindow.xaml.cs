@@ -9,6 +9,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.Graphics;
@@ -56,6 +57,7 @@ public sealed partial class StartMenuWindow : Window
 
     private readonly ThemeApplicator _themes;
     private readonly IMonitorManager _monitors;
+    private readonly ISettingsManager _settings;
     private readonly IDisposable _settingsChanged;
     private readonly List<StartMenuItemViewModel> _items = [];
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer _animation;
@@ -83,6 +85,7 @@ public sealed partial class StartMenuWindow : Window
     {
         _themes = themes ?? throw new ArgumentNullException(nameof(themes));
         _monitors = monitors ?? throw new ArgumentNullException(nameof(monitors));
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         InitializeComponent();
         AppWindow.IsShownInSwitchers = false;
         Title = "Glaze Shell — Пуск";
@@ -448,6 +451,50 @@ public sealed partial class StartMenuWindow : Window
         }
     }
 
+    /// <summary>
+    /// Правая кнопка по плитке приложения: открыть, показать файл программы в проводнике
+    /// или закрепить приложение в dock. Меню не скрывает «Пуск» — пользователь может
+    /// выбрать ещё одно действие.
+    /// </summary>
+    private void OnAppItemRightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        if (e.OriginalSource is not DependencyObject source ||
+            VisualTreeSearch.FindDataContext<StartMenuItemViewModel>(source) is not { } item)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        var flyout = new MenuFlyout();
+
+        var open = new MenuFlyoutItem { Text = "Открыть" };
+        open.Click += (_, _) =>
+        {
+            ItemActivated?.Invoke(this, item);
+            HideMenu();
+        };
+        flyout.Items.Add(open);
+
+        if (item.ExecutablePath is { Length: > 0 } path)
+        {
+            var location = new MenuFlyoutItem { Text = "Открыть расположение файла" };
+            location.Click += (_, _) => ShellTargets.ShowInExplorer(path);
+            flyout.Items.Add(location);
+        }
+
+        flyout.Items.Add(new MenuFlyoutSeparator());
+
+        var pinned = _settings.GetSettings().DockPinnedApps;
+        var isPinned = pinned.Any(id => string.Equals(id, item.ApplicationId, StringComparison.OrdinalIgnoreCase));
+
+        var pin = new MenuFlyoutItem { Text = isPinned ? "Открепить от Dock" : "Закрепить в Dock" };
+        pin.Click += (_, _) => PinToggleRequested?.Invoke(this, item);
+        flyout.Items.Add(pin);
+
+        flyout.ShowAt(AppsGrid, new FlyoutShowOptions { Position = e.GetPosition(AppsGrid) });
+    }
+
     private void OnMainWindowClick(object sender, RoutedEventArgs e)
     {
         _animation.Stop();
@@ -520,6 +567,9 @@ public sealed partial class StartMenuWindow : Window
 
     /// <summary>Пользователь выбрал приложение.</summary>
     public event EventHandler<StartMenuItemViewModel>? ItemActivated;
+
+    /// <summary>Просят закрепить или открепить приложение в dock.</summary>
+    public event EventHandler<StartMenuItemViewModel>? PinToggleRequested;
 
     /// <summary>Нажата кнопка «Glaze Shell»: открыть главное окно приложения.</summary>
     public event EventHandler? MainWindowRequested;

@@ -5,7 +5,9 @@ using GlazeShell.Core.Events;
 using GlazeShell.Core.Interfaces;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 using Windows.System;
 
@@ -156,8 +158,74 @@ public sealed partial class ExplorerWindow : Window
         }
     }
 
-    private void OnItemsKeyDown(object sender, KeyRoutedEventArgs e)
+    /// <summary>
+    /// Правая кнопка по элементу папки: обычные действия проводника. Открытие и свойства
+    /// выполняет оболочка Windows, поэтому меню не зависит от типа файла и его обработчика.
+    /// </summary>
+    private void OnItemsRightTapped(object sender, RightTappedRoutedEventArgs e)
     {
+        if (e.OriginalSource is not DependencyObject source ||
+            VisualTreeSearch.FindDataContext<ExplorerItemViewModel>(source) is not { } item)
+        {
+            return;
+        }
+
+        if (sender is ListViewBase list)
+        {
+            list.SelectedItem = item;
+        }
+
+        e.Handled = true;
+
+        var flyout = new MenuFlyout();
+
+        var open = new MenuFlyoutItem { Text = "Открыть" };
+        open.Click += (_, _) => _ = ViewModel.OpenItemAsync(item);
+        flyout.Items.Add(open);
+
+        if (item.IsFolder)
+        {
+            var newWindow = new MenuFlyoutItem { Text = "Открыть в новом окне" };
+            newWindow.Click += (_, _) => NewWindowRequested?.Invoke(this, item.FullPath);
+            flyout.Items.Add(newWindow);
+        }
+
+        flyout.Items.Add(new MenuFlyoutSeparator());
+
+        var copyPath = new MenuFlyoutItem { Text = "Копировать путь" };
+        copyPath.Click += (_, _) => CopyPath(item.FullPath);
+        flyout.Items.Add(copyPath);
+
+        var showInExplorer = new MenuFlyoutItem { Text = "Показать в проводнике Windows" };
+        showInExplorer.Click += (_, _) => ShellTargets.ShowInExplorer(item.FullPath);
+        flyout.Items.Add(showInExplorer);
+
+        var properties = new MenuFlyoutItem { Text = "Свойства" };
+        properties.Click += (_, _) => ShellTargets.ShowProperties(item.FullPath);
+        flyout.Items.Add(properties);
+
+        if (sender is UIElement target)
+        {
+            flyout.ShowAt(target, new FlyoutShowOptions { Position = e.GetPosition(target) });
+        }
+    }
+
+    /// <summary>Кладёт путь в буфер обмена; сбой буфера не должен ронять проводник.</summary>
+    private static void CopyPath(string path)
+    {
+        try
+        {
+            var package = new DataPackage();
+            package.SetText(path);
+            Clipboard.SetContent(package);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            Trace.WriteLine($"GlazeShell.Explorer: copying '{path}' failed. {exception}");
+        }
+    }
+
+    private void OnItemsKeyDown(object sender, KeyRoutedEventArgs e)    {
         if (sender is not ListViewBase list || list.SelectedItem is not ExplorerItemViewModel item)
         {
             return;
@@ -204,4 +272,10 @@ public sealed partial class ExplorerWindow : Window
         _preview.Closed += (_, _) => _preview = null;
         _preview.Activate();
     }
+
+    /// <summary>
+    /// Просят открыть папку в отдельном окне проводника Glaze Shell. Решение об окне
+    /// принимает приложение: одному проводнику незачем знать про остальные.
+    /// </summary>
+    public event EventHandler<string>? NewWindowRequested;
 }

@@ -546,4 +546,28 @@ public sealed class SettingsDocumentMapperTests
         Assert.IsTrue(restored!.ReduceMotion);
         Assert.IsTrue(restored.HighContrast);
     }
+
+    [TestMethod]
+    public void MissingSystemAppearanceDefaultsToEnabledWithoutWallpaper()
+    {
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(new SettingsDocument(), out var settings, out _));
+
+        Assert.IsTrue(settings!.SystemAppearanceEnabled);
+        Assert.IsFalse(settings.GlazeWallpaperEnabled);
+    }
+
+    [TestMethod]
+    public void SystemAppearanceSurvivesTheRoundTrip()
+    {
+        var settings = new UserSettings(systemAppearanceEnabled: false, glazeWallpaperEnabled: true);
+
+        var document = SettingsDocument.FromSettings(settings);
+
+        Assert.IsFalse(document.SystemAppearanceEnabled);
+        Assert.IsTrue(document.GlazeWallpaperEnabled);
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var restored, out _));
+        Assert.IsFalse(restored!.SystemAppearanceEnabled);
+        Assert.IsTrue(restored.GlazeWallpaperEnabled);
+    }
 }

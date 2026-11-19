@@ -443,6 +443,73 @@ public sealed class DockViewModel : IDisposable
     }
 
     /// <summary>
+    /// Окна приложения для контекстного меню плитки. Отбор тот же, что при пересборке
+    /// dock: собственные окна, системные окна и окна без заголовка не считаются.
+    /// Стоит один вызов перечисления окон, поэтому вызывается только по правой кнопке.
+    /// </summary>
+    public IReadOnlyList<WindowInfo> GetWindows(DockItemViewModel item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+
+        if (item.ExecutablePath is not { Length: > 0 } path)
+        {
+            return [];
+        }
+
+        try
+        {
+            var result = new List<WindowInfo>();
+
+            foreach (var window in _windows.GetWindows())
+            {
+                if (window.ProcessId == _ownProcessId ||
+                    window.Type is WindowType.None or WindowType.System ||
+                    string.IsNullOrWhiteSpace(window.Title))
+                {
+                    continue;
+                }
+
+                if (string.Equals(window.ExecutablePath, path, StringComparison.OrdinalIgnoreCase))
+                {
+                    result.Add(window);
+                }
+            }
+
+            return result;
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            Trace.WriteLine($"GlazeShell.Dock: window lookup failed. {exception}");
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// Закрывает окна приложения вежливо, через <c>WM_CLOSE</c>: программа успевает
+    /// спросить о несохранённых данных. Возвращает число окон, которым отправлено закрытие.
+    /// </summary>
+    /// <param name="all">Закрыть все окна приложения, а не только активное.</param>
+    public int CloseWindows(DockItemViewModel item, bool all)
+    {
+        var closed = 0;
+
+        foreach (var window in GetWindows(item).Take(all ? int.MaxValue : 1))
+        {
+            if (_windows.CloseWindow(window.Id))
+            {
+                closed++;
+            }
+        }
+
+        if (closed > 0)
+        {
+            _runningRefresh.Request();
+        }
+
+        return closed;
+    }
+
+    /// <summary>
     /// Открывает системную цель оболочки (например, <c>shell:Downloads</c>) через ShellExecute.
     /// </summary>
     private static void OpenShellTarget(string target)

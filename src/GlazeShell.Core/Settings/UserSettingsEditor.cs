@@ -40,6 +40,9 @@ public static class UserSettingsEditor
         int? startMenuTransparency = null,
         bool? topBarHidesWithQuickSettings = null,
         bool? topBarVolumePercent = null,
+        bool? systemAppearanceEnabled = null,
+        bool? glazeWallpaperEnabled = null,
+        bool? glazeDesktopLayerEnabled = null,
         IReadOnlyDictionary<string, string>? monitorNames = null,
         IReadOnlyList<string>? dockPinnedApps = null,
         IReadOnlyList<string>? explorerFavorites = null)
@@ -74,6 +77,9 @@ public static class UserSettingsEditor
             hidePanelsInGlazeShell: hidePanelsInGlazeShell ?? source.HidePanelsInGlazeShell,
             startMenuTransparency: startMenuTransparency ?? source.StartMenuTransparency,
             topBarHidesWithQuickSettings: topBarHidesWithQuickSettings ?? source.TopBarHidesWithQuickSettings,
-            topBarVolumePercent: topBarVolumePercent ?? source.TopBarVolumePercent);
+            topBarVolumePercent: topBarVolumePercent ?? source.TopBarVolumePercent,
+            systemAppearanceEnabled: systemAppearanceEnabled ?? source.SystemAppearanceEnabled,
+            glazeWallpaperEnabled: glazeWallpaperEnabled ?? source.GlazeWallpaperEnabled,
+            glazeDesktopLayerEnabled: glazeDesktopLayerEnabled ?? source.GlazeDesktopLayerEnabled);
     }
 }

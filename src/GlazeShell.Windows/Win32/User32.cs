@@ -154,8 +154,8 @@ internal delegate void WinEventProc(nint hook, uint winEvent, nint hwnd, uint ob
 internal static class User32
 {
     internal const int GwOwner = 4;
-    internal const long GwlStyle = -16;
-    internal const long GwlExStyle = -20;
+    internal const int GwlStyle = -16;
+    internal const int GwlExStyle = -20;
 
     internal const long WsThickFrame = 0x0004_0000;
     internal const long WsCaption = 0x00C0_0000;
@@ -167,6 +167,7 @@ internal static class User32
     internal const long WsExNoRedirectionBitmap = 0x0020_0000;
 
     internal const nint HwndTop = 0;
+    internal const nint HwndBottom = 1;
     internal const nint HwndTopmost = -1;
     internal const nint HwndNotTopmost = -2;
     internal const uint AsfwAny = 0xFFFF_FFFF;
@@ -230,6 +231,18 @@ internal static class User32
     /// <summary>Путь к файлу обоев рабочего стола.</summary>
     internal const uint SpiGetDesktopWallpaper = 0x0073;
 
+    /// <summary>Установка обоев рабочего стола по пути к файлу.</summary>
+    internal const uint SpiSetDesktopWallpaper = 0x0014;
+
+    /// <summary>Записать изменение в профиль пользователя.</summary>
+    internal const uint SpifUpdateIniFile = 0x0001;
+
+    /// <summary>Разослать WM_SETTINGCHANGE после изменения.</summary>
+    internal const uint SpifSendChange = 0x0002;
+
+    /// <summary>Не ждать зависшее окно при широковещательной рассылке.</summary>
+    internal const uint SmtoAbortIfHung = 0x0002;
+
     /// <summary>Признак включённой темы высокой контрастности.</summary>
     internal const uint HcfHighContrastOn = 0x0000_0001;
 
@@ -279,6 +292,7 @@ internal static class User32
     internal const uint MonitorInfoFPrimary = 0x0000_0001;
 
     internal const uint MonitorDefaultToNearest = 0x0000_0002;
+    internal const uint MonitorDefaultToPrimary = 0x0000_0001;
 
     internal const uint EnumCurrentSettings = unchecked((uint)-1);
 
@@ -633,9 +647,32 @@ internal static class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SystemParametersInfoW(uint action, uint param, [Out] char[] value, uint winIni);
 
+    /// <summary>Задаёт строковый параметр системы, например путь к файлу обоев.</summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SystemParametersInfoW(uint action, uint param, string value, uint winIni);
+
+    /// <summary>
+    /// Рассылает сообщение окнам с таймаутом: широковещательная рассылка синхронна, и
+    /// зависшее чужое окно иначе заблокировало бы вызывающий поток.
+    /// </summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    internal static extern nint SendMessageTimeoutW(
+        nint hwnd,
+        uint message,
+        nint wParam,
+        string lParam,
+        uint flags,
+        uint timeout,
+        out nint result);
+
     /// <summary>Возвращает текущий системный цвет по индексу (например, <c>COLOR_WINDOW</c>).</summary>
     [DllImport("user32.dll", ExactSpelling = true)]
     internal static extern uint GetSysColor(int index);
+
+    /// <summary>Системная метрика в пикселях (например, ширина экрана).</summary>
+    [DllImport("user32.dll", ExactSpelling = true)]
+    internal static extern int GetSystemMetrics(int index);
 
     /// <summary>Создаёт пустое всплывающее меню (контекстное меню трея).</summary>
     [DllImport("user32.dll", ExactSpelling = true)]

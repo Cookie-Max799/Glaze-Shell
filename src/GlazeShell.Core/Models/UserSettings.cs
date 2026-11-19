@@ -70,7 +70,10 @@ public sealed record UserSettings
         bool hidePanelsInGlazeShell = true,
         int startMenuTransparency = DefaultStartMenuTransparency,
         bool topBarHidesWithQuickSettings = false,
-        bool topBarVolumePercent = false)
+        bool topBarVolumePercent = false,
+        bool systemAppearanceEnabled = true,
+        bool glazeWallpaperEnabled = false,
+        bool glazeDesktopLayerEnabled = false)
     {
         Language = ModelValidation.Required(language, nameof(language));
         ActiveThemeId = ModelValidation.Optional(activeThemeId, nameof(activeThemeId));
@@ -96,6 +99,9 @@ public sealed record UserSettings
         HidePanelsInGlazeShell = hidePanelsInGlazeShell;
         TopBarHidesWithQuickSettings = topBarHidesWithQuickSettings;
         TopBarVolumePercent = topBarVolumePercent;
+        SystemAppearanceEnabled = systemAppearanceEnabled;
+        GlazeWallpaperEnabled = glazeWallpaperEnabled;
+        GlazeDesktopLayerEnabled = glazeDesktopLayerEnabled;
         StartWithWindows = startWithWindows;
         MinimizeToTray = minimizeToTray;
         ShowDesktopOnStartup = showDesktopOnStartup;
@@ -244,6 +250,27 @@ public sealed record UserSettings
     /// уровня (0–100). По умолчанию выключено: панель остаётся компактной.
     /// </summary>
     public bool TopBarVolumePercent { get; }
+
+    /// <summary>
+    /// Переносить оформление Glaze на Windows: системный акцент, светлый или тёмный режим
+    /// приложений и прозрачность. Системные приложения и рамки окон окрашиваются так же,
+    /// как оболочка. Исходные значения запоминаются и возвращаются при выключении.
+    /// </summary>
+    public bool SystemAppearanceEnabled { get; }
+
+    /// <summary>
+    /// Заменять обои рабочего стола градиентом из основного цвета и акцента Glaze.
+    /// Исходные обои запоминаются и возвращаются при выключении. По умолчанию выключено:
+    /// обои — личный выбор пользователя, менять их без согласия нельзя.
+    /// </summary>
+    public bool GlazeWallpaperEnabled { get; }
+
+    /// <summary>
+    /// Показывать безопасный слой рабочего стола Glaze: неактивирующее окно уровня
+    /// рабочего стола со значками приложений активной вкладки. Explorer при этом не
+    /// заменяется, обычные окна остаются поверх слоя. По умолчанию выключено.
+    /// </summary>
+    public bool GlazeDesktopLayerEnabled { get; }
 
     public static UserSettings CreateDefault() => new();
 

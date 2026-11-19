@@ -22,6 +22,7 @@ using GlazeShell.Windows.FileSystem;
 using GlazeShell.Windows.Lifecycle;
 using GlazeShell.Windows.Shell;
 using GlazeShell.Windows.SystemEvents;
+using GlazeShell.Windows.Theming;
 using GlazeShell.Windows.WindowManagement;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -78,6 +79,12 @@ public partial class App : Application
     private ExplorerWindow? _explorer;
 
     /// <summary>
+    /// Дополнительные проводники, открытые пунктом «Открыть в новом окне». Ссылка нужна,
+    /// чтобы окно не собрал сборщик мусора; удаляется при закрытии окна.
+    /// </summary>
+    private readonly List<ExplorerWindow> _extraExplorers = [];
+
+    /// <summary>
     /// Окно настроек Glaze (I1) — создаётся лениво и переиспользуется.
     /// </summary>
     private SettingsWindow? _settingsWindow;
@@ -87,6 +94,28 @@ public partial class App : Application
     /// в настройке <see cref="GlazeShell.Core.Models.UserSettings.DockReplacesTaskbar"/>.
     /// </summary>
     private TaskbarHider? _taskbarHider;
+
+    /// <summary>
+    /// Упреждающее скрытие системных окон (поиск, «Пуск», Widgets), открываемых жестом
+    /// тачпада: окна скрываются в момент показа, до отрисовки, без вспышки на экране.
+    /// </summary>
+    private GestureSystemWindowSuppressor? _gestureSuppressor;
+
+    /// <summary>
+    /// Перенос оформления Glaze на Windows: акцент, режим приложений и прозрачность.
+    /// Исходные значения запоминаются и возвращаются при выключении и выходе.
+    /// </summary>
+    private SystemAppearance? _systemAppearance;
+
+    /// <summary>Обои рабочего стола в оформлении Glaze и их исходный снимок.</summary>
+    private GlazeWallpaper? _glazeWallpaper;
+
+    /// <summary>
+    /// Безопасный слой рабочего стола Glaze: неактивирующее окно уровня рабочего стола со
+    /// значками приложений. Создаётся и закрывается по настройке
+    /// <see cref="GlazeShell.Core.Models.UserSettings.GlazeDesktopLayerEnabled"/>.
+    /// </summary>
+    private DesktopLayerWindow? _desktopLayer;
 
     /// <summary>
     /// Глобальная горячая клавиша <c>Ctrl K</c> (B1): открывает поиск Glance в верхней
@@ -283,6 +312,13 @@ public partial class App : Application
 
         var settings = settingsManager.GetSettings();
 
+        // Оформление Windows переносится из темы Glaze: снимок исходных значений лежит
+        // рядом с настройками, поэтому прежний вид возвращается и после падения оболочки.
+        _systemAppearance = new SystemAppearance(Path.Combine(store.RootDirectory, "system-appearance.json"));
+        _glazeWallpaper = new GlazeWallpaper(
+            Path.Combine(store.RootDirectory, "wallpaper"),
+            Path.Combine(store.RootDirectory, "wallpaper-snapshot.json"));
+
         // Восстановление (I2): незавершённая прошлая сессия означает падение оболочки,
         // а несколько падений подряд включают безопасный режим.
         _safeMode = PrepareRecovery(store.RootDirectory, settings).IsSafeMode;
@@ -313,13 +349,7 @@ public partial class App : Application
         {
             if (_explorer is null)
             {
-                _explorer = new ExplorerWindow(
-                    new NativeFileSystemBrowser(),
-                    settingsManager,
-                    eventManager,
-                    themeApplicator,
-                    new NativeFilePreviewReader(),
-                    path);
+                _explorer = CreateExplorer(path);
 
                 _explorer.Closed += (_, _) => _explorer = null;
                 _explorer.Activate();
@@ -332,6 +362,29 @@ public partial class App : Application
             {
                 _ = _explorer.ViewModel.NavigateAsync(path);
             }
+        }
+
+        // «Открыть в новом окне» создаёт второй проводник; первый остаётся на месте.
+        ExplorerWindow CreateExplorer(string? path)
+        {
+            var explorer = new ExplorerWindow(
+                new NativeFileSystemBrowser(),
+                settingsManager,
+                eventManager,
+                themeApplicator,
+                new NativeFilePreviewReader(),
+                path);
+
+            explorer.NewWindowRequested += (_, folder) => OpenExplorerWindow(folder);
+            return explorer;
+        }
+
+        void OpenExplorerWindow(string folder)
+        {
+            var explorer = CreateExplorer(folder);
+            _extraExplorers.Add(explorer);
+            explorer.Closed += (_, _) => _extraExplorers.Remove(explorer);
+            explorer.Activate();
         }
 
         // Настройки Glaze Shell (I1): создаются лениво и переиспользуются, чтобы не плодить окна.
@@ -451,6 +504,24 @@ public partial class App : Application
             }
         }
 
+        void ApplyDesktopLayer(bool enabled)
+        {
+            if (enabled)
+            {
+                _desktopLayer ??= new DesktopLayerWindow(
+                    desktopManager,
+                    discovery,
+                    launcher,
+                    eventManager,
+                    monitorManager);
+            }
+            else
+            {
+                _desktopLayer?.Close();
+                _desktopLayer = null;
+            }
+        }
+
         void ApplyStartMenu(bool enabled)
         {
             if (!enabled)
@@ -467,6 +538,7 @@ public partial class App : Application
             {
                 _startMenu = new StartMenuWindow(themeApplicator, monitorManager, settingsManager, eventManager);
                 _startMenu.ItemActivated += OnStartMenuItemActivated;
+                _startMenu.PinToggleRequested += OnStartMenuPinToggleRequested;
                 _startMenu.SettingsRequested += (_, _) => OpenSettings();
                 _startMenu.ExplorerRequested += (_, _) => OpenExplorer(null);
                 _startMenu.MainWindowRequested += (_, _) => window.ShowFromTray();
@@ -525,10 +597,21 @@ public partial class App : Application
                 {
                     _winKeyInterceptor.SetEnabled(true);
                 }
+
+                // Упреждающий подавитель: скрывает окна поиска, «Пуска» и Widgets в момент
+                // показа, поэтому жест тачпада не оставляет на экране вспышки системного окна.
+                if (_gestureSuppressor is null)
+                {
+                    _gestureSuppressor = new GestureSystemWindowSuppressor(_logger);
+                    _gestureSuppressor.Start();
+                }
+
+                _gestureSuppressor.SetEnabled(true);
             }
             else
             {
                 _winKeyInterceptor?.SetEnabled(false);
+                _gestureSuppressor?.SetEnabled(false);
                 _searchDismissTimer?.Stop();
                 _taskbarHider?.Dispose();
                 _taskbarHider = null;
@@ -552,10 +635,12 @@ public partial class App : Application
                 !_safeMode &&
                 current.DockEnabled &&
                 current.DockReplacesTaskbar);
+            ApplyDesktopLayer(!_safeMode && current.GlazeDesktopLayerEnabled);
         }
 
         _applyUiMode = ApplyUiMode;
         ApplyUiMode();
+        ApplySystemAppearance();
 
         // Автонастройка жеста «тап тремя пальцами» (Windows 11): выполняется один раз
         // до регистрации горячих клавиш, чтобы жест сразу открывал меню Glaze Shell
@@ -591,6 +676,7 @@ public partial class App : Application
             changed => RunOnUiThread(() =>
             {
                 ApplyUiMode();
+                ApplySystemAppearance();
                 RegisterRecoveryHotkey(changed.Settings);
             }));
 
@@ -788,6 +874,7 @@ public partial class App : Application
             }
 
             var result = WindowsUiRestorer.Restore();
+            RestoreSystemAppearanceFromDisk();
 
             _logger.Write(
                 GlazeLogLevel.Information,
@@ -813,6 +900,7 @@ public partial class App : Application
         try
         {
             var result = WindowsUiRestorer.Restore();
+            RestoreSystemAppearanceFromDisk();
 
             _logger.Write(
                 GlazeLogLevel.Information,
@@ -833,6 +921,124 @@ public partial class App : Application
         }
 
         Environment.Exit(0);
+    }
+
+    /// <summary>
+    /// Переносит оформление Glaze на Windows: акцент, режим приложений, прозрачность и,
+    /// если включено, обои рабочего стола. В безопасном режиме система не меняется, а
+    /// ранее применённое оформление возвращается к исходному.
+    /// </summary>
+    private void ApplySystemAppearance()
+    {
+        var appearance = _systemAppearance;
+
+        if (appearance is null || _settingsManager is null)
+        {
+            return;
+        }
+
+        if (_safeMode)
+        {
+            appearance.Restore();
+            _glazeWallpaper?.Restore();
+            return;
+        }
+
+        var settings = _settingsManager.GetSettings();
+
+        if (!settings.SystemAppearanceEnabled)
+        {
+            appearance.Restore();
+        }
+
+        if (!settings.GlazeWallpaperEnabled)
+        {
+            _glazeWallpaper?.Restore();
+        }
+
+        var light = Core.Services.ThemeModeResolver.Resolve(
+            settings.ThemeMode,
+            Theming.ThemeApplicator.SystemUsesLightTheme()) == Core.Models.ThemeMode.Light;
+        var theme = Core.Theming.GlazePalette.Create(
+            light,
+            settings.BaseColorId,
+            settings.AccentId,
+            settings.TopBarTransparency);
+
+        if (settings.SystemAppearanceEnabled)
+        {
+            // Для системной темы режим приложений не навязывается: иначе выбор
+            // «системная» переставал бы означать «как в Windows».
+            var applied = appearance.Apply(
+                theme.DefaultAccent,
+                light,
+                applyColorMode: settings.ThemeMode != Core.Models.ThemeMode.System,
+                settings.TransparencyEnabled);
+
+            if (!applied && _logger is not null)
+            {
+                _logger.Write(
+                    GlazeLogLevel.Warning,
+                    "SystemAppearance",
+                    "The Windows appearance could not be changed.");
+            }
+        }
+
+        if (settings.GlazeWallpaperEnabled)
+        {
+            ApplyGlazeWallpaper(theme);
+        }
+    }
+
+    /// <summary>
+    /// Ставит обои Glaze по текущей теме. Вынесено отдельно: оформление Windows и обои
+    /// включаются независимо, и сбой обоев не должен мешать акценту.
+    /// </summary>
+    private void ApplyGlazeWallpaper(Core.Theming.GlazeTheme theme)
+    {
+        var wallpaper = _glazeWallpaper;
+
+        if (wallpaper is null)
+        {
+            return;
+        }
+
+        if (wallpaper.Apply(theme.Background, theme.DefaultAccent) is null)
+        {
+            _logger.Write(
+                GlazeLogLevel.Warning,
+                "SystemAppearance",
+                "The Glaze wallpaper could not be applied.");
+        }
+    }
+
+    /// <summary>
+    /// Возвращает системное оформление по снимкам на диске. Нужно путям, которые работают
+    /// без основного объекта приложения: сторож и ключ <c>--restore-ui</c>. Снимки читаются
+    /// из того же каталога данных, что и при применении темы.
+    /// </summary>
+    private void RestoreSystemAppearanceFromDisk()
+    {
+        try
+        {
+            var (store, _) = CreateUserDataStore();
+
+            new SystemAppearance(Path.Combine(store.RootDirectory, "system-appearance.json")).Restore();
+
+            var wallpaper = new GlazeWallpaper(
+                Path.Combine(store.RootDirectory, "wallpaper"),
+                Path.Combine(store.RootDirectory, "wallpaper-snapshot.json"));
+
+            wallpaper.Restore();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            _logger.Write(
+                GlazeLogLevel.Warning,
+                "SystemAppearance",
+                "The Windows appearance could not be restored.",
+                exception);
+        }
     }
 
     /// <summary>
@@ -864,6 +1070,11 @@ public partial class App : Application
             _taskbarHider = null;
 
             var result = WindowsUiRestorer.Restore();
+
+            // Оформление Windows тоже возвращается к исходному: «Восстановить UI»
+            // означает прежний вид системы, а не только вернувшуюся панель задач.
+            _systemAppearance?.Restore();
+            _glazeWallpaper?.Restore();
 
             _logger.Write(
                 GlazeLogLevel.Information,
@@ -1114,6 +1325,38 @@ public partial class App : Application
         });
     }
 
+    /// <summary>
+    /// Закрепляет или открепляет приложение меню «Пуск» в dock. Список закреплённых хранится
+    /// в настройках, поэтому dock обновляется сам по событию изменений; при переполнении
+    /// новое приложение не добавляется (лимит <see cref="UserSettings.MaxDockPinnedApps"/>).
+    /// </summary>
+    private void OnStartMenuPinToggleRequested(object? sender, StartMenuItemViewModel item)
+    {
+        if (_settingsManager is null)
+        {
+            return;
+        }
+
+        var settings = _settingsManager.GetSettings();
+        var pinned = settings.DockPinnedApps.ToList();
+        var index = pinned.FindIndex(id => string.Equals(id, item.ApplicationId, StringComparison.OrdinalIgnoreCase));
+
+        if (index >= 0)
+        {
+            pinned.RemoveAt(index);
+        }
+        else if (pinned.Count < Core.Models.UserSettings.MaxDockPinnedApps)
+        {
+            pinned.Add(item.ApplicationId);
+        }
+        else
+        {
+            return;
+        }
+
+        _settingsManager.SetSettings(Core.Settings.UserSettingsEditor.With(settings, dockPinnedApps: pinned));
+    }
+
     /// <summary>Заполняет меню «Пуск» приложениями каталога и догружает их значки.</summary>
     private async Task LoadStartMenuItemsAsync()
     {
@@ -1248,6 +1491,25 @@ public partial class App : Application
             _startMenu = null;
         });
 
+        // Подавитель системных окон снимает WinEvent-хук при выходе: хук не должен
+        // оставаться активным после закрытия оболочки.
+        TryShutdownStep("gesture suppressor", () =>
+        {
+            _gestureSuppressor?.Dispose();
+            _gestureSuppressor = null;
+        });
+
+        // Оформление Windows остаётся, если настройки включены: обычное завершение не
+        // должно возвращать акцент и вызывать мигание при перезапуске. Восстановление
+        // выполняется только по «Восстановить UI», выключению настроек, безопасному
+        // режиму, сторожу и ключу --restore-ui (они вызывают RestoreSystemAppearanceFromDisk).
+        TryShutdownStep("system appearance", () =>
+        {
+            _glazeWallpaper?.Cleanup();
+            _systemAppearance = null;
+            _glazeWallpaper = null;
+        });
+
         // Сторож завершается вместе с оболочкой: панель задач уже возвращена, а отдельный
         // процесс после выхода пользователя не нужен.
         TryShutdownStep("watchdog", () =>
@@ -1290,6 +1552,12 @@ public partial class App : Application
         {
             _dock?.Close();
             _dock = null;
+        });
+
+        TryShutdownStep("desktop layer", () =>
+        {
+            _desktopLayer?.Close();
+            _desktopLayer = null;
         });
 
         TryShutdownStep("explorer", () =>

@@ -1269,6 +1269,8 @@ public sealed partial class DockWindow : Window
                 focus.Click += async (_, _) => await ViewModel.ActivateItemAsync(item);
                 flyout.Items.Add(focus);
             }
+
+            AppendApplicationActions(flyout, item);
         }
         else
         {
@@ -1282,6 +1284,47 @@ public sealed partial class DockWindow : Window
         };
 
         flyout.ShowAt(tile, new FlyoutShowOptions { Position = e.GetPosition(tile) });
+    }
+
+    /// <summary>
+    /// Пункты меню приложения в dock: расположение файла и закрытие окон. Закрытие
+    /// показывается только у запущенного приложения, «все окна» — когда их больше одного.
+    /// </summary>
+    private void AppendApplicationActions(MenuFlyout flyout, DockItemViewModel item)
+    {
+        if (item.ExecutablePath is { Length: > 0 } path)
+        {
+            flyout.Items.Add(new MenuFlyoutSeparator());
+
+            var location = new MenuFlyoutItem { Text = "Открыть расположение файла" };
+            location.Click += (_, _) => ShellTargets.ShowInExplorer(path);
+            flyout.Items.Add(location);
+        }
+
+        if (!item.IsRunning)
+        {
+            return;
+        }
+
+        var windows = ViewModel.GetWindows(item);
+
+        if (windows.Count == 0)
+        {
+            return;
+        }
+
+        flyout.Items.Add(new MenuFlyoutSeparator());
+
+        var close = new MenuFlyoutItem { Text = "Закрыть окно" };
+        close.Click += (_, _) => ViewModel.CloseWindows(item, all: false);
+        flyout.Items.Add(close);
+
+        if (windows.Count > 1)
+        {
+            var closeAll = new MenuFlyoutItem { Text = $"Закрыть все окна ({windows.Count})" };
+            closeAll.Click += (_, _) => ViewModel.CloseWindows(item, all: true);
+            flyout.Items.Add(closeAll);
+        }
     }
 
     /// <summary>

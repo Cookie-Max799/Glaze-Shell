@@ -378,4 +378,64 @@ public sealed class SettingsCatalogTests
         Assert.AreEqual("cobalt", settings.AccentId);
         Assert.AreEqual("mint", settings.BaseColorId);
     }
+
+    [TestMethod]
+    public void WindowsPageExistsInTheSidebar()
+    {
+        var page = SettingsCatalog.Pages.Single(item => item.Id == SettingsCatalog.WindowsPageId);
+
+        Assert.AreEqual("Оформление Windows", page.Title);
+        Assert.AreEqual("Система", page.Section);
+    }
+
+    [TestMethod]
+    public void WindowsPageExposesSystemAppearanceAndWallpaper()
+    {
+        var settings = SettingsCatalog.ForPage(SettingsCatalog.WindowsPageId);
+
+        var appearance = settings.Single(definition => definition.Id == "systemAppearanceEnabled");
+        var wallpaper = settings.Single(definition => definition.Id == "glazeWallpaperEnabled");
+
+        Assert.AreEqual(SettingKind.Toggle, appearance.Kind);
+        Assert.AreEqual(SettingKind.Toggle, wallpaper.Kind);
+
+        var defaults = UserSettings.CreateDefault();
+        Assert.IsTrue((bool)appearance.Read(defaults)!);
+        Assert.IsFalse((bool)wallpaper.Read(defaults)!);
+    }
+
+    [TestMethod]
+    public void WindowsTogglesWriteIntoSettings()
+    {
+        var appearance = SettingsCatalog.All.Single(item => item.Id == "systemAppearanceEnabled");
+        var wallpaper = SettingsCatalog.All.Single(item => item.Id == "glazeWallpaperEnabled");
+
+        var written = wallpaper.Write(appearance.Write(UserSettings.CreateDefault(), false), true);
+
+        Assert.IsFalse(written.SystemAppearanceEnabled);
+        Assert.IsTrue(written.GlazeWallpaperEnabled);
+    }
+
+    [TestMethod]
+    public void ResetRestoresWindowsDefaults()
+    {
+        var changed = UserSettingsEditor.With(
+            UserSettings.CreateDefault(),
+            systemAppearanceEnabled: false,
+            glazeWallpaperEnabled: true);
+
+        var reset = SettingsCatalog.Reset(changed, SettingsCatalog.WindowsPageId);
+
+        Assert.IsTrue(reset.SystemAppearanceEnabled);
+        Assert.IsFalse(reset.GlazeWallpaperEnabled);
+    }
+
+    [TestMethod]
+    public void WindowsSettingsAreFoundBySearch()
+    {
+        Assert.IsTrue(
+            SettingsCatalog.Search("рабочий стол").Any(definition => definition.Id == "glazeWallpaperEnabled"));
+        Assert.IsTrue(
+            SettingsCatalog.Search("accent").Any(definition => definition.Id == "systemAppearanceEnabled"));
+    }
 }

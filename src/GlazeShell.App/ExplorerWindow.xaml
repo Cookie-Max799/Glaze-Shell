@@ -261,6 +261,7 @@
                     ItemClick="OnItemClick"
                     ItemsSource="{x:Bind ViewModel.Items}"
                     KeyDown="OnItemsKeyDown"
+                    RightTapped="OnItemsRightTapped"
                     SelectionMode="Single"
                     Visibility="{x:Bind ViewModel.IconsVisibility, Mode=OneWay}">
                     <GridView.ItemTemplate>
@@ -345,6 +346,7 @@
                         ItemClick="OnItemClick"
                         ItemsSource="{x:Bind ViewModel.Items}"
                         KeyDown="OnItemsKeyDown"
+                        RightTapped="OnItemsRightTapped"
                         SelectionMode="Single">
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="p:ExplorerItemViewModel">

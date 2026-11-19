@@ -122,6 +122,61 @@ public static class OverlayWindow
     }
 
     /// <summary>
+    /// Помечает окно как tool window (не появляется в Alt+Tab) и опускает его на уровень
+    /// рабочего стола (<c>HWND_BOTTOM</c>): окно остаётся под всеми обычными окнами, но
+    /// над обоями. Слой Glaze на весь экран — единственное безопасное место для такого
+    /// окна: полноценная замена shell требует регистрации в реестре и рискует оставить
+    /// пользователя без рабочего стола при падении.
+    /// </summary>
+    public static void MakeDesktopLevelToolWindow(nint hwnd)
+    {
+        if (hwnd == 0)
+        {
+            return;
+        }
+
+        var style = (nint)User32.GetWindowLongPtr(hwnd, User32.GwlExStyle);
+        style &= (nint)~(User32.WsExWindowEdge | User32.WsExDlgModalFrame | User32.WsExTopmost);
+        style |= (nint)User32.WsExToolWindow;
+        User32.SetWindowLongPtr(hwnd, User32.GwlExStyle, style);
+
+        var frame = (nint)User32.GetWindowLongPtr(hwnd, User32.GwlStyle);
+        frame &= (nint)~(User32.WsCaption | User32.WsThickFrame);
+        User32.SetWindowLongPtr(hwnd, User32.GwlStyle, frame);
+
+        User32.SetWindowPos(
+            hwnd,
+            User32.HwndBottom,
+            0,
+            0,
+            0,
+            0,
+            User32.SwpNoMove | User32.SwpNoSize | User32.SwpNoActivate);
+    }
+
+    /// <summary>
+    /// Возвращает окно на уровень рабочего стола. Вызывается после операций, которые
+    /// поднимают окно в Z-порядке: <c>AppWindow.MoveAndResize</c> и показ окна ставят
+    /// его выше слоя обоев вместе с остальными окнами.
+    /// </summary>
+    public static void SendToDesktopLevel(nint hwnd)
+    {
+        if (hwnd == 0)
+        {
+            return;
+        }
+
+        User32.SetWindowPos(
+            hwnd,
+            User32.HwndBottom,
+            0,
+            0,
+            0,
+            0,
+            User32.SwpNoMove | User32.SwpNoSize | User32.SwpNoActivate);
+    }
+
+    /// <summary>
     /// Выводит окно на передний план и отдаёт ему фокус ввода, даже если оно показано
     /// без активации. Фоновому процессу система запрещает менять активное окно, поэтому
     /// потоки временно присоединяются друг к другу (<c>AttachThreadInput</c>): без этого
