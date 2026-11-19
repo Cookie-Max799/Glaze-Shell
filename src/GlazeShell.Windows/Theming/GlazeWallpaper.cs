@@ -112,6 +112,9 @@ public sealed class GlazeWallpaper
 
             if (snapshot.Path is not null)
             {
+                // Пустая строка — штатный способ сказать Windows «файла обоев нет»:
+                // тогда показывается исходный сплошной цвет рабочего стола. Без этого
+                // градиент Glaze оставался бы на экране после выключения.
                 _ = User32.SystemParametersInfoW(
                     User32.SpiSetDesktopWallpaper,
                     0,
@@ -172,11 +175,15 @@ public sealed class GlazeWallpaper
 
         if (!User32.SystemParametersInfoW(User32.SpiGetDesktopWallpaper, (uint)buffer.Length, buffer, 0))
         {
+            // Не удалось прочитать: путь неизвестен, обои при восстановлении лучше не трогать.
             return null;
         }
 
         var end = Array.IndexOf(buffer, '\0');
-        return end <= 0 ? null : new string(buffer, 0, end);
+
+        // Пустая строка — это не сбой, а сплошной цвет: Windows сообщает, что файла нет.
+        // Такой снимок восстановит исходный цвет, если снять обои Glaze.
+        return end <= 0 ? string.Empty : new string(buffer, 0, end);
     }
 
     private WallpaperSnapshot? LoadSnapshot()

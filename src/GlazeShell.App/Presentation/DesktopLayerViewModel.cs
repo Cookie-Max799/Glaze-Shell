@@ -34,9 +34,11 @@ public sealed class DesktopIconViewModel : INotifyPropertyChanged
 {
     private ImageSource? _icon;
     private string _name;
+    private string? _executablePath;
 
     public DesktopIconViewModel(
         string id,
+        string tabId,
         string name,
         string? path,
         DesktopFileKind kind,
@@ -44,6 +46,7 @@ public sealed class DesktopIconViewModel : INotifyPropertyChanged
         double y)
     {
         Id = id;
+        TabId = tabId;
         _name = name;
         Path = path;
         Kind = kind;
@@ -55,6 +58,9 @@ public sealed class DesktopIconViewModel : INotifyPropertyChanged
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public string Id { get; }
+
+    /// <summary>Вкладка layout, которой принадлежит значок: нужна для удаления.</summary>
+    public string TabId { get; }
 
     public string Name
     {
@@ -74,6 +80,28 @@ public sealed class DesktopIconViewModel : INotifyPropertyChanged
 
     /// <summary>Путь к файлу или идентификатор приложения Glaze.</summary>
     public string? Path { get; }
+
+    /// <summary>
+    /// Путь к исполняемому файлу приложения: нужен для «расположения файла», «свойств» и
+    /// копирования пути. Заполняется асинхронно после поиска приложения.
+    /// </summary>
+    public string? ExecutablePath
+    {
+        get => _executablePath;
+        set
+        {
+            if (string.Equals(_executablePath, value, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            _executablePath = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(HasExecutablePath));
+        }
+    }
+
+    public bool HasExecutablePath => _executablePath is { Length: > 0 };
 
     public DesktopFileKind Kind { get; }
 
@@ -267,6 +295,23 @@ public sealed class DesktopLayerViewModel
         }
     }
 
+    /// <summary>
+    /// Убирает значок из слоя: элемент удаляется из layout активной вкладки. Файлы на диске
+    /// не трогаются — безопасный слой показывает ярлыки Glaze, а не сами приложения.
+    /// </summary>
+    public bool Remove(DesktopIconViewModel icon)
+    {
+        ArgumentNullException.ThrowIfNull(icon);
+
+        if (_desktopManager.RemoveApplication(icon.TabId, icon.Id))
+        {
+            return true;
+        }
+
+        Trace.WriteLine($"GlazeShell.DesktopLayer: '{icon.Id}' was not removed from the layout.");
+        return false;
+    }
+
     /// <summary>Загружает иконки для значков без изображения. Вызывается окном один раз.</summary>
     public void LoadIcons()
     {
@@ -350,6 +395,7 @@ public sealed class DesktopLayerViewModel
                 // EnrichAsync подставит настоящее имя и загрузит иконку.
                 Icons.Add(new DesktopIconViewModel(
                     item.Id,
+                    tab.Id,
                     item.Label ?? item.ApplicationId,
                     item.ApplicationId,
                     DesktopFileKind.Application,
@@ -392,6 +438,7 @@ public sealed class DesktopLayerViewModel
                 }
 
                 icon.Name = application.Name;
+                icon.ExecutablePath = application.ExecutablePath;
             }
             catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
             {

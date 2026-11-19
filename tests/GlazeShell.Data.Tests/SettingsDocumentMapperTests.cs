@@ -554,6 +554,19 @@ public sealed class SettingsDocumentMapperTests
 
         Assert.IsTrue(settings!.SystemAppearanceEnabled);
         Assert.IsFalse(settings.GlazeWallpaperEnabled);
+        Assert.IsFalse(settings.GlazeDesktopLayerEnabled);
+    }
+
+    [TestMethod]
+    public void DesktopLayerSurvivesTheRoundTrip()
+    {
+        var settings = new UserSettings(glazeDesktopLayerEnabled: true);
+
+        var document = SettingsDocument.FromSettings(settings);
+        Assert.IsTrue(document.GlazeDesktopLayerEnabled);
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var restored, out _));
+        Assert.IsTrue(restored!.GlazeDesktopLayerEnabled);
     }
 
     [TestMethod]

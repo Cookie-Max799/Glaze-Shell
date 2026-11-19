@@ -395,13 +395,28 @@ public sealed class SettingsCatalogTests
 
         var appearance = settings.Single(definition => definition.Id == "systemAppearanceEnabled");
         var wallpaper = settings.Single(definition => definition.Id == "glazeWallpaperEnabled");
+        var desktopLayer = settings.Single(definition => definition.Id == "glazeDesktopLayerEnabled");
 
         Assert.AreEqual(SettingKind.Toggle, appearance.Kind);
         Assert.AreEqual(SettingKind.Toggle, wallpaper.Kind);
+        Assert.AreEqual(SettingKind.Toggle, desktopLayer.Kind);
 
         var defaults = UserSettings.CreateDefault();
         Assert.IsTrue((bool)appearance.Read(defaults)!);
         Assert.IsFalse((bool)wallpaper.Read(defaults)!);
+        Assert.IsFalse((bool)desktopLayer.Read(defaults)!);
+    }
+
+    [TestMethod]
+    public void DesktopLayerToggleWritesIntoSettingsAndResets()
+    {
+        var desktopLayer = SettingsCatalog.All.Single(item => item.Id == "glazeDesktopLayerEnabled");
+
+        var written = desktopLayer.Write(UserSettings.CreateDefault(), true);
+        Assert.IsTrue(written.GlazeDesktopLayerEnabled);
+
+        var reset = SettingsCatalog.Reset(written, SettingsCatalog.WindowsPageId);
+        Assert.IsFalse(reset.GlazeDesktopLayerEnabled);
     }
 
     [TestMethod]

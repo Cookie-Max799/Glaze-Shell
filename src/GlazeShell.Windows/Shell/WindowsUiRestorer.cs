@@ -66,14 +66,16 @@ public static class WindowsUiRestorer
     /// </summary>
     private static bool RestoreDesktopIcons()
     {
+        // Список значков мог быть скрыт слоем Glaze, а не всем окном рабочего стола:
+        // ShowDesktopIcons возвращает видимость списку внутри видимого Progman/WorkerW.
+        var restored = ShowDesktopIcons();
+
         var host = FindDesktopIconHost();
 
         if (host == 0)
         {
-            return false;
+            return restored;
         }
-
-        var restored = false;
 
         if (!User32.IsWindowVisible(host))
         {
@@ -98,6 +100,84 @@ public static class WindowsUiRestorer
         }
 
         return restored;
+    }
+
+    /// <summary>
+    /// Скрывает значки рабочего стола Explorer, пока работает слой Glaze. Скрывается только
+    /// список значков <c>SHELLDLL_DefView</c>: фон рабочего стола и обои рисует родительское
+    /// окно, поэтому картинка остаётся на месте.
+    /// </summary>
+    /// <returns><see langword="true"/>, если окно значков найдено и скрыто.</returns>
+    public static bool HideDesktopIcons()
+    {
+        var list = FindDesktopIconList();
+
+        if (list == 0 || !User32.IsWindowVisible(list))
+        {
+            return false;
+        }
+
+        User32.ShowWindow(list, User32.SwHide);
+        return true;
+    }
+
+    /// <summary>
+    /// Показывает значки рабочего стола Explorer. Безопасно вызывать повторно: если окно
+    /// значков уже видно или не найдено, ничего не происходит.
+    /// </summary>
+    /// <returns><see langword="true"/>, если окно значков было скрыто и показано снова.</returns>
+    public static bool ShowDesktopIcons()
+    {
+        var list = FindDesktopIconList();
+
+        if (list == 0 || User32.IsWindowVisible(list))
+        {
+            return false;
+        }
+
+        User32.ShowWindow(list, User32.SwShow);
+        return true;
+    }
+
+    /// <summary>
+    /// Находит список значков рабочего стола (<c>SHELLDLL_DefView</c>) внутри <c>Progman</c>
+    /// или <c>WorkerW</c>. Возвращает 0, если окно не найдено.
+    /// </summary>
+    private static nint FindDesktopIconList()
+    {
+        var progman = User32.FindWindow(ProgmanClassName, null);
+
+        if (progman != 0)
+        {
+            var list = User32.FindWindowEx(progman, 0, DesktopListClassName, null);
+
+            if (list != 0)
+            {
+                return list;
+            }
+        }
+
+        nint found = 0;
+
+        User32.EnumWindows((hwnd, _) =>
+        {
+            if (!IsClass(hwnd, WorkerWClassName))
+            {
+                return true;
+            }
+
+            var list = User32.FindWindowEx(hwnd, 0, DesktopListClassName, null);
+
+            if (list == 0)
+            {
+                return true;
+            }
+
+            found = list;
+            return false;
+        }, 0);
+
+        return found;
     }
 
     /// <summary>

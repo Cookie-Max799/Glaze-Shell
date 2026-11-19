@@ -3,6 +3,7 @@ using GlazeShell.App.Theming;
 using GlazeShell.Core.Display;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
+using GlazeShell.Windows.Shell;
 using GlazeShell.Windows.WindowManagement;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -58,12 +59,37 @@ public sealed partial class DesktopLayerWindow : Window
         {
             _closed = true;
             ViewModel.Dispose();
+
+            // Значки Explorer возвращаются при любом закрытии слоя: пользователь не должен
+            // остаться с пустым рабочим столом, если слой выключили или приложение вышло.
+            ShowExplorerIcons();
+            AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
         };
+
+        // Аварийное завершение не проходит через Closed: отдельный обработчик возвращает
+        // значки, чтобы падение не оставило рабочий стол без них.
+        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
 
         _ = ViewModel.InitializeAsync();
     }
 
     public DesktopLayerViewModel ViewModel { get; }
+
+    private void OnProcessExit(object? sender, EventArgs e) => ShowExplorerIcons();
+
+    /// <summary>Показывает значки Explorer, если слой их скрыл.</summary>
+    private static void ShowExplorerIcons()
+    {
+        try
+        {
+            WindowsUiRestorer.ShowDesktopIcons();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            // Восстановление повторит «Восстановить UI» или следующий запуск.
+            System.Diagnostics.Trace.WriteLine($"GlazeShell.DesktopLayer: restoring desktop icons failed. {exception}");
+        }
+    }
 
     /// <summary>
     /// Настраивает окно: без рамки и панели задач, с уровня рабочего стола. В отличие от
@@ -88,6 +114,13 @@ public sealed partial class DesktopLayerWindow : Window
 
         UpdatePlacement();
         OverlayWindow.ShowWithoutActivation(_hwnd);
+
+        // Показ окна поднимает его в Z-порядке, поэтому нижний уровень возвращается ещё раз.
+        OverlayWindow.SendToDesktopLevel(_hwnd);
+
+        // Слой показывает собственные значки, поэтому системные значки Explorer на время
+        // его работы скрываются. Показываются они снова в Closed и по ProcessExit.
+        WindowsUiRestorer.HideDesktopIcons();
     }
 
     /// <summary>
@@ -128,12 +161,7 @@ public sealed partial class DesktopLayerWindow : Window
 
     private void OnIconRightTapped(object sender, RightTappedRoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: DesktopIconViewModel icon })
-        {
-            return;
-        }
-
-        if (sender is not FrameworkElement tile)
+        if (sender is not FrameworkElement { DataContext: DesktopIconViewModel icon } tile)
         {
             return;
         }
@@ -144,7 +172,7 @@ public sealed partial class DesktopLayerWindow : Window
         open.Click += (_, _) => _ = ViewModel.ActivateAsync(icon);
         flyout.Items.Add(open);
 
-        if (icon.Path is { Length: > 0 } path)
+        if (icon.HasExecutablePath && icon.ExecutablePath is { Length: > 0 } path)
         {
             var location = new MenuFlyoutItem { Text = "Открыть расположение файла" };
             location.Click += (_, _) => ShellTargets.ShowInExplorer(path);
@@ -160,6 +188,12 @@ public sealed partial class DesktopLayerWindow : Window
             properties.Click += (_, _) => ShellTargets.ShowProperties(path);
             flyout.Items.Add(properties);
         }
+
+        flyout.Items.Add(new MenuFlyoutSeparator());
+
+        var remove = new MenuFlyoutItem { Text = "Удалить значок" };
+        remove.Click += (_, _) => ViewModel.Remove(icon);
+        flyout.Items.Add(remove);
 
         flyout.Closed += (_, _) => OverlayWindow.SetNonActivating(_hwnd, true);
         OverlayWindow.SetNonActivating(_hwnd, false);
