@@ -122,13 +122,13 @@ dotnet test --configuration Release
 
 - `tests/GlazeShell.Core.Tests` — модели и события (`CoreModel`, `GlazeEvents`), `EventManager`, `EventCoalescer`, `EventLatencyRecorder`, `InMemorySettingsManager`, `ApplicationProcessMatcher`, `ApplicationIdentity`, `ApplicationDiscoveryOptions`, `ApplicationDiscoveryService` (на фейковых источниках), `DesktopManager`, `MonitorLayoutBinding`, `MonitorMapLayout`, `UserDataDirectoryName`, `UserDataPaths`, `UserSettings`, `ThemeManager`, диагностика (`PerformanceSession`, `PerformanceMonitor`, `ProcessMetricsCollector`), `LogRedactor`, `FileLogger`.
 - `tests/GlazeShell.Data.Tests` — `JsonUserDataStoreTests`, `SchemaMigrationRunnerTests`, `PersistenceServicesTests`, `ThemeStoreTests`, `BoundedTextFileTests`, `UserDataDirectoryTests`, `PersistenceLimitsTests`, мапперы документов (`LayoutDocumentMapperTests`, `SettingsDocumentMapperTests`, `ConfigurationDocumentMapperTests`) и `MigrationResultTests`; каждый тест работает в собственном временном каталоге (`TempUserData`), который удаляется после теста.
-- `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `AppsFolderSourceTests`, `WindowsApplicationLauncherTests`, `ProcessInspectorTests`, `ProcessWatchOptionsTests`, `WindowManagerTests`, `WindowEventMonitorTests`, `MonitorManagerTests`, `DisplaySignalTests`, `ProcessEventMonitorTests`, `ShellEventCoordinatorTests`, `SingleInstanceHelperTests`, `TaskbarHiderTests`.
+- `tests/GlazeShell.Windows.Tests` — `ShellLinkResolverTests`, `StartMenuShortcutSourceTests`, `PackagedApplicationSourceTests`, `WindowsApplicationLauncherTests`, `ProcessInspectorTests`, `ProcessWatchOptionsTests`, `WindowManagerTests`, `WindowEventMonitorTests`, `MonitorManagerTests`, `DisplaySignalTests`, `ProcessEventMonitorTests`, `ShellEventCoordinatorTests`, `SingleInstanceHelperTests`, `TaskbarHiderTests`.
 
 `Windows.Tests` использует управляемый writer `.lnk`-фикстур `ShellLinkBuilder` вместо COM `IShellLinkW.Save`, который в текущем окружении возвращает `0x80070002`.
 
 Текущий статус: 510 tests (`Core.Tests` 269/269, `Data.Tests` 140/140, `Windows.Tests` 101/101 при изолированном запуске) в Debug и Release; build — 0 warnings / 0 errors. В общем прогоне допустим единственный провал — environment-tolerant flake `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` (см. ниже); изолированный запуск `GlazeShell.Windows.Tests` даёт 101/101.
 
-Остальные environment-tolerant тесты не падают из-за недоступных API, а завершаются `Inconclusive` с объясняющим warning: `AppsFolderSourceTests` и `MonitorManagerTests`. `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` зависит от доставки `EVENT_OBJECT_DESTROY` для собственного процесса и потому чувствителен к параллелизму прогонов: таймаут ожидания события истекает, когда тестовые сборки запускаются одновременно. Поведение воспроизводится и на commit до Stage 7, то есть не связано с persistence или темами; изолированный запуск `GlazeShell.Windows.Tests` проходит стабильно.
+Остальные environment-tolerant тесты не падают из-за недоступных API, а завершаются `Inconclusive` с объясняющим warning: `PackagedApplicationSourceTests` (WinRT `PackageManager` может быть недоступен) и `MonitorManagerTests`. `WindowManagerTests.RaisesWindowOpenedAndClosedEvents` зависит от доставки `EVENT_OBJECT_DESTROY` для собственного процесса и потому чувствителен к параллелизму прогонов: таймаут ожидания события истекает, когда тестовые сборки запускаются одновременно. Поведение воспроизводится и на commit до Stage 7, то есть не связано с persistence или темами; изолированный запуск `GlazeShell.Windows.Tests` проходит стабильно.
 
 Изолированный запуск одного проекта:
 
@@ -140,7 +140,7 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 
 | Симптом | Причина и решение |
 | --- | --- |
-| Приложения MSIX не обнаруживаются | `IShellItemArray` AppsFolder недоступен. Классические `.lnk` из меню «Пуск» продолжают работать. |
+| Приложения MSIX не обнаруживаются | `PackageManager`/`GetAppListEntriesAsync` недоступен (среда без WinRT-деплоя). Проверьте warning в журнале; классические `.lnk` из меню «Пуск» продолжают работать. |
 | `.lnk` не резолвятся через COM, `IShellLinkW.Save` возвращает `0x80070002` | Известная особенность среды. Резолв идёт managed-парсером `ShellLinkData`; создание фикстур использует managed-writer. |
 | Фокус окна не срабатывает | Фокусировка best-effort: Windows может отклонить `SetForegroundWindow` из-за foreground lock. Это ограничение системы, а не ошибка. |
 | Второй запуск сразу завершается | Так и задумано: работает уже запущенный экземпляр, его окно поднимается, а новый процесс закрывается. Закройте существующее окно, чтобы запустить заново. |
@@ -170,7 +170,7 @@ dotnet test .\tests\GlazeShell.Windows.Tests\GlazeShell.Windows.Tests.csproj --c
 
 - Visual Studio/WinUI 3 template не установлен в текущем окружении; App project создан вручную.
 - В текущей среде `CLSID_ShellLink` зарегистрирован не в `shell32.dll`, поэтому `IShellLinkW.Load` реальных `.lnk` возвращает `0x00000001`, а `Save` — `0x80070002`. Классические `.lnk` резолвятся managed-парсером `ShellLinkData` (LinkInfo/relative path); через property store и `IShellLinkW` — в зависимости от здоровья среды.
-- `IShellItemArray` AppsFolder в текущей среде возвращает `0x800401E5`, поэтому MSIX-источник может сообщить warning вместо списка приложений. Это environment-specific limitation и не считается ошибкой продукта.
+- WinRT `PackageManager`/`GetAppListEntriesAsync` (MSIX-источник `PackagedApplicationSource`) требует Windows 10 2004+; в средах без работающего деплоя пакетов источник сообщает warning вместо списка приложений. Это environment-specific limitation и не считается ошибкой продукта.
 - Окна MSIX-приложений сопоставляются с карточками по имени семейства пакета, извлечённому из пути процесса окна (`WindowsApps\<PackageFullName>`); каталог установки из реестра для bundle-пакетов указывает на `neutral`-вариант и для этой цели не используется. Побочный эффект: пакет с фоновым сервисом без окна показывается запущенным, пока сервис жив.
 - Фокусировка окна — best-effort: при отказе `SetForegroundWindow` (foreground lock) используется fallback через `AttachThreadInput`; в окружениях с жёстким foreground lock команда может не сработать.
 - Используется системный title bar, поэтому его оформление не следует тёмной палитре контента; кастомный title bar запланирован вместе с Theme System.

@@ -144,9 +144,9 @@ Persistence contracts: `PersistenceStatus` (`Created`/`Loaded`/`Migrated`/`Recov
 
 - `Shell/ShellLinkData.cs` — byte-safe managed парсер MS-SHLLINK (header, LinkInfo, StringData, relative path);
 - `Shell/ShellLinkResolver.cs` — трёхуровневый резолвер: managed fast path → property store → `IShellLinkW`;
-- `Shell/AppsFolderSource.cs` — обнаружение MSIX через `IShellItemArray`;
+- `Shell/PackagedApplicationSource.cs` — обнаружение MSIX через `PackageManager` + `Package.GetAppListEntriesAsync()` (WinRT), параллелизм 8, таймаут 30 с; даёт точный AUMID, имя семейства пакета и метаданные;
 - `Shell/StartMenuShortcutSource.cs` — параллельное сканирование Start Menu;
-- `Shell/IShellItem*.cs`, `IShellFolder.cs`, `IShellLinkW.cs`, `IPersistFile.cs` — официальные COM-интерфейсы;
+- `Shell/IShellItem*.cs`, `IShellLinkW.cs` — официальные COM-интерфейсы;
 - `Interop/ComApartment.cs` — STA-исполнение COM с балансом `CoInitializeEx`/`CoUninitialize`;
 - `Interop/IApplicationActivationManager.cs` — активация MSIX;
 - `Applications/WindowsApplicationLauncher.cs`, `ProcessInspector.cs` — Stage 3 launcher (сопоставление процессов и окон с приложением — `ApplicationProcessMatcher` в Core);
@@ -635,6 +635,17 @@ MVP закрывал инженерный фундамент (Stage 0–13); Pha
 - **Контекстные меню.** Правая кнопка на плитке dock открывает расположение исполняемого файла и закрывает окно (или все окна) приложения вежливым `WM_CLOSE`; плитка меню «Пуск» — открывает приложение, показывает файл в проводнике и закрепляет или открепляет его в dock; элемент проводника — открывает файл или папку, открывает папку в новом окне, копирует путь, показывает элемент в проводнике Windows и вызывает системное окно «Свойства». Действия выполняет оболочка Windows, поэтому меню не зависит от типа файла, а приложение не читает атрибуты само.
 - **Ограничения.** Настройка системного акцента не перекрашивает значки сторонних программ с собственными цветными ресурсами, а контекстное меню рабочего стола остаётся системным: рабочий стол принадлежит проводнику Windows, и перехват его меню потребовал бы хука на чужое окно. Ограничение по иконкам и обоям описано выше.
 
+## Продуктовый UI — этап 7: стабильность, light dismiss и расширенные контекстные меню
+
+Седьмой этап устраняет причины зависаний и аварийного завершения оболочки, переводит обнаружение MSIX на WinRT `PackageManager`, добавляет закрытие всплывающих меню кликом мимо и расширяет контекстные меню приложений.
+
+- **Изоляция исключений.** `App.UnhandledException` выставляет `args.Handled = true` с записью в журнал, `TaskScheduler.UnobservedTaskException` вызывает `SetObserved()`. Все `async void`-обработчики окон (`MainWindow`, `TopBarWindow`, `DockWindow`, `DesktopLayerWindow`, `StartMenuWindow`) и `AsyncCommand` обёрнуты в `try/catch`; нативные колбэки (`WindowEventMonitor`, `MonitorEventMonitor`, `TaskbarHider`, `GestureSystemWindowSuppressor`, `GlobalHotkey`, `TrayIcon`, `VolumeKeyInterceptor`, `WindowsKeyInterceptor`) не пропускают исключения обратно в Win32 — исключение в колбэке больше не убивает процесс.
+- **Устранение блокировок UI-потока.** Cross-process операции с системными и сторонними окнами (`TaskbarHider`, `WindowsUiRestorer`, `OverlayWindow`) переведены на `SWP_ASYNCWINDOWPOS` и `ShowWindowAsync`; перед `AttachThreadInput` (`WindowManager.Focus`, `SingleInstanceHelper`) проверяется `IsHungAppWindow`, поэтому зависшее приложение не подвешивает оболочку; таймауты ожидания нативных потоков сокращены. Сбор кандидатов в `ApplicationDiscoveryService.ScanAsync` выполняется через `Task.Run`.
+- **Гонки в слое рабочего стола.** `DesktopLayerViewModel` синхронизирует асинхронные обновления карточек и загрузку иконок через снимки состояния и счётчик поколений: устаревшие результаты (например, иконка удалённого элемента) отбрасываются. Мёртвый тип `DesktopFileKind` удалён.
+- **Замена `AppsFolderSource` на `PackagedApplicationSource`.** `shell:AppsFolder` через `IShellItemArray` возвращал `0x800401E5`, не давал `IShellItem2` и корректный AUMID. Новый источник `Shell/PackagedApplicationSource.cs` перечисляет пакеты `PackageTypes.Main` через `PackageManager` и `Package.GetAppListEntriesAsync()` (параллелизм 8, таймаут 30 с) и получает точные `ApplicationUserModelId` с разделителем `!`, `PackageFamilyName`, `DisplayName` и метаданные. Устаревшие COM-объявления (`IEnumShellItems`, `IShellFolder`, `IShellItemArray`, `GetAttributes` из `IShellItem`) удалены.
+- **Light dismiss.** Меню dock и слоя рабочего стола закрываются кликом мимо через потерю активации окна (доп. окна поверх). Для слоя добавлена активация в момент показа меню, чтобы потеря фокуса могла наступить.
+- **Общие контекстные меню.** `Presentation/ApplicationContextMenu.cs` + `Presentation/ShellTargets.cs` (`RunAsAdministrator`, `ShowInExplorer`, `CopyToClipboard`, `ShowProperties`) используются в dock, слое рабочего стола и меню «Пуск»: единый набор пунктов вместо трёх расходящихся реализаций. Запуск от имени администратора — через `ProcessStartInfo` `UseShellExecute` + `Verb = "runas"` (UAC запрашивает Windows), «Свойства» — системный `ShellExecuteEx` с глаголом `properties`.
+
 ## Windows API
 
 ### Текущий статус
@@ -654,7 +665,7 @@ Glaze Shell использует только официальные Win32 и CO
 | Shortcuts | бинарный формат MS-SHLLINK через managed `ShellLinkData` | `Shell/ShellLinkData.cs` |
 | Shortcuts | `IShellLinkW` (Load/Get*), `IPersistFile` (Load) | `Shell/IShellLinkW.cs`, `Shell/ShellIdentifiers.cs` |
 | Shortcuts | `IShellItem`, `IShellItem2` property store (`PKEY_Link_TargetParsingPath`, `PKEY_Link_Arguments`, `PKEY_Link_Name`) | `Shell/IShellItem.cs` |
-| AppsFolder | `SHCreateItemFromParsingName`, `IShellFolder`, `IShellItemArray`, `IID_IShellItemArray` `{56FDF344-FD6D-11D0-958A-006097C9A090}` | `Shell/AppsFolderSource.cs` |
+| MSIX discovery | `PackageManager` + `Package.GetAppListEntriesAsync()` (WinRT), `AppListEntry` → точный AUMID | `Shell/PackagedApplicationSource.cs` |
 | MSIX | `IApplicationActivationManager` (`ActivateApplication`) | `Interop/IApplicationActivationManager.cs` |
 | MSIX | разбор пути процесса (`WindowsApps\<PackageFullName>`) через `PackageIdentity` | `GlazeShell.Core/Discovery/PackageIdentity.cs`, `Applications/ProcessInspector.cs` |
 | Processes | `Process.GetProcesses`, `CloseMainWindow`, `Process.Kill(entireProcessTree: true)` | `Applications/WindowsApplicationLauncher.cs`, `Applications/ProcessInspector.cs`, `SystemEvents/ProcessEventMonitor.cs`, `GlazeShell.Core/Discovery/ApplicationProcessMatcher.cs` |
@@ -674,7 +685,7 @@ Glaze Shell использует только официальные Win32 и CO
 | Accessibility | `SystemParametersInfoW` (`SPI_GETCLIENTAREAANIMATION`, `SPI_GETHIGHCONTRAST`), `GetSysColor` (`COLOR_WINDOW`, `COLOR_WINDOWTEXT`, `COLOR_HIGHLIGHT`, `COLOR_HIGHLIGHTTEXT`, `COLOR_BTNFACE`, `COLOR_BTNTEXT`, `COLOR_GRAYTEXT`) | `SystemAccessibility/SystemAccessibilityProvider.cs`, `Win32/User32.cs` |
 | System status | `GetSystemTimes` (загрузка ЦП), `PdhOpenQuery`, `PdhAddEnglishCounter`, `PdhCollectQueryData`, `PdhGetFormattedCounterArrayW` (загрузка ГП); PDH-хэндлы закрываются `PdhCloseQuery` | `SystemStatus/SystemStatusProvider.cs`, `SystemStatus/GpuUsageProvider.cs`, `Win32/Pdh.cs` |
 | Threads | `GetCurrentThreadId` | `Win32/Kernel32.cs` |
-| Recovery | `FindWindowEx` (`SHELLDLL_DefView` в `Progman`/`WorkerW`), `FindWindow`, `EnumWindows`, `GetClassName`, `IsWindowVisible`, `ShowWindow`, `GetWindowRect`, `SetWindowPos` (`SWP_NOSIZE`/`SWP_NOZORDER`/`SWP_NOACTIVATE`), `MonitorFromWindow` (`DEFAULTTONEAREST`), `GetMonitorInfoW`, `TaskbarHider.RestoreIfOffScreen` | `Shell/WindowsUiRestorer.cs`, `Shell/TaskbarHider.cs`, `Win32/User32.cs` |
+| Recovery | `FindWindowEx` (`SHELLDLL_DefView` в `Progman`/`WorkerW`), `FindWindow`, `EnumWindows`, `GetClassName`, `IsWindowVisible`, `ShowWindowAsync`, `GetWindowRect`, `SetWindowPos` (`SWP_NOSIZE`/`SWP_NOZORDER`/`SWP_NOACTIVATE`/`SWP_ASYNCWINDOWPOS`), `MonitorFromWindow` (`DEFAULTTONEAREST`), `GetMonitorInfoW`, `TaskbarHider.RestoreIfOffScreen`, `IsHungAppWindow` | `Shell/WindowsUiRestorer.cs`, `Shell/TaskbarHider.cs`, `Win32/User32.cs` |
 | Recovery | `MessageBoxW` (`MB_OK`, `MB_ICONINFORMATION`, `MB_SETFOREGROUND`) — сообщение в режиме `--restore-ui`, где окна приложения нет | `Shell/UserNotifier.cs`, `Win32/User32.cs` |
 | Recovery | наблюдение за процессом (`Process.GetProcessById`, `StartTime`), опрос каждые 200 мс | `Lifecycle/ProcessExitWatcher.cs`, `Lifecycle/WatchdogLauncher.cs` |
 | System appearance | реестр `HKCU` (`DWM` — `AccentColor`/`AccentColorInactive`/`ColorPrevalence`, `Explorer\Accent` — `StartColorMenu`/`AccentColorMenu`/`AccentPalette`, `Themes\Personalize` — `AppsUseLightTheme`/`SystemUsesLightTheme`/`EnableTransparency`), `SendMessageTimeoutW` (`WM_SETTINGCHANGE`, `SMTO_ABORTIFHUNG`, 200 мс) | `Theming/SystemAppearance.cs`, `Win32/User32.cs` |
@@ -696,7 +707,7 @@ Glaze Shell использует только официальные Win32 и CO
 ### Известные ограничения среды
 
 - В текущем окружении `CLSID_ShellLink` зарегистрирован в `C:\Windows\System32\windows.storage.dll`, `IShellLinkW.Load` реальных `.lnk` возвращает `0x00000001`, `Save` — `0x80070002`.
-- `IPropertyStore`/`IShellItem2` на реальных `.lnk` возвращают `0x80004002`; AppsFolder через `MatchOption.None` — `0x800401E5`.
+- `IPropertyStore`/`IShellItem2` на реальных `.lnk` возвращают `0x80004002`.
 - `SHGetPathFromIDListEx` с извлечённым из `.lnk` PIDL вызывал `0xC0000005`; native PIDL-резолв не используется, вместо него работает managed LinkInfo.
 - Эти ограничения специфичны для данной машины; на штатных системах соответствующие fallback возвращают результат.
 - Delivery событий `SetWinEventHook` зависит от сессии: в службовых/неинтерактивных сессиях и в некоторых host-окружениях события могут не доставляться, поэтому событийные тесты являются environment-tolerant (`Inconclusive`).
@@ -715,7 +726,7 @@ Stage 1 добавил только framework-free Core: модели, конт�
 
 - `StartMenuShortcutSource` использует параллельное сканирование с ограничением `min(max(1, Environment.ProcessorCount), 8)` потоков; результат детерминированно сортируется.
 - Для каждого `.lnk` сначала выполняется managed fast path (`ShellLinkData`) без COM; fallback на `IShellLinkW`/property store выполняется только для нерезолвнутых файлов.
-- AppsFolder сканируется через один STA-вызов `IShellItemArray`; COM-объекты освобождаются в `finally`.
+- AppsFolder-источник удалён: MSIX обнаруживается через `PackagedApplicationSource` (WinRT `PackageManager`, параллелизм 8), поэтому блокирующие STA-перечисления AppsFolder исчезли; `ApplicationDiscoveryService.ScanAsync` переносит сбор кандидатов на `Task.Run`.
 - `ApplicationDiscoveryService` кэширует снапшот на `CacheDuration` (5 минут) и использует single-flight lock, поэтому повторный `DiscoverAsync` в течение окна не сканирует диск.
 - Результат сканирования (десятки shortlinks) собирается за время меньше секунды на штатных системах.
 

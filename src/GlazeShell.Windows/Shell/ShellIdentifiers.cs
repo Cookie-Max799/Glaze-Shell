@@ -39,12 +39,6 @@ internal enum Slgp : uint
     RawPath = 0x00000004,
 }
 
-internal enum Shgdn : uint
-{
-    NormalDisplay = 0x00000000,
-    FileSysPath = 0x00080000,
-}
-
 internal static class ShellIdentifiers
 {
     internal static readonly Guid ClassShellLink = new("00021401-0000-0000-C000-000000000046");

@@ -9,7 +9,7 @@
 ### Обнаружение и запуск приложений
 
 - обнаружение приложений меню «Пуск»: managed-парсер бинарных shortcut-файлов (MS-SHLLINK) с fallback на `IShellLinkW` и shell property store;
-- обнаружение MSIX/Store-приложений через AppsFolder (`IShellItemArray`, `PKEY_AppUserModelID`);
+- обнаружение MSIX/Store-приложений через WinRT `PackageManager` + `Package.GetAppListEntriesAsync()` (`PackagedApplicationSource`, точный AUMID);
 - агрегация кандидатов, dedup по launch identity, предупреждения диагностики по каждому источнику;
 - запуск: MSIX через `IApplicationActivationManager`, Win32 через `ProcessStartInfo`;
 - проверка состояния и закрытие: вежливое закрытие (`CloseMainWindow`, при отсутствии главного окна — `WM_CLOSE` по top-level окнам процесса), а принудительное завершение — отдельное явное действие с подтверждением (`Process.Kill(entireProcessTree: true)` плюс добивание фоновых процессов из несистемного каталога установки); MSIX-пакет определяется по каталогу установки, извлечённому из пути процесса (`WindowsApps\<PackageFullName>`);
