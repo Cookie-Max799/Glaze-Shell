@@ -88,4 +88,55 @@ internal static class ShellTargets
             Trace.WriteLine($"GlazeShell.ShellTargets: properties of '{path}' failed. {exception}");
         }
     }
+
+    /// <summary>
+    /// Запускает программу от имени администратора: глагол <c>runas</c> показывает
+    /// системное подтверждение UAC, поэтому приложение не запрашивает права само и
+    /// не повышает собственный процесс.
+    /// </summary>
+    internal static void RunAsAdministrator(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = path,
+                Verb = "runas",
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            // Отказ пользователя в UAC — обычный исход, а не ошибка приложения.
+            Trace.WriteLine($"GlazeShell.ShellTargets: running '{path}' as administrator failed. {exception}");
+        }
+    }
+
+    /// <summary>
+    /// Кладёт текст в системный буфер обмена. Буфер может быть занят другим процессом,
+    /// поэтому сбой не пробрасывается: повторная попытка — следующим выбором пункта.
+    /// </summary>
+    internal static void CopyToClipboard(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        try
+        {
+            var package = new global::Windows.ApplicationModel.DataTransfer.DataPackage();
+            package.SetText(text);
+            global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            Trace.WriteLine($"GlazeShell.ShellTargets: copying to the clipboard failed. {exception}");
+        }
+    }
 }

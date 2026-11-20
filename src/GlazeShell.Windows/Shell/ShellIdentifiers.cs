@@ -52,19 +52,11 @@ internal static class ShellIdentifiers
     internal static readonly Guid InterfaceIPersistFile = new("0000010B-0000-0000-C000-000000000046");
     internal static readonly Guid InterfaceIShellItem = new("43826D1E-E718-42EE-BC55-A1E261C37BFE");
     internal static readonly Guid InterfaceIShellItem2 = new("B63EA76D-1F85-456F-A19C-47959E30A9A9");
-    internal static readonly Guid InterfaceIShellItemArray = new("56FDF344-FD6D-11D0-958A-006097C9A090");
-    internal static readonly Guid InterfaceIShellFolder = new("000214E6-0000-0000-C000-000000000046");
-    internal static readonly Guid InterfaceIEnumIdList = new("000214F2-0000-0000-C000-000000000046");
-    internal static readonly Guid BhidEnumItems = new("94F60519-2850-4927-AA24-5F0B2AAFD3E3");
-    internal static readonly Guid BhidSfObject = new("3981E224-F559-11D3-8E3A-00C04F6837D5");
     internal static readonly Guid ClassApplicationActivationManager = new("45BA127D-10A8-46EA-8AB7-56EA9078943C");
     internal static readonly Guid InterfaceIApplicationActivationManager = new("2E941141-7F97-4756-BA1D-9DECDE894A3D");
 
     internal static readonly Guid FolderIdPrograms = new("A77F5D77-2E2B-44C3-A6A2-ABA601054A51");
     internal static readonly Guid FolderIdCommonPrograms = new("0139D44E-6AFE-49F2-8690-3DAFCAE6FFB8");
-    internal static readonly Guid FolderIdAppsFolder = new("A3918781-E5F2-4890-B3D9-A7E54332328C");
-
-    internal static readonly PropertyKey AppUserModelId = new(new Guid("9F4C2855-9F79-4B39-A8D0-E1D42DE1D5F3"), 5);
 
     private static readonly Guid LinkPropertySet = new("B64428C4-E1D2-101A-999E-08002B2CF9AE");
 

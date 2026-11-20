@@ -46,7 +46,7 @@ public sealed class TrayIcon : IDisposable
     private const int SettingsCommand = 2;
     private const int ExitCommand = 3;
 
-    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(2);
 
     private readonly WindowProc _windowProcedure;
     private readonly Action<Exception>? _errorHandler;
@@ -409,7 +409,7 @@ public sealed class TrayIcon : IDisposable
             _ = User32.PostThreadMessage(_threadId, User32.WmQuit, 0, 0);
         }
 
-        _thread?.Join(TimeSpan.FromSeconds(2));
+        _thread?.Join(TimeSpan.FromSeconds(1));
         _thread = null;
         _window = 0;
         _threadId = 0;

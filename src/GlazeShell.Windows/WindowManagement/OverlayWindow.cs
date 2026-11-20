@@ -199,6 +199,7 @@ public static class OverlayWindow
 
         var attached = foregroundThread != 0 &&
                        foregroundThread != currentThread &&
+                       !User32.IsHungAppWindow(foreground) &&
                        User32.AttachThreadInput(currentThread, foregroundThread, true);
 
         try

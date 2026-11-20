@@ -131,12 +131,12 @@ public sealed class WindowManager : IWindowManager, IWindowsEventSource
         var attachedForeground = false;
         var attachedTarget = false;
 
-        if (foregroundThread != 0 && foregroundThread != currentThread)
+        if (foregroundThread != 0 && foregroundThread != currentThread && !User32.IsHungAppWindow(foreground))
         {
             attachedForeground = User32.AttachThreadInput(foregroundThread, currentThread, true);
         }
 
-        if (targetThread != 0 && targetThread != currentThread)
+        if (targetThread != 0 && targetThread != currentThread && !User32.IsHungAppWindow(handle))
         {
             attachedTarget = User32.AttachThreadInput(targetThread, currentThread, true);
         }

@@ -31,7 +31,7 @@ public sealed class WindowsKeyInterceptor : IDisposable
 {
     private const string WindowClassNamePrefix = "GlazeShellWinKey";
 
-    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(2);
 
     private readonly User32.LowLevelKeyboardProc _keyboardProcedure;
     private readonly string _windowClassName = WindowClassNamePrefix + Guid.NewGuid().ToString("N");
@@ -123,7 +123,7 @@ public sealed class WindowsKeyInterceptor : IDisposable
             User32.PostThreadMessage(_threadId, User32.WmQuit, 0, 0);
         }
 
-        _thread?.Join(TimeSpan.FromSeconds(2));
+        _thread?.Join(TimeSpan.FromSeconds(1));
         _thread = null;
     }
 

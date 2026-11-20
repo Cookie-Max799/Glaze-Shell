@@ -38,7 +38,7 @@ public enum VolumeKeyAction
 /// </remarks>
 public sealed class VolumeKeyInterceptor : IDisposable
 {
-    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(2);
 
     private readonly User32.LowLevelKeyboardProc _keyboardProcedure;
 
@@ -105,7 +105,7 @@ public sealed class VolumeKeyInterceptor : IDisposable
             User32.PostThreadMessage(_threadId, User32.WmQuit, 0, 0);
         }
 
-        _thread?.Join(TimeSpan.FromSeconds(2));
+        _thread?.Join(TimeSpan.FromSeconds(1));
         _thread = null;
     }
 

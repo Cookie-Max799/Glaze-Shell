@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using GlazeShell.Windows.Win32;
 
@@ -33,7 +34,7 @@ public sealed class TaskbarHider : IDisposable
     /// <summary>Отступ скрытой панели за краем монитора, чтобы её нельзя было задеть курсором.</summary>
     private const int OffScreenGap = 16;
 
-    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(2);
 
     private readonly object _sync = new();
     private readonly WindowProc _windowProcedure;
@@ -160,7 +161,8 @@ public sealed class TaskbarHider : IDisposable
             {
                 restored |= User32.SetWindowPos(taskbar, 0, bounds.Left,
                     below ? monitor.Bottom - (bounds.Bottom - bounds.Top) : bounds.Top,
-                    0, 0, User32.SwpNoSize | User32.SwpNoZOrder | User32.SwpNoActivate | User32.SwpShowWindow);
+                    0, 0, User32.SwpNoSize | User32.SwpNoZOrder | User32.SwpNoActivate |
+                    User32.SwpShowWindow | User32.SwpAsyncWindowPos);
             }
 
             return true;
@@ -202,7 +204,8 @@ public sealed class TaskbarHider : IDisposable
 
                 _taskbars.TryAdd(taskbar, bounds);
                 success &= User32.SetWindowPos(taskbar, 0, bounds.Left, monitor.Bottom + OffScreenGap,
-                    0, 0, User32.SwpNoSize | User32.SwpNoZOrder | User32.SwpNoActivate | User32.SwpHideWindow);
+                    0, 0, User32.SwpNoSize | User32.SwpNoZOrder | User32.SwpNoActivate |
+                    User32.SwpHideWindow | User32.SwpAsyncWindowPos);
                 return true;
             }, 0);
             return found && success;
@@ -214,15 +217,23 @@ public sealed class TaskbarHider : IDisposable
 
     private void OnVisibilityChanged(nint hook, uint winEvent, nint hwnd, uint objectId, uint childId, uint eventThread, uint eventTime)
     {
-        if (objectId == 0 && childId == 0 && hwnd != 0 && IsTaskbar(hwnd) && Volatile.Read(ref _disposed) == 0)
+        try
         {
-            lock (_sync)
+            if (objectId == 0 && childId == 0 && hwnd != 0 && IsTaskbar(hwnd) && Volatile.Read(ref _disposed) == 0)
             {
-                if (_hidden)
+                lock (_sync)
                 {
-                    _ = HideTaskbar();
+                    if (_hidden)
+                    {
+                        _ = HideTaskbar();
+                    }
                 }
             }
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            // Колбэк нативный: исключение сквозь него завершило бы процесс.
+            Trace.WriteLine($"GlazeShell.TaskbarHider: re-hiding the taskbar failed. {exception}");
         }
     }
 
@@ -240,7 +251,7 @@ public sealed class TaskbarHider : IDisposable
             bounds.Top,
             bounds.Right - bounds.Left,
             bounds.Bottom - bounds.Top,
-            User32.SwpNoZOrder | User32.SwpNoActivate | User32.SwpShowWindow);
+            User32.SwpNoZOrder | User32.SwpNoActivate | User32.SwpShowWindow | User32.SwpAsyncWindowPos);
     }
 
     private static bool TryGetMonitorBounds(nint window, out Rect monitor)
@@ -334,18 +345,27 @@ public sealed class TaskbarHider : IDisposable
         if ((_taskbarCreatedMessage != 0 && message == _taskbarCreatedMessage) ||
             message == User32.WmDisplayChange)
         {
-            bool hidden;
-
-            lock (_sync)
+            try
             {
-                hidden = _hidden;
+                bool hidden;
+
+                lock (_sync)
+                {
+                    hidden = _hidden;
+                }
+
+                // Перезапуск Explorer создаёт новую панель, а смена разрешения возвращает
+                // старую на штатное место: в обоих случаях скрытие повторяется.
+                if (hidden && Volatile.Read(ref _disposed) == 0)
+                {
+                    _ = HideTaskbar();
+                }
             }
-
-            // Перезапуск Explorer создаёт новую панель, а смена разрешения возвращает
-            // старую на штатное место: в обоих случаях скрытие повторяется.
-            if (hidden && Volatile.Read(ref _disposed) == 0)
+            catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
             {
-                _ = HideTaskbar();
+                // Оконная процедура вызывается системой: исключение отсюда завершило бы
+                // процесс, поэтому сбой скрытия только пишется в трассировку.
+                Trace.WriteLine($"GlazeShell.TaskbarHider: hiding the taskbar failed. {exception}");
             }
 
             return 0;
@@ -384,7 +404,7 @@ public sealed class TaskbarHider : IDisposable
             User32.PostThreadMessage(_threadId, User32.WmQuit, 0, 0);
         }
 
-        _thread?.Join(TimeSpan.FromSeconds(2));
+        _thread?.Join(TimeSpan.FromSeconds(1));
         _thread = null;
         _eventWindow = 0;
         _threadId = 0;

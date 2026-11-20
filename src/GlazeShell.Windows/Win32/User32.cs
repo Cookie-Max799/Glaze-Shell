@@ -335,6 +335,14 @@ internal static class User32
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool IsZoomed(nint hwnd);
 
+    /// <summary>
+    /// Окно перестало отвечать на сообщения. <c>AttachThreadInput</c> к потоку такого окна
+    /// блокирует вызывающий поток, поэтому перед присоединением нужна эта проверка.
+    /// </summary>
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool IsHungAppWindow(nint hwnd);
+
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool ShowWindowAsync(nint hwnd, int command);

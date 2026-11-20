@@ -476,13 +476,6 @@ public sealed partial class StartMenuWindow : Window
         };
         flyout.Items.Add(open);
 
-        if (item.ExecutablePath is { Length: > 0 } path)
-        {
-            var location = new MenuFlyoutItem { Text = "Открыть расположение файла" };
-            location.Click += (_, _) => ShellTargets.ShowInExplorer(path);
-            flyout.Items.Add(location);
-        }
-
         flyout.Items.Add(new MenuFlyoutSeparator());
 
         var pinned = _settings.GetSettings().DockPinnedApps;
@@ -491,6 +484,8 @@ public sealed partial class StartMenuWindow : Window
         var pin = new MenuFlyoutItem { Text = isPinned ? "Открепить от Dock" : "Закрепить в Dock" };
         pin.Click += (_, _) => PinToggleRequested?.Invoke(this, item);
         flyout.Items.Add(pin);
+
+        ApplicationContextMenu.AddFileActions(flyout, item.ExecutablePath);
 
         flyout.ShowAt(AppsGrid, new FlyoutShowOptions { Position = e.GetPosition(AppsGrid) });
     }

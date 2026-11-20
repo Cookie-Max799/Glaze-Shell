@@ -41,7 +41,7 @@ public sealed class GlobalHotkey : IDisposable
     /// <summary>Идентификатор комбинации в пределах окна (0x474C — «GL»).</summary>
     private const int HotkeyId = 0x474C;
 
-    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(2);
 
     private readonly Modifier _modifiers;
     private readonly uint _virtualKey;
@@ -240,7 +240,7 @@ public sealed class GlobalHotkey : IDisposable
             User32.PostThreadMessage(_threadId, User32.WmQuit, 0, 0);
         }
 
-        _thread?.Join(TimeSpan.FromSeconds(2));
+        _thread?.Join(TimeSpan.FromSeconds(1));
         _thread = null;
         _window = 0;
         _threadId = 0;

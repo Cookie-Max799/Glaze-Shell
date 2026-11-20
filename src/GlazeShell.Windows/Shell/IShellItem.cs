@@ -17,9 +17,6 @@ internal interface IShellItem
     int GetDisplayName(Sigdn form, out nint name);
 
     [PreserveSig]
-    int GetAttributes(Sfgao mask, out Sfgao attributes);
-
-    [PreserveSig]
     int Compare(nint other, Sichintf hint, out int order);
 }
 

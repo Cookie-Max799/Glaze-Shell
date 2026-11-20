@@ -79,7 +79,8 @@ public static class WindowsUiRestorer
 
         if (!User32.IsWindowVisible(host))
         {
-            User32.ShowWindow(host, User32.SwShow);
+            // Асинхронный показ не ждёт потока Explorer: если он занят, UI не зависает.
+            _ = User32.ShowWindowAsync(host, User32.SwShow);
             restored = true;
         }
 
@@ -94,7 +95,7 @@ public static class WindowsUiRestorer
                 monitor.Top,
                 0,
                 0,
-                User32.SwpNoSize | User32.SwpNoZOrder | User32.SwpNoActivate);
+                User32.SwpNoSize | User32.SwpNoZOrder | User32.SwpNoActivate | User32.SwpAsyncWindowPos);
 
             restored = true;
         }
@@ -117,7 +118,7 @@ public static class WindowsUiRestorer
             return false;
         }
 
-        User32.ShowWindow(list, User32.SwHide);
+        _ = User32.ShowWindowAsync(list, User32.SwHide);
         return true;
     }
 
@@ -135,7 +136,7 @@ public static class WindowsUiRestorer
             return false;
         }
 
-        User32.ShowWindow(list, User32.SwShow);
+        _ = User32.ShowWindowAsync(list, User32.SwShow);
         return true;
     }
 

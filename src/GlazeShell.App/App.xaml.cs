@@ -219,11 +219,21 @@ public partial class App : Application
     {
         _commandLine = RecoveryCommandLine.Parse(Environment.GetCommandLineArgs().Skip(1).ToArray());
         _logger = new FileLogger(UserDataPaths.GetLogFilePath(GlazeShellConfiguration.CreateDefault()));
-        UnhandledException += (_, args) => LogUnhandledException("WinUI", args.Exception, args.Message);
+        UnhandledException += (_, args) =>
+        {
+            LogUnhandledException("WinUI", args.Exception, args.Message);
+
+            // Исключение из async void в обработчике разметки не должно ронять оболочку:
+            // без этой строки WinUI завершает процесс через CoreMessagingXP (0xc000027b).
+            args.Handled = true;
+        };
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
             LogUnhandledException("AppDomain", args.ExceptionObject as Exception, $"Terminating: {args.IsTerminating}.");
         TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
             LogUnhandledException("TaskScheduler", args.Exception, "An unobserved task failed.");
+            args.SetObserved();
+        };
 
         // Сторож работает отдельным процессом и не должен касаться единственного экземпляра:
         // иначе он сразу же выйдет, не дождавшись оболочки.
@@ -282,7 +292,7 @@ public partial class App : Application
             eventLatency);
 
         var discovery = new ApplicationDiscoveryService(
-            [new AppsFolderSource(options), new StartMenuShortcutSource(options)],
+            [new PackagedApplicationSource(), new StartMenuShortcutSource(options)],
             eventManager,
             options);
 
@@ -975,7 +985,7 @@ public partial class App : Application
                 applyColorMode: settings.ThemeMode != Core.Models.ThemeMode.System,
                 settings.TransparencyEnabled);
 
-            if (!applied && _logger is not null)
+            if (!applied)
             {
                 _logger.Write(
                     GlazeLogLevel.Warning,

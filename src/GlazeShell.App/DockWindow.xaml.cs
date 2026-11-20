@@ -102,6 +102,7 @@ public sealed partial class DockWindow : Window
     private bool _closed;
     private bool _cursorWatchRunning;
     private PanelBackdrop? _backdrop;
+    private MenuFlyout? _contextFlyout;
 
     private readonly int _ownProcessId = Environment.ProcessId;
 
@@ -210,6 +211,8 @@ public sealed partial class DockWindow : Window
         _cursorWatch.Tick += OnCursorWatchTick;
         _revealWatch.Tick += OnRevealWatchTick;
 
+        Activated += OnActivated;
+
         ConfigureOverlay();
 
         Closed += (_, _) =>
@@ -219,6 +222,7 @@ public sealed partial class DockWindow : Window
             _cursorWatch.Tick -= OnCursorWatchTick;
             _revealWatch.Stop();
             _revealWatch.Tick -= OnRevealWatchTick;
+            Activated -= OnActivated;
             ViewModel.StartRequested -= OnStartRequested;
             ViewModel.Items.CollectionChanged -= OnItemsChanged;
             Tiles.SizeChanged -= OnTilesSizeChanged;
@@ -1115,7 +1119,15 @@ public sealed partial class DockWindow : Window
 
         e.Handled = true;
         PlayPress(tile);
-        await ViewModel.ActivateItemAsync(item);
+
+        try
+        {
+            await ViewModel.ActivateItemAsync(item);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            System.Diagnostics.Trace.WriteLine($"GlazeShell.Dock: launching '{item.Key}' failed. {exception}");
+        }
     }
 
     /// <summary>
@@ -1193,7 +1205,15 @@ public sealed partial class DockWindow : Window
 
         e.Handled = true;
         PlayPress(tile);
-        await ViewModel.ActivateItemAsync(item);
+
+        try
+        {
+            await ViewModel.ActivateItemAsync(item);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            System.Diagnostics.Trace.WriteLine($"GlazeShell.Dock: launching '{item.Key}' failed. {exception}");
+        }
     }
 
     /// <summary>
@@ -1269,16 +1289,26 @@ public sealed partial class DockWindow : Window
                 focus.Click += async (_, _) => await ViewModel.ActivateItemAsync(item);
                 flyout.Items.Add(focus);
             }
+            else
+            {
+                var open = new MenuFlyoutItem { Text = "Открыть" };
+                open.Click += async (_, _) => await ViewModel.ActivateItemAsync(item);
+                flyout.Items.Add(open);
+            }
 
-            AppendApplicationActions(flyout, item);
+            ApplicationContextMenu.AddFileActions(flyout, item.ExecutablePath);
+            AppendCloseActions(flyout, item);
         }
         else
         {
             return;
         }
 
+        _contextFlyout = flyout;
+
         flyout.Closed += (_, _) =>
         {
+            _contextFlyout = null;
             OverlayWindow.SetNonActivating(_hwnd, true);
             ResetTiles();
         };
@@ -1287,20 +1317,11 @@ public sealed partial class DockWindow : Window
     }
 
     /// <summary>
-    /// Пункты меню приложения в dock: расположение файла и закрытие окон. Закрытие
-    /// показывается только у запущенного приложения, «все окна» — когда их больше одного.
+    /// Пункты закрытия окон приложения: «Закрыть окно» и «Закрыть все окна». Оба пункта
+    /// показываются только у запущенного приложения; «все окна» — когда их больше одного.
     /// </summary>
-    private void AppendApplicationActions(MenuFlyout flyout, DockItemViewModel item)
+    private void AppendCloseActions(MenuFlyout flyout, DockItemViewModel item)
     {
-        if (item.ExecutablePath is { Length: > 0 } path)
-        {
-            flyout.Items.Add(new MenuFlyoutSeparator());
-
-            var location = new MenuFlyoutItem { Text = "Открыть расположение файла" };
-            location.Click += (_, _) => ShellTargets.ShowInExplorer(path);
-            flyout.Items.Add(location);
-        }
-
         if (!item.IsRunning)
         {
             return;
@@ -1325,6 +1346,21 @@ public sealed partial class DockWindow : Window
             closeAll.Click += (_, _) => ViewModel.CloseWindows(item, all: true);
             flyout.Items.Add(closeAll);
         }
+    }
+
+    /// <summary>
+    /// Light dismiss контекстного меню: клик по другой части экрана деактивирует окно,
+    /// и меню закрывается вместе с ним. Без этого меню оставалось бы висеть, потому что
+    /// dock показан без активации и не получает клики за своими границами.
+    /// </summary>
+    private void OnActivated(object sender, WindowActivatedEventArgs args)
+    {
+        if (args.WindowActivationState != WindowActivationState.Deactivated)
+        {
+            return;
+        }
+
+        _contextFlyout?.Hide();
     }
 
     /// <summary>

@@ -1,10 +1,11 @@
+using System.Diagnostics;
 using GlazeShell.Windows.Win32;
 
 namespace GlazeShell.Windows.DisplayManagement;
 
 internal sealed class MonitorEventMonitor : IDisposable
 {
-    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(2);
 
     private readonly Action _displayChanged;
     private readonly WindowProc _windowProcedure;
@@ -67,7 +68,7 @@ internal sealed class MonitorEventMonitor : IDisposable
             User32.PostThreadMessage(_threadId, User32.WmQuit, 0, 0);
         }
 
-        _thread?.Join(TimeSpan.FromSeconds(2));
+        _thread?.Join(TimeSpan.FromSeconds(1));
         _thread = null;
         _hwnd = 0;
         _threadId = 0;
@@ -123,7 +124,17 @@ internal sealed class MonitorEventMonitor : IDisposable
     {
         if (DisplaySignal.IsDisplaySignal(message, wParam))
         {
-            _displayChanged();
+            try
+            {
+                _displayChanged();
+            }
+            catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+            {
+                // Оконная процедура вызывается системой: исключение отсюда завершило бы
+                // процесс, поэтому сбой обработчика только пишется в трассировку.
+                Trace.WriteLine($"GlazeShell.MonitorEvents: the display handler failed. {exception}");
+            }
+
             return 0;
         }
 

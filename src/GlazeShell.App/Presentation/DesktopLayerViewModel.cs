@@ -14,16 +14,6 @@ using Windows.UI;
 
 namespace GlazeShell.App.Presentation;
 
-/// <summary>Режим значка слоя рабочего стола: приложение Glaze или файл оболочки.</summary>
-public enum DesktopFileKind
-{
-    /// <summary>Приложение из реестра Glaze, запускается через <c>IApplicationLauncher</c>.</summary>
-    Application,
-
-    /// <summary>Файл или папка, запускаемая через ShellExecute.</summary>
-    File,
-}
-
 /// <summary>
 /// Состояние одного значка на безопасном слое рабочего стола Glaze: позиция, подпись,
 /// иконка и путь, который открывается по щелчку. Значок грузится асинхронно через
@@ -41,7 +31,6 @@ public sealed class DesktopIconViewModel : INotifyPropertyChanged
         string tabId,
         string name,
         string? path,
-        DesktopFileKind kind,
         double x,
         double y)
     {
@@ -49,7 +38,6 @@ public sealed class DesktopIconViewModel : INotifyPropertyChanged
         TabId = tabId;
         _name = name;
         Path = path;
-        Kind = kind;
         X = x;
         Y = y;
         FallbackBrush = CreateFallbackBrush(id);
@@ -102,8 +90,6 @@ public sealed class DesktopIconViewModel : INotifyPropertyChanged
     }
 
     public bool HasExecutablePath => _executablePath is { Length: > 0 };
-
-    public DesktopFileKind Kind { get; }
 
     /// <summary>Позиция в DIP относительно левого верхнего угла рабочей области.</summary>
     public double X { get; }
@@ -222,6 +208,12 @@ public sealed class DesktopLayerViewModel
     private bool _initialized;
     private bool _disposed;
 
+    /// <summary>
+    /// Поколение набора значков. Перестройка увеличивает его, а асинхронная загрузка иконки
+    /// сверяет его перед применением: иначе результат для старого набора попадал бы в новый.
+    /// </summary>
+    private int _generation;
+
     public DesktopLayerViewModel(
         IDesktopManager desktopManager,
         IApplicationManager applications,
@@ -266,8 +258,8 @@ public sealed class DesktopLayerViewModel
     }
 
     /// <summary>
-    /// Открывает значок: приложение — через <see cref="IApplicationLauncher.LaunchAsync"/>,
-    /// файл — через ShellExecute.
+    /// Открывает значок через <see cref="IApplicationLauncher.LaunchAsync"/>: слой
+    /// показывает приложения Glaze, а не файлы рабочего стола пользователя.
     /// </summary>
     public async Task ActivateAsync(DesktopIconViewModel icon)
     {
@@ -280,14 +272,7 @@ public sealed class DesktopLayerViewModel
 
         try
         {
-            if (icon.Kind == DesktopFileKind.Application)
-            {
-                await _launcher.LaunchAsync(target);
-            }
-            else
-            {
-                ShellTargets.Open(target);
-            }
+            await _launcher.LaunchAsync(target);
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {
@@ -315,26 +300,57 @@ public sealed class DesktopLayerViewModel
     /// <summary>Загружает иконки для значков без изображения. Вызывается окном один раз.</summary>
     public void LoadIcons()
     {
-        foreach (var icon in Icons)
+        var generation = Volatile.Read(ref _generation);
+
+        // Снимок: перестройка набора идёт на этом же потоке, но загрузка ниже — асинхронная,
+        // и перебирать ObservableCollection, пока её меняют, нельзя.
+        foreach (var icon in Icons.ToList())
         {
-            if (icon.HasIcon || icon.Path is not { Length: > 0 } target)
+            if (icon.HasIcon || icon.Path is not { Length: > 0 })
             {
                 continue;
             }
 
             var captured = icon;
 
-            _ = _dispatcher.TryEnqueue(async () =>
+            _ = Task.Run(async () =>
             {
-                var path = await ResolveIconPathAsync(captured);
-                var pixels = await Task.Run(() => ShellIconProvider.TryGetIcon(path, IconSize));
-                var bitmap = pixels is null ? null : IconBitmap.Create(pixels);
-
-                if (bitmap is not null)
+                try
                 {
-                    captured.Icon = bitmap;
+                    var path = await ResolveIconPathAsync(captured);
+                    var pixels = path is { Length: > 0 }
+                        ? ShellIconProvider.TryGetIcon(path, IconSize)
+                        : null;
+
+                    if (pixels is null)
+                    {
+                        return;
+                    }
+
+                    // Изображение создаётся на потоке интерфейса: WriteableBitmap к другому
+                    // потоку привязан нельзя.
+                    _ = _dispatcher.TryEnqueue(() => ApplyIcon(captured, pixels, generation));
+                }
+                catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+                {
+                    Trace.WriteLine($"GlazeShell.DesktopLayer: icon for '{captured.Name}' failed. {exception}");
                 }
             });
+        }
+    }
+
+    private void ApplyIcon(DesktopIconViewModel icon, IconPixels pixels, int generation)
+    {
+        if (_disposed || generation != Volatile.Read(ref _generation))
+        {
+            return;
+        }
+
+        var bitmap = IconBitmap.Create(pixels);
+
+        if (bitmap is not null)
+        {
+            icon.Icon = bitmap;
         }
     }
 
@@ -372,6 +388,7 @@ public sealed class DesktopLayerViewModel
             return;
         }
 
+        var generation = ++_generation;
         Icons.Clear();
 
         var layout = _desktopManager.GetLayout();
@@ -398,7 +415,6 @@ public sealed class DesktopLayerViewModel
                     tab.Id,
                     item.Label ?? item.ApplicationId,
                     item.ApplicationId,
-                    DesktopFileKind.Application,
                     OriginX + column * CellWidth,
                     OriginY + row * CellHeight));
 
@@ -412,18 +428,24 @@ public sealed class DesktopLayerViewModel
             }
         }
 
-        _ = EnrichAsync();
+        _ = EnrichAsync(generation);
     }
 
     /// <summary>
     /// Подставляет настоящие имена приложений и загружает иконки. Поиск по одному запросу
-    /// на элемент: <c>IApplicationManager</c> не отдаёт снимок синхронно.
+    /// на элемент: <c>IApplicationManager</c> не отдаёт снимок синхронно. Перебор идёт по
+    /// снимку набора и прерывается, если за время поиска набор перестроили.
     /// </summary>
-    private async Task EnrichAsync()
+    private async Task EnrichAsync(int generation)
     {
-        foreach (var icon in Icons)
+        foreach (var icon in Icons.ToList())
         {
-            if (icon.Kind != DesktopFileKind.Application || icon.Path is not { Length: > 0 } applicationId)
+            if (_disposed || generation != _generation)
+            {
+                return;
+            }
+
+            if (icon.Path is not { Length: > 0 } applicationId)
             {
                 continue;
             }
@@ -446,16 +468,14 @@ public sealed class DesktopLayerViewModel
             }
         }
 
-        LoadIcons();
+        if (!_disposed && generation == _generation)
+        {
+            LoadIcons();
+        }
     }
 
     private async Task<string?> ResolveIconPathAsync(DesktopIconViewModel icon)
     {
-        if (icon.Kind == DesktopFileKind.File)
-        {
-            return icon.Path;
-        }
-
         if (icon.Path is not { Length: > 0 } applicationId)
         {
             return null;

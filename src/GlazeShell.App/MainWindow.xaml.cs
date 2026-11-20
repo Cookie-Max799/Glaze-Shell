@@ -229,26 +229,35 @@ public sealed partial class MainWindow : Window
 
     private async void OnTerminateClick(object sender, RoutedEventArgs e)
     {
-        var target = ViewModel.Selected;
-
-        if (target is null)
+        try
         {
-            return;
+            var target = ViewModel.Selected;
+
+            if (target is null)
+            {
+                return;
+            }
+
+            var dialog = new ContentDialog
+            {
+                Title = "Завершить принудительно?",
+                Content = $"Приложение «{target.Name}» и его фоновые процессы будут сняты без сохранения данных. Продолжить?",
+                PrimaryButtonText = "Завершить",
+                CloseButtonText = "Отмена",
+                DefaultButton = ContentDialogButton.Close,
+                XamlRoot = Root.XamlRoot,
+            };
+
+            if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+            {
+                await ViewModel.TerminateSelectedAsync();
+            }
         }
-
-        var dialog = new ContentDialog
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {
-            Title = "Завершить принудительно?",
-            Content = $"Приложение «{target.Name}» и его фоновые процессы будут сняты без сохранения данных. Продолжить?",
-            PrimaryButtonText = "Завершить",
-            CloseButtonText = "Отмена",
-            DefaultButton = ContentDialogButton.Close,
-            XamlRoot = Root.XamlRoot,
-        };
-
-        if (await dialog.ShowAsync() == ContentDialogResult.Primary)
-        {
-            await ViewModel.TerminateSelectedAsync();
+            // Второй диалог поверх открытого WinUI не показывает: исключение не должно
+            // завершать процесс, поэтому оно уходит в трассировку.
+            System.Diagnostics.Trace.WriteLine($"GlazeShell.MainWindow: terminating an app failed. {exception}");
         }
     }
 
@@ -258,40 +267,47 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async void OnRenameMonitorClick(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: MonitorListItemViewModel monitor })
+        try
         {
-            return;
+            if (sender is not FrameworkElement { DataContext: MonitorListItemViewModel monitor })
+            {
+                return;
+            }
+
+            var input = new TextBox
+            {
+                Text = monitor.DisplayName,
+                MaxLength = 64,
+                SelectionStart = monitor.DisplayName.Length,
+            };
+
+            var dialog = new ContentDialog
+            {
+                Title = "Имя дисплея",
+                Content = input,
+                PrimaryButtonText = "Сохранить",
+                SecondaryButtonText = "Сбросить",
+                CloseButtonText = "Отмена",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = Root.XamlRoot,
+            };
+
+            var result = await dialog.ShowAsync();
+
+            switch (result)
+            {
+                case ContentDialogResult.Primary:
+                    ViewModel.RenameMonitor(monitor, input.Text);
+                    break;
+
+                case ContentDialogResult.Secondary:
+                    ViewModel.RenameMonitor(monitor, null);
+                    break;
+            }
         }
-
-        var input = new TextBox
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {
-            Text = monitor.DisplayName,
-            MaxLength = 64,
-            SelectionStart = monitor.DisplayName.Length,
-        };
-
-        var dialog = new ContentDialog
-        {
-            Title = "Имя дисплея",
-            Content = input,
-            PrimaryButtonText = "Сохранить",
-            SecondaryButtonText = "Сбросить",
-            CloseButtonText = "Отмена",
-            DefaultButton = ContentDialogButton.Primary,
-            XamlRoot = Root.XamlRoot,
-        };
-
-        var result = await dialog.ShowAsync();
-
-        switch (result)
-        {
-            case ContentDialogResult.Primary:
-                ViewModel.RenameMonitor(monitor, input.Text);
-                break;
-
-            case ContentDialogResult.Secondary:
-                ViewModel.RenameMonitor(monitor, null);
-                break;
+            System.Diagnostics.Trace.WriteLine($"GlazeShell.MainWindow: renaming a display failed. {exception}");
         }
     }
 

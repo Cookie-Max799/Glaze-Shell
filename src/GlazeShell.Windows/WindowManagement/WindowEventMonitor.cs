@@ -8,7 +8,7 @@ namespace GlazeShell.Windows.WindowManagement;
 
 internal sealed class WindowEventMonitor : IDisposable
 {
-    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(2);
 
     private const uint ObjectIdWindow = 0;
 
@@ -73,7 +73,7 @@ internal sealed class WindowEventMonitor : IDisposable
             User32.PostThreadMessage(_threadId, User32.WmQuit, 0, 0);
         }
 
-        _thread?.Join(TimeSpan.FromSeconds(2));
+        _thread?.Join(TimeSpan.FromSeconds(1));
         _thread = null;
     }
 
@@ -151,6 +151,20 @@ internal sealed class WindowEventMonitor : IDisposable
     }
 
     private void OnWinEvent(nint hook, uint winEvent, nint hwnd, uint objectId, uint childId, uint eventThread, uint eventTime)
+    {
+        try
+        {
+            HandleWinEvent(winEvent, hwnd, objectId);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            // Колбэк вызывается из нативной системы: исключение сквозь него завершило бы
+            // весь процесс, поэтому ошибка наблюдателя только пишется в трассировку.
+            System.Diagnostics.Trace.WriteLine($"GlazeShell.WindowEvents: an event handler failed. {exception}");
+        }
+    }
+
+    private void HandleWinEvent(uint winEvent, nint hwnd, uint objectId)
     {
         if (hwnd == 0 || objectId != ObjectIdWindow)
         {

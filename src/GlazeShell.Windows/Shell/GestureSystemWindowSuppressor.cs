@@ -76,7 +76,7 @@ public sealed class GestureSystemWindowSuppressor : IDisposable
             User32.PostThreadMessage(_threadId, User32.WmQuit, 0, 0);
         }
 
-        _thread?.Join(TimeSpan.FromSeconds(2));
+        _thread?.Join(TimeSpan.FromSeconds(1));
         _thread = null;
     }
 
@@ -136,6 +136,20 @@ public sealed class GestureSystemWindowSuppressor : IDisposable
     }
 
     private void OnWinEvent(nint hook, uint winEvent, nint hwnd, uint objectId, uint childId, uint eventThread, uint eventTime)
+    {
+        try
+        {
+            HideSystemWindow(hwnd, objectId);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            // Исключение из нативного колбэка завершило бы процесс: сбой подавления
+            // не должен ронять оболочку, поэтому он только попадает в журнал.
+            _logger.Write(GlazeLogLevel.Warning, "GestureSuppressor", "Suppressing a system window failed.", exception);
+        }
+    }
+
+    private void HideSystemWindow(nint hwnd, uint objectId)
     {
         if (!_enabled || hwnd == 0 || objectId != ObjectIdWindow)
         {

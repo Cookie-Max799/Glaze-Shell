@@ -34,6 +34,10 @@ public sealed class AsyncCommand : ICommand
         {
             await _execute().ConfigureAwait(true);
         }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            System.Diagnostics.Trace.WriteLine($"GlazeShell.AsyncCommand: the command failed. {exception}");
+        }
         finally
         {
             _isRunning = false;
@@ -73,6 +77,10 @@ public sealed class AsyncCommand<T> : ICommand
         try
         {
             await _execute(Cast(parameter)).ConfigureAwait(true);
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            System.Diagnostics.Trace.WriteLine($"GlazeShell.AsyncCommand: the command failed. {exception}");
         }
         finally
         {

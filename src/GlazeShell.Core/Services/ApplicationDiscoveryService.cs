@@ -80,14 +80,12 @@ public sealed class ApplicationDiscoveryService : IApplicationManager, IDisposab
 
         try
         {
-            var candidates = new List<ApplicationCandidate>();
-            var warnings = new List<string>();
-
-            foreach (var source in _sources)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                CollectSource(source, candidates, warnings, cancellationToken);
-            }
+            // Источники читают реестр, меню «Пуск» и пакеты приложений: это I/O, которое
+            // не должно идти на потоке интерфейса. Ожидание семафора часто завершается
+            // синхронно, поэтому без явного переноса весь скан подвешивал окна.
+            var (candidates, warnings) = await Task.Run(
+                () => CollectCandidates(cancellationToken),
+                cancellationToken).ConfigureAwait(false);
 
             var applications = BuildSnapshot(candidates, warnings, out var skipped);
 
@@ -127,6 +125,21 @@ public sealed class ApplicationDiscoveryService : IApplicationManager, IDisposab
 
         _disposed = true;
         _scanLock.Dispose();
+    }
+
+    private (List<ApplicationCandidate> Candidates, List<string> Warnings) CollectCandidates(
+        CancellationToken cancellationToken)
+    {
+        var candidates = new List<ApplicationCandidate>();
+        var warnings = new List<string>();
+
+        foreach (var source in _sources)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            CollectSource(source, candidates, warnings, cancellationToken);
+        }
+
+        return (candidates, warnings);
     }
 
     private void CollectSource(

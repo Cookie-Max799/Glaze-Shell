@@ -1371,41 +1371,55 @@ public sealed partial class TopBarWindow : Window
     /// <summary>Клавиатура Glance: стрелки двигают выбор, Enter открывает, Escape очищает.</summary>
     private async void OnSearchKeyDown(object sender, KeyRoutedEventArgs e)
     {
-        switch (e.Key)
+        try
         {
-            case VirtualKey.Enter:
-                e.Handled = true;
-                await ViewModel.ActivateSelectedAsync();
-                break;
+            switch (e.Key)
+            {
+                case VirtualKey.Enter:
+                    e.Handled = true;
+                    await ViewModel.ActivateSelectedAsync();
+                    break;
 
-            case VirtualKey.Escape:
-                e.Handled = true;
-                ViewModel.ClearSearch();
-                break;
+                case VirtualKey.Escape:
+                    e.Handled = true;
+                    ViewModel.ClearSearch();
+                    break;
 
-            case VirtualKey.Down:
-                e.Handled = true;
-                ViewModel.MoveSelection(1);
-                break;
+                case VirtualKey.Down:
+                    e.Handled = true;
+                    ViewModel.MoveSelection(1);
+                    break;
 
-            case VirtualKey.Up:
-                e.Handled = true;
-                ViewModel.MoveSelection(-1);
-                break;
+                case VirtualKey.Up:
+                    e.Handled = true;
+                    ViewModel.MoveSelection(-1);
+                    break;
 
-            default:
-                break;
+                default:
+                    break;
+            }
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            System.Diagnostics.Trace.WriteLine($"GlazeShell.TopBar: handling a search key failed. {exception}");
         }
     }
 
     private async void OnResultClicked(object sender, ItemClickEventArgs e)
     {
-        if (e.ClickedItem is GlanceResultViewModel result)
+        try
         {
-            ViewModel.SelectedResult = result;
-        }
+            if (e.ClickedItem is GlanceResultViewModel result)
+            {
+                ViewModel.SelectedResult = result;
+            }
 
-        await ViewModel.ActivateSelectedAsync();
+            await ViewModel.ActivateSelectedAsync();
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            System.Diagnostics.Trace.WriteLine($"GlazeShell.TopBar: opening a search result failed. {exception}");
+        }
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

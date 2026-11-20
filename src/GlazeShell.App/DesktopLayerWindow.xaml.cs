@@ -25,6 +25,7 @@ public sealed partial class DesktopLayerWindow : Window
     private readonly ShellMonitorTarget _monitorTarget;
     private nint _hwnd;
     private bool _closed;
+    private MenuFlyout? _contextFlyout;
 
     public DesktopLayerWindow(
         IDesktopManager desktopManager,
@@ -55,10 +56,13 @@ public sealed partial class DesktopLayerWindow : Window
 
         ConfigureDesktopLevelWindow();
 
+        Activated += OnActivated;
+
         Closed += (_, _) =>
         {
             _closed = true;
             ViewModel.Dispose();
+            Activated -= OnActivated;
 
             // Значки Explorer возвращаются при любом закрытии слоя: пользователь не должен
             // остаться с пустым рабочим столом, если слой выключили или приложение вышло.
@@ -147,8 +151,6 @@ public sealed partial class DesktopLayerWindow : Window
         // MoveAndResize поднимает окно в Z-порядке: уровень рабочего стола возвращается
         // после каждого перемещения.
         OverlayWindow.SendToDesktopLevel(_hwnd);
-
-        ViewModel.LoadIcons();
     }
 
     private void OnIconDoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
@@ -166,28 +168,22 @@ public sealed partial class DesktopLayerWindow : Window
             return;
         }
 
+        e.Handled = true;
+
+        // Меню требует активации: иначе клик по другому окну не закроет его, потому что
+        // слой показан без активации. Сразу после активации окно возвращается на уровень
+        // рабочего стола и обычные окна не перекрывает.
+        OverlayWindow.SetNonActivating(_hwnd, false);
+        _ = OverlayWindow.ActivateForInput(_hwnd);
+        OverlayWindow.SendToDesktopLevel(_hwnd);
+
         var flyout = new MenuFlyout();
 
         var open = new MenuFlyoutItem { Text = "Открыть" };
         open.Click += (_, _) => _ = ViewModel.ActivateAsync(icon);
         flyout.Items.Add(open);
 
-        if (icon.HasExecutablePath && icon.ExecutablePath is { Length: > 0 } path)
-        {
-            var location = new MenuFlyoutItem { Text = "Открыть расположение файла" };
-            location.Click += (_, _) => ShellTargets.ShowInExplorer(path);
-            flyout.Items.Add(location);
-
-            var copyPath = new MenuFlyoutItem { Text = "Копировать путь" };
-            copyPath.Click += (_, _) => CopyToClipboard(path);
-            flyout.Items.Add(copyPath);
-
-            flyout.Items.Add(new MenuFlyoutSeparator());
-
-            var properties = new MenuFlyoutItem { Text = "Свойства" };
-            properties.Click += (_, _) => ShellTargets.ShowProperties(path);
-            flyout.Items.Add(properties);
-        }
+        ApplicationContextMenu.AddFileActions(flyout, icon.ExecutablePath);
 
         flyout.Items.Add(new MenuFlyoutSeparator());
 
@@ -195,24 +191,28 @@ public sealed partial class DesktopLayerWindow : Window
         remove.Click += (_, _) => ViewModel.Remove(icon);
         flyout.Items.Add(remove);
 
-        flyout.Closed += (_, _) => OverlayWindow.SetNonActivating(_hwnd, true);
-        OverlayWindow.SetNonActivating(_hwnd, false);
+        _contextFlyout = flyout;
+
+        flyout.Closed += (_, _) =>
+        {
+            _contextFlyout = null;
+            OverlayWindow.SetNonActivating(_hwnd, true);
+            OverlayWindow.SendToDesktopLevel(_hwnd);
+        };
 
         flyout.ShowAt(tile, new FlyoutShowOptions { Position = e.GetPosition(tile) });
     }
 
-    private static void CopyToClipboard(string text)
+    /// <summary>
+    /// Light dismiss меню слоя: клик мимо окна деактивирует его, и меню закрывается.
+    /// </summary>
+    private void OnActivated(object sender, WindowActivatedEventArgs args)
     {
-        try
+        if (args.WindowActivationState != WindowActivationState.Deactivated)
         {
-            var pack = new global::Windows.ApplicationModel.DataTransfer.DataPackage();
-            pack.SetText(text);
-            global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(pack);
+            return;
         }
-        catch (Exception)
-        {
-            // Буфер обмена может быть занят другим процессом: повторная попытка — при
-            // следующем выборе пункта меню.
-        }
+
+        _contextFlyout?.Hide();
     }
 }
