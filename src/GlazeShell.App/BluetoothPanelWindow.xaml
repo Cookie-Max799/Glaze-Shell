@@ -50,7 +50,7 @@
                             <Border
                                 Padding="12,10"
                                 Margin="0,0,0,6"
-                                Background="{StaticResource GlazeTopBarPillBrush}"
+                                Background="{StaticResource GlazePanelCardBrush}"
                                 BorderBrush="{StaticResource GlazeBorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="10">
@@ -58,12 +58,12 @@
                                     <TextBlock
                                         FontSize="13"
                                         FontWeight="SemiBold"
-                                        Foreground="{StaticResource GlazePanelTextPrimaryBrush}"
+                                        Foreground="{StaticResource GlazePanelCardTextPrimaryBrush}"
                                         Text="{Binding Name}"
                                         TextTrimming="CharacterEllipsis" />
                                     <TextBlock
                                         FontSize="11"
-                                        Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
+                                        Foreground="{StaticResource GlazePanelCardTextSecondaryBrush}"
                                         Text="{Binding Status}" />
                                 </StackPanel>
                             </Border>

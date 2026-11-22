@@ -47,6 +47,8 @@ internal static class GlazePalette
 
     public static Color Lighten(Color color, double amount) => ToColor(GlazeColor.Lighten(ToCore(color), amount));
 
+    public static Color Mix(Color from, Color to, double amount) => ToColor(GlazeColor.Mix(ToCore(from), ToCore(to), amount));
+
     public static Color OnAccent(Color accent) => ToColor(GlazeColor.OnAccent(ToCore(accent)));
 
     private static GlazeTheme Convert(CoreTheme theme) => new(

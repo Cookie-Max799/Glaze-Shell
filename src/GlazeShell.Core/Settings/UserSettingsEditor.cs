@@ -40,6 +40,7 @@ public static class UserSettingsEditor
         int? startMenuTransparency = null,
         bool? topBarHidesWithQuickSettings = null,
         bool? topBarVolumePercent = null,
+        bool? glanceAppIcons = null,
         bool? systemAppearanceEnabled = null,
         bool? glazeWallpaperEnabled = null,
         bool? glazeDesktopLayerEnabled = null,
@@ -78,6 +79,7 @@ public static class UserSettingsEditor
             startMenuTransparency: startMenuTransparency ?? source.StartMenuTransparency,
             topBarHidesWithQuickSettings: topBarHidesWithQuickSettings ?? source.TopBarHidesWithQuickSettings,
             topBarVolumePercent: topBarVolumePercent ?? source.TopBarVolumePercent,
+            glanceAppIcons: glanceAppIcons ?? source.GlanceAppIcons,
             systemAppearanceEnabled: systemAppearanceEnabled ?? source.SystemAppearanceEnabled,
             glazeWallpaperEnabled: glazeWallpaperEnabled ?? source.GlazeWallpaperEnabled,
             glazeDesktopLayerEnabled: glazeDesktopLayerEnabled ?? source.GlazeDesktopLayerEnabled);

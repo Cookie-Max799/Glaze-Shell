@@ -583,4 +583,24 @@ public sealed class SettingsDocumentMapperTests
         Assert.IsFalse(restored!.SystemAppearanceEnabled);
         Assert.IsTrue(restored.GlazeWallpaperEnabled);
     }
+
+    [TestMethod]
+    public void MissingGlanceAppIconsDefaultsToEnabled()
+    {
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(new SettingsDocument(), out var settings, out _));
+
+        Assert.IsTrue(settings!.GlanceAppIcons);
+    }
+
+    [TestMethod]
+    public void GlanceAppIconsSurvivesTheRoundTrip()
+    {
+        var settings = new UserSettings(glanceAppIcons: false);
+
+        var document = SettingsDocument.FromSettings(settings);
+        Assert.IsFalse(document.GlanceAppIcons);
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var restored, out _));
+        Assert.IsFalse(restored!.GlanceAppIcons);
+    }
 }

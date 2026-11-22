@@ -91,6 +91,12 @@ public sealed class SettingsDocument
     public bool? TopBarVolumePercent { get; set; }
 
     /// <summary>
+    /// Настоящие значки приложений и окон в результатах поиска. Отсутствие значения в
+    /// старом документе означает включённое поведение.
+    /// </summary>
+    public bool? GlanceAppIcons { get; set; }
+
+    /// <summary>
     /// Переносить оформление Glaze на Windows. Отсутствие значения в старом документе
     /// означает включённое поведение.
     /// </summary>
@@ -148,6 +154,7 @@ public sealed class SettingsDocument
             HidePanelsInGlazeShell = settings.HidePanelsInGlazeShell,
             TopBarHidesWithQuickSettings = settings.TopBarHidesWithQuickSettings,
             TopBarVolumePercent = settings.TopBarVolumePercent,
+            GlanceAppIcons = settings.GlanceAppIcons,
             SystemAppearanceEnabled = settings.SystemAppearanceEnabled,
             GlazeWallpaperEnabled = settings.GlazeWallpaperEnabled,
             GlazeDesktopLayerEnabled = settings.GlazeDesktopLayerEnabled,
@@ -272,6 +279,7 @@ public static class SettingsDocumentMapper
             startMenuTransparency,
             document.TopBarHidesWithQuickSettings ?? false,
             document.TopBarVolumePercent ?? false,
+            document.GlanceAppIcons ?? true,
             document.SystemAppearanceEnabled ?? true,
             document.GlazeWallpaperEnabled ?? false,
             document.GlazeDesktopLayerEnabled ?? false);

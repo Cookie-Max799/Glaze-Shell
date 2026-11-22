@@ -86,7 +86,8 @@ public sealed class GlanceSearchCatalog
                 application.Id,
                 application.Name,
                 BuildApplicationSubtitle(application),
-                BuildApplicationKeywords(application)));
+                BuildApplicationKeywords(application),
+                BuildApplicationIconPath(application)));
         }
 
         _applicationResults = results;
@@ -126,7 +127,12 @@ public sealed class GlanceSearchCatalog
                     ? process
                     : "Открытое окно";
 
-            results.Add(new GlanceResult(GlanceResultKind.Window, window.Id, window.Title.Trim(), subtitle));
+            results.Add(new GlanceResult(
+                GlanceResultKind.Window,
+                window.Id,
+                window.Title.Trim(),
+                subtitle,
+                iconPath: window.ExecutablePath ?? string.Empty));
         }
 
         return results;
@@ -134,6 +140,13 @@ public sealed class GlanceSearchCatalog
 
     private static string BuildApplicationSubtitle(Application application) =>
         application.Publisher ?? application.Description ?? string.Empty;
+
+    /// <summary>
+    /// Путь для извлечения значка: как в dock, сначала исполняемый файл, затем указанный
+    /// в ярлыке файл значка. Пустая строка — значка нет, останется глиф категории.
+    /// </summary>
+    private static string BuildApplicationIconPath(Application application) =>
+        application.ExecutablePath ?? application.IconPath ?? string.Empty;
 
     /// <summary>
     /// Ключевые слова приложения: имя исполняемого файла без расширения помогает найти

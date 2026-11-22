@@ -66,6 +66,7 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     private ImageSource? _appIcon;
     private string? _appIconPath;
     private readonly Dictionary<string, ImageSource> _iconCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ImageSource> _resultIconCache = new(StringComparer.OrdinalIgnoreCase);
     private string _clockTime = string.Empty;
     private string _keyboardLanguage = string.Empty;
     private bool _showVolumeCount;
@@ -96,6 +97,34 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     public Microsoft.UI.Xaml.Visibility VolumeCountVisibility => _showVolumeCount
         ? Microsoft.UI.Xaml.Visibility.Visible
         : Microsoft.UI.Xaml.Visibility.Collapsed;
+
+    private bool _showAppIcons = true;
+
+    /// <summary>
+    /// Настоящие значки приложений и окон в результатах поиска (настройка). При выключении
+    /// строки показывают глиф категории на тематической плитке.
+    /// </summary>
+    public bool ShowAppIcons
+    {
+        get => _showAppIcons;
+        set
+        {
+            if (Set(ref _showAppIcons, value))
+            {
+                if (value)
+                {
+                    LoadResultIcons();
+                }
+                else
+                {
+                    foreach (var item in Results)
+                    {
+                        item.Icon = null;
+                    }
+                }
+            }
+        }
+    }
 
     public bool BluetoothVisible
     {
@@ -300,6 +329,7 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
 
         _iconScale = scale;
         _iconCache.Clear();
+        _resultIconCache.Clear();
 
         var path = _appIconPath;
         _appIconPath = null;
@@ -565,6 +595,65 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
             OnPropertyChanged(nameof(HasResults));
         }
         OnPropertyChanged(nameof(ShowEmptyState));
+
+        if (ShowAppIcons)
+        {
+            LoadResultIcons();
+        }
+    }
+
+    /// <summary>
+    /// Загружает настоящие значки приложений и окон для текущих строк результатов. Значок
+    /// достаётся shell-ом в фоне и кэшируется по пути; готовое изображение создаётся на
+    /// потоке интерфейса. Строка могла исчезнуть или смениться, пока значок грузился:
+    /// устаревший значок не применяется.
+    /// </summary>
+    private void LoadResultIcons()
+    {
+        var size = Math.Clamp(
+            (int)Math.Round(GlanceResultViewModel.IconDips * GlanceResultViewModel.IconOversample * _iconScale),
+            (int)(GlanceResultViewModel.IconDips * GlanceResultViewModel.IconOversample),
+            GlanceResultViewModel.MaxIconPixels);
+
+        foreach (var item in Results)
+        {
+            var path = item.IconPath;
+
+            if (item.Icon is not null || string.IsNullOrWhiteSpace(path))
+            {
+                continue;
+            }
+
+            if (_resultIconCache.TryGetValue(path, out var cached))
+            {
+                item.Icon = cached;
+                continue;
+            }
+
+            var captured = path;
+
+            _ = Task.Run(() =>
+            {
+                var pixels = ShellIconProvider.TryGetIcon(captured, size);
+
+                if (pixels is null)
+                {
+                    return;
+                }
+
+                _ = _dispatcher.TryEnqueue(() =>
+                {
+                    // Строка могла уйти из результатов (запрос сменился) или настройка
+                    // могла выключиться, пока значок грузился: применяется только
+                    // актуальный значок к ещё видимой строке.
+                    if (ShowAppIcons && Results.Contains(item) && IconBitmap.Create(pixels) is { } source)
+                    {
+                        _resultIconCache[captured] = source;
+                        item.Icon = source;
+                    }
+                });
+            });
+        }
     }
 
     private async Task RunCommandAsync(string commandId)

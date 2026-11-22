@@ -267,6 +267,17 @@ public static class SettingsCatalog
             (settings, value) => UserSettingsEditor.With(settings, topBarVolumePercent: AsBool(value)),
             []),
 
+        new(
+            "glanceAppIcons",
+            TopBarPageId,
+            "Настоящие значки приложений в поиске",
+            "Результаты поиска показывают значки приложений и открытых окон, как в dock. Когда выключено, строки показывают единые значки категории.",
+            ["поиск", "glance", "значки", "иконки", "приложения", "icons", "search"],
+            SettingKind.Toggle,
+            settings => settings.GlanceAppIcons,
+            (settings, value) => UserSettingsEditor.With(settings, glanceAppIcons: AsBool(value)),
+            []),
+
         // Проводник.
         new(
             "explorerViewMode",

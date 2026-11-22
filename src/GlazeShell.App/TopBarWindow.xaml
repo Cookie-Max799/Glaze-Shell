@@ -603,16 +603,27 @@
                                         <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
 
-                                    <Border
+                                    <Grid
                                         Width="32"
-                                        Height="32"
-                                        Background="{StaticResource GlazeElevatedBrush}"
-                                        CornerRadius="10">
-                                        <FontIcon
-                                            FontSize="14"
-                                            Foreground="{StaticResource GlazePanelTextSecondaryBrush}"
-                                            Glyph="{x:Bind Glyph}" />
-                                    </Border>
+                                        Height="32">
+                                        <Image
+                                            Source="{x:Bind Icon, Mode=OneWay}"
+                                            Visibility="{x:Bind HasIcon, Mode=OneWay}"
+                                            Width="28"
+                                            Height="28"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            Stretch="Uniform" />
+                                        <Border
+                                            Background="{StaticResource GlazeElevatedBrush}"
+                                            CornerRadius="10"
+                                            Visibility="{x:Bind ShowGlyph, Mode=OneWay}">
+                                            <FontIcon
+                                                FontSize="14"
+                                                Foreground="{StaticResource GlazeTextSecondaryBrush}"
+                                                Glyph="{x:Bind Glyph}" />
+                                        </Border>
+                                    </Grid>
 
                                     <StackPanel
                                         Grid.Column="1"

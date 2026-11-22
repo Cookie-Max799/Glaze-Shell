@@ -45,6 +45,9 @@ public sealed class ThemeApplicator
     private const string PanelTextSecondaryKey = "GlazePanelTextSecondaryBrush";
     private const string PanelTextMutedKey = "GlazePanelTextMutedBrush";
     private const string PanelTextAccentKey = "GlazePanelTextAccentBrush";
+    private const string PanelCardKey = "GlazePanelCardBrush";
+    private const string PanelCardTextPrimaryKey = "GlazePanelCardTextPrimaryBrush";
+    private const string PanelCardTextSecondaryKey = "GlazePanelCardTextSecondaryBrush";
     private const string SelectionKey = "GlazeSelectionBrush";
     private const string HoverKey = "GlazeHoverBrush";
     private const string PressedKey = "GlazePressedBrush";
@@ -513,6 +516,18 @@ public sealed class ThemeApplicator
         SetBrush(DockGlassKey, GlazePalette.WithAlpha(theme.Glass, dockAlpha));
         SetBrush(StartMenuGlassKey, GlazePalette.WithAlpha(theme.Glass, startMenuAlpha));
         SetBrush(PillKey, pill);
+
+        // Карточки раскрытых панелей (сети Wi-Fi, устройства Bluetooth) лежат на
+        // непрозрачной поверхности, поэтому их текст берётся из темы, а не из схемы
+        // стекла: схема выбирается по обоям, и на светлом рабочем столе тёмная тема
+        // давала тёмный текст на тёмной карточке. Сама карточка слегка светлее
+        // поверхности темы, чтобы читалась как карточка, а не как провал.
+        var card = light
+            ? GlazePalette.Mix(theme.Elevated, Color.FromArgb(0xFF, 0x00, 0x00, 0x00), 0.04)
+            : GlazePalette.Lighten(theme.Elevated, 0.12);
+        SetBrush(PanelCardKey, card);
+        SetBrush(PanelCardTextPrimaryKey, theme.TextPrimary);
+        SetBrush(PanelCardTextSecondaryKey, theme.TextSecondary);
         SetBrush(BlackKey, Color.FromArgb(0xFF, 0x00, 0x00, 0x00));
         SetBrush(WhiteKey, Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF));
         SetBrush(TextPrimaryKey, theme.TextPrimary);
@@ -688,6 +703,9 @@ public sealed class ThemeApplicator
         SetBrush(PanelTextSecondaryKey, surfaceText);
         SetBrush(PanelTextMutedKey, muted);
         SetBrush(PanelTextAccentKey, highlight);
+        SetBrush(PanelCardKey, surface);
+        SetBrush(PanelCardTextPrimaryKey, foreground);
+        SetBrush(PanelCardTextSecondaryKey, surfaceText);
         SetBrush(SelectionKey, selection);
         SetBrush(HoverKey, selection);
         SetBrush(PressedKey, GlazePalette.WithAlpha(highlight, ContrastSelectionAlpha));

@@ -71,6 +71,7 @@ public sealed record UserSettings
         int startMenuTransparency = DefaultStartMenuTransparency,
         bool topBarHidesWithQuickSettings = false,
         bool topBarVolumePercent = false,
+        bool glanceAppIcons = true,
         bool systemAppearanceEnabled = true,
         bool glazeWallpaperEnabled = false,
         bool glazeDesktopLayerEnabled = false)
@@ -99,6 +100,7 @@ public sealed record UserSettings
         HidePanelsInGlazeShell = hidePanelsInGlazeShell;
         TopBarHidesWithQuickSettings = topBarHidesWithQuickSettings;
         TopBarVolumePercent = topBarVolumePercent;
+        GlanceAppIcons = glanceAppIcons;
         SystemAppearanceEnabled = systemAppearanceEnabled;
         GlazeWallpaperEnabled = glazeWallpaperEnabled;
         GlazeDesktopLayerEnabled = glazeDesktopLayerEnabled;
@@ -250,6 +252,13 @@ public sealed record UserSettings
     /// уровня (0–100). По умолчанию выключено: панель остаётся компактной.
     /// </summary>
     public bool TopBarVolumePercent { get; }
+
+    /// <summary>
+    /// Показывать в результатах глобального поиска настоящие значки приложений и открытых
+    /// окон вместо единых значков категории. По умолчанию включено: поиск должен узнаваться
+    /// так же, как dock и слой рабочего стола.
+    /// </summary>
+    public bool GlanceAppIcons { get; }
 
     /// <summary>
     /// Переносить оформление Glaze на Windows: системный акцент, светлый или тёмный режим

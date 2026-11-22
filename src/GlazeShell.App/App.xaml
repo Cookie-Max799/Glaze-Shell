@@ -73,6 +73,16 @@
             <SolidColorBrush x:Key="GlazePanelTextSecondaryBrush" Color="#C6C0EC" />
             <SolidColorBrush x:Key="GlazePanelTextMutedBrush" Color="#918BBB" />
             <SolidColorBrush x:Key="GlazePanelTextAccentBrush" Color="#C9BEFF" />
+            <!--
+                Карточки внутри раскрытых панелей (сети Wi-Fi, устройства Bluetooth).
+                В отличие от подписей на стекле, текст карточки лежит на непрозрачной
+                поверхности, поэтому его цвет задаётся самой темой, а не яркостью обоев:
+                иначе на светлом рабочем столе тёмная тема давала тёмный текст на тёмной
+                карточке. Заливка тонирована цветом темы, а не серым.
+            -->
+            <SolidColorBrush x:Key="GlazePanelCardBrush" Color="#FF221C48" />
+            <SolidColorBrush x:Key="GlazePanelCardTextPrimaryBrush" Color="#F8F4FF" />
+            <SolidColorBrush x:Key="GlazePanelCardTextSecondaryBrush" Color="#C6C0EC" />
             <SolidColorBrush x:Key="GlazeSelectionBrush" Color="#33B4A4FF" />
             <!--
                 Наведение и нажатие кнопок: полупрозрачная примесь акцента. Отдельные

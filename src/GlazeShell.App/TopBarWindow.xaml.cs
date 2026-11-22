@@ -144,6 +144,7 @@ public sealed partial class TopBarWindow : Window
             DispatcherQueue);
 
         ViewModel.ShowVolumeCount = settings.GetSettings().TopBarVolumePercent;
+        ViewModel.ShowAppIcons = settings.GetSettings().GlanceAppIcons;
 
         InitializeComponent();
         SearchHit.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnSearchPointerPressed), true);
@@ -1640,6 +1641,7 @@ public sealed partial class TopBarWindow : Window
         _hideInOwnProcess = changed.Settings.HidePanelsInGlazeShell;
         _topBarHidesWithQuickSettings = changed.Settings.TopBarHidesWithQuickSettings;
         ViewModel.ShowVolumeCount = changed.Settings.TopBarVolumePercent;
+        ViewModel.ShowAppIcons = changed.Settings.GlanceAppIcons;
         _lastAppliedReveal = -1;
         _ = DispatcherQueue.TryEnqueue(() => UpdateOverlayBounds());
     }
