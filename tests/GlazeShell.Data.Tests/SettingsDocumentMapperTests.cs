@@ -603,4 +603,24 @@ public sealed class SettingsDocumentMapperTests
         Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var restored, out _));
         Assert.IsFalse(restored!.GlanceAppIcons);
     }
+
+    [TestMethod]
+    public void MissingDeviceRowLimitDefaultsToTheDefaultRow()
+    {
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(new SettingsDocument(), out var settings, out _));
+
+        Assert.AreEqual(UserSettings.DefaultTopBarDeviceRowLimit, settings!.TopBarDeviceRowLimit);
+    }
+
+    [TestMethod]
+    public void DeviceRowLimitSurvivesTheRoundTrip()
+    {
+        var settings = new UserSettings(topBarDeviceRowLimit: 5);
+
+        var document = SettingsDocument.FromSettings(settings);
+        Assert.AreEqual(5, document.TopBarDeviceRowLimit);
+
+        Assert.IsTrue(SettingsDocumentMapper.TryMap(document, out var restored, out _));
+        Assert.AreEqual(5, restored!.TopBarDeviceRowLimit);
+    }
 }

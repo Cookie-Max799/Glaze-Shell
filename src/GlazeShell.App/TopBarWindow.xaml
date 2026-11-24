@@ -463,6 +463,52 @@
                             Glyph="{x:Bind ViewModel.NetworkGlyph, Mode=OneWay}"
                              ToolTipService.ToolTip="Сеть: открыть панель Wi-Fi" />
                         </Button>
+                        <!--
+                            Секция заряда подключённых устройств. Пока устройств немного,
+                            они показываются строкой значков; когда строка становится
+                            длиннее лимита из настроек, она сворачивается в один общий
+                            значок. Наведение на значок или на строку показывает плашку
+                            с зарядом — её показывает опрос курсора в TopBarWindow.
+                        -->
+                        <StackPanel
+                            x:Name="DeviceIndicator"
+                            Orientation="Horizontal"
+                            Spacing="2"
+                            VerticalAlignment="Center"
+                            Visibility="{x:Bind ViewModel.HasDevices, Mode=OneWay}">
+                            <ItemsControl
+                                x:Name="DeviceIcons"
+                                ItemsSource="{x:Bind ViewModel.VisibleDevices, Mode=OneWay}"
+                                VerticalAlignment="Center"
+                                IsHitTestVisible="False">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal" Spacing="2" />
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="presentation:DeviceRowViewModel">
+                                        <FontIcon
+                                            Width="14"
+                                            Height="22"
+                                            HorizontalAlignment="Center"
+                                            VerticalAlignment="Center"
+                                            FontSize="12"
+                                            Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                                            Glyph="{x:Bind Glyph}"
+                                            ToolTipService.ToolTip="{x:Bind Name}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <FontIcon
+                                x:Name="CollapsedDevicesIcon"
+                                VerticalAlignment="Center"
+                                FontSize="12"
+                                Foreground="{StaticResource GlazeGlassTextSecondaryBrush}"
+                                Glyph="&#xE772;"
+                                ToolTipService.ToolTip="Подключённые устройства"
+                                Visibility="{x:Bind ViewModel.DevicesCollapsed, Mode=OneWay}" />
+                        </StackPanel>
                         <Button x:Name="BluetoothButton" Click="OnBluetoothClick" Width="18" Height="22" Padding="0" CornerRadius="6" Style="{StaticResource TopBarActionStyle}" AutomationProperties.Name="Bluetooth: состояние адаптера и устройства" Visibility="{x:Bind ViewModel.BluetoothVisible, Mode=OneWay}">
                         <FontIcon
                             x:Name="BluetoothIcon"

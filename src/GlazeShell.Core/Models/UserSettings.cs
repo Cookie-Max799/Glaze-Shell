@@ -33,6 +33,23 @@ public sealed record UserSettings
     public const int DefaultStartMenuTransparency = 35;
 
     /// <summary>
+    /// Сколько значков подключённых устройств помещается в строке верхней панели.
+    /// </summary>
+    public const int DefaultTopBarDeviceRowLimit = 3;
+
+    /// <summary>
+    /// Минимум устройств в строке верхней панели: хотя бы один значок должен помещаться.
+    /// </summary>
+    public const int MinTopBarDeviceRowLimit = 1;
+
+    /// <summary>
+    /// Максимум устройств в строке верхней панели. Дальше строка становится слишком
+    /// широкой и вытесняет остальные индикаторы, поэтому лишние устройства сворачиваются
+    /// в один значок со списком.
+    /// </summary>
+    public const int MaxTopBarDeviceRowLimit = 6;
+
+    /// <summary>
     /// Предел прозрачности, который пользователь может выставить ползунком. Дальше панель
     /// почти сливается с фоном, и подписи теряют читаемость.
     /// </summary>
@@ -71,6 +88,7 @@ public sealed record UserSettings
         int startMenuTransparency = DefaultStartMenuTransparency,
         bool topBarHidesWithQuickSettings = false,
         bool topBarVolumePercent = false,
+        int topBarDeviceRowLimit = DefaultTopBarDeviceRowLimit,
         bool glanceAppIcons = true,
         bool systemAppearanceEnabled = true,
         bool glazeWallpaperEnabled = false,
@@ -100,6 +118,7 @@ public sealed record UserSettings
         HidePanelsInGlazeShell = hidePanelsInGlazeShell;
         TopBarHidesWithQuickSettings = topBarHidesWithQuickSettings;
         TopBarVolumePercent = topBarVolumePercent;
+        TopBarDeviceRowLimit = NormalizeDeviceRowLimit(topBarDeviceRowLimit);
         GlanceAppIcons = glanceAppIcons;
         SystemAppearanceEnabled = systemAppearanceEnabled;
         GlazeWallpaperEnabled = glazeWallpaperEnabled;
@@ -254,6 +273,13 @@ public sealed record UserSettings
     public bool TopBarVolumePercent { get; }
 
     /// <summary>
+    /// Сколько значков подключённых устройств с зарядом помещается в строке верхней
+    /// панели (1–6). Когда устройств больше, строка сворачивается в один значок, при
+    /// наведении на который показывается список всех устройств.
+    /// </summary>
+    public int TopBarDeviceRowLimit { get; }
+
+    /// <summary>
     /// Показывать в результатах глобального поиска настоящие значки приложений и открытых
     /// окон вместо единых значков категории. По умолчанию включено: поиск должен узнаваться
     /// так же, как dock и слой рабочего стола.
@@ -295,6 +321,14 @@ public sealed record UserSettings
     /// </summary>
     private static int NormalizeTransparency(int transparency) =>
         Math.Clamp(transparency, 0, MaxTransparency);
+
+    /// <summary>
+    /// Приводит число устройств в строке к безопасному диапазону. Значение вне диапазона
+    /// не отклоняется, а приводится к ближайшей границе: документ настроек, записанный
+    /// другой версией приложения, не должен считаться повреждённым.
+    /// </summary>
+    private static int NormalizeDeviceRowLimit(int limit) =>
+        Math.Clamp(limit, MinTopBarDeviceRowLimit, MaxTopBarDeviceRowLimit);
 
     /// <summary>
     /// Нормализует избранные папки Explorer: отбрасывает пустые и повторяющиеся пути,

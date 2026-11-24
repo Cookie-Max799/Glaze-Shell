@@ -91,6 +91,12 @@ public sealed class SettingsDocument
     public bool? TopBarVolumePercent { get; set; }
 
     /// <summary>
+    /// Сколько значков подключённых устройств с зарядом помещается в строке верхней панели.
+    /// Отсутствие значения в старом документе означает значение по умолчанию.
+    /// </summary>
+    public int? TopBarDeviceRowLimit { get; set; }
+
+    /// <summary>
     /// Настоящие значки приложений и окон в результатах поиска. Отсутствие значения в
     /// старом документе означает включённое поведение.
     /// </summary>
@@ -154,6 +160,7 @@ public sealed class SettingsDocument
             HidePanelsInGlazeShell = settings.HidePanelsInGlazeShell,
             TopBarHidesWithQuickSettings = settings.TopBarHidesWithQuickSettings,
             TopBarVolumePercent = settings.TopBarVolumePercent,
+            TopBarDeviceRowLimit = settings.TopBarDeviceRowLimit,
             GlanceAppIcons = settings.GlanceAppIcons,
             SystemAppearanceEnabled = settings.SystemAppearanceEnabled,
             GlazeWallpaperEnabled = settings.GlazeWallpaperEnabled,
@@ -279,6 +286,7 @@ public static class SettingsDocumentMapper
             startMenuTransparency,
             document.TopBarHidesWithQuickSettings ?? false,
             document.TopBarVolumePercent ?? false,
+            document.TopBarDeviceRowLimit ?? UserSettings.DefaultTopBarDeviceRowLimit,
             document.GlanceAppIcons ?? true,
             document.SystemAppearanceEnabled ?? true,
             document.GlazeWallpaperEnabled ?? false,

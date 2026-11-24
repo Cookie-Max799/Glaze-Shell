@@ -7,6 +7,7 @@ using GlazeShell.Core.Events;
 using GlazeShell.Core.Glance;
 using GlazeShell.Core.Interfaces;
 using GlazeShell.Core.Models;
+using GlazeShell.Core.SystemStatus;
 using GlazeShell.Windows.Applications;
 using GlazeShell.Windows.Audio;
 using GlazeShell.Windows.SystemStatus;
@@ -73,6 +74,12 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
     private bool _bluetoothVisible;
     private bool _bluetoothChecking;
     private long _nextBluetoothCheck;
+    private bool _devicesChecking;
+    private long _nextDevicesCheck;
+    private int _deviceRowLimit = UserSettings.DefaultTopBarDeviceRowLimit;
+    private IReadOnlyList<DeviceRowViewModel> _visibleDevices = Array.Empty<DeviceRowViewModel>();
+    private bool _hasDevices;
+    private bool _devicesCollapsed;
 
     public string KeyboardLanguage
     {
@@ -131,6 +138,101 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         get => _bluetoothVisible;
         set => Set(ref _bluetoothVisible, value);
     }
+
+    /// <summary>Все подключённые устройства с зарядом, отсортированные по имени.</summary>
+    public IReadOnlyList<DeviceRowViewModel> Devices { get; private set; } =
+        Array.Empty<DeviceRowViewModel>();
+
+    /// <summary>
+    /// Значки устройств, которые помещаются в строку верхней панели: первые
+    /// <see cref="DeviceRowLimit"/> из <see cref="Devices"/>. Когда устройств больше,
+    /// строка целиком сворачивается в один значок.
+    /// </summary>
+    public IReadOnlyList<DeviceRowViewModel> VisibleDevices
+    {
+        get => _visibleDevices;
+        private set => Set(ref _visibleDevices, value);
+    }
+
+    /// <summary>Есть ли хотя бы одно устройство с зарядом.</summary>
+    public bool HasDevices
+    {
+        get => _hasDevices;
+        private set => Set(ref _hasDevices, value);
+    }
+
+    /// <summary>
+    /// Устройств больше, чем помещается в строку: вместо строки значков показывается
+    /// один общий значок, при наведении на который раскрывается список всех устройств.
+    /// </summary>
+    public bool DevicesCollapsed
+    {
+        get => _devicesCollapsed;
+        private set => Set(ref _devicesCollapsed, value);
+    }
+
+    /// <summary>
+    /// Сколько значков устройств помещается в строку (настройка «Значков устройств в строке»).
+    /// </summary>
+    public int DeviceRowLimit
+    {
+        get => _deviceRowLimit;
+        set
+        {
+            if (Set(ref _deviceRowLimit, value))
+            {
+                RebuildDeviceRows();
+            }
+        }
+    }
+
+    /// <summary>Строка устройств раскрыта: значки и список обновляются одним методом.</summary>
+    private void RebuildDeviceRows()
+    {
+        HasDevices = Devices.Count > 0;
+        DevicesCollapsed = Devices.Count > DeviceRowLimit;
+        VisibleDevices = DevicesCollapsed
+            ? Array.Empty<DeviceRowViewModel>()
+            : Devices.Take(DeviceRowLimit).ToList();
+    }
+
+    /// <summary>
+    /// Обновляет список подключённых устройств. Опрос дерева PnP дороже остальных
+    /// индикаторов, поэтому он идёт не чаще раза в 5 секунд, без наложения запросов,
+    /// и в фоне: поток UI ждёт только готовый список.
+    /// </summary>
+    private void RefreshDevices()
+    {
+        if (_devicesChecking || Environment.TickCount64 < _nextDevicesCheck)
+        {
+            return;
+        }
+
+        _devicesChecking = true;
+        _nextDevicesCheck = Environment.TickCount64 + 5000;
+        _ = RefreshDevicesAsync();
+    }
+
+    private async Task RefreshDevicesAsync()
+    {
+        try
+        {
+            var devices = await Task.Run(DeviceBatteryProvider.GetDevices);
+            Devices = devices
+                .Select(device => new DeviceRowViewModel(device))
+                .ToList();
+            RebuildDeviceRows();
+        }
+        catch
+        {
+            // Отказ PnP не должен ломать остальные индикаторы: строка просто не обновится.
+        }
+        finally
+        {
+            _devicesChecking = false;
+        }
+    }
+
     private string _clockDate = string.Empty;
     private string _batteryText = string.Empty;
     private string _batteryGlyph = "\uE83F";
@@ -874,6 +976,7 @@ public sealed class TopBarViewModel : INotifyPropertyChanged, IDisposable
         }
 
         RefreshBluetoothStatus();
+        RefreshDevices();
     }
 
     private void RefreshBluetoothStatus()

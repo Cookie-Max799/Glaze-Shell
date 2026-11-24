@@ -104,6 +104,7 @@ public sealed partial class TopBarWindow : Window
     private int? _lastLanguageId;
     private long _nextLanguageCheck;
     private VolumeToastWindow? _volumeToast;
+    private DeviceToastWindow? _deviceToast;
     private BluetoothPanelWindow? _bluetoothPanel;
     private NetworkPanelWindow? _networkPanel;
 
@@ -145,6 +146,7 @@ public sealed partial class TopBarWindow : Window
 
         ViewModel.ShowVolumeCount = settings.GetSettings().TopBarVolumePercent;
         ViewModel.ShowAppIcons = settings.GetSettings().GlanceAppIcons;
+        ViewModel.DeviceRowLimit = settings.GetSettings().TopBarDeviceRowLimit;
 
         InitializeComponent();
         SearchHit.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(OnSearchPointerPressed), true);
@@ -212,6 +214,8 @@ public sealed partial class TopBarWindow : Window
             _languageToast = null;
             _volumeToast?.Close();
             _volumeToast = null;
+            _deviceToast?.Close();
+            _deviceToast = null;
             _bluetoothPanel?.Close();
             _bluetoothPanel = null;
             _networkPanel?.Close();
@@ -493,6 +497,7 @@ public sealed partial class TopBarWindow : Window
                 _bluetoothPanel?.ShiftBy(shift);
                 _languageToast?.ShiftBy(shift);
                 _volumeToast?.ShiftBy(shift);
+                _deviceToast?.ShiftBy(shift);
             }
         }
     }
@@ -552,6 +557,7 @@ public sealed partial class TopBarWindow : Window
         }
 
         UpdateVolumeHover();
+        UpdateDeviceHover();
 
         var now = DateTimeOffset.UtcNow;
         var pinned = IsPinnedOpen();
@@ -751,17 +757,28 @@ public sealed partial class TopBarWindow : Window
     /// </summary>
     private bool IsCursorOverVolumeIcon()
     {
-        if (VolumeIndicator is null ||
-            VolumeIndicator.ActualWidth <= 0 ||
-            VolumeIndicator.ActualHeight <= 0 ||
-            !OverlayWindow.TryGetCursorPosition(_hwnd, out var x, out var y))
+        return OverlayWindow.TryGetCursorPosition(_hwnd, out var x, out var y) &&
+            IsCursorOverElement(VolumeIndicator, x, y);
+    }
+
+    /// <summary>
+    /// Курсор над элементом полосы. Область считается в экранных координатах: окно
+    /// неактивирующее, события указателя в элементы не приходят, поэтому наведение
+    /// проверяется по положению курсора раз в кадр.
+    /// </summary>
+    private bool IsCursorOverElement(FrameworkElement? element, int x, int y)
+    {
+        if (element is null ||
+            element.ActualWidth <= 0 ||
+            element.ActualHeight <= 0 ||
+            element.Visibility != Visibility.Visible)
         {
             return false;
         }
 
-        var bounds = VolumeIndicator
+        var bounds = element
             .TransformToVisual(null)
-            .TransformBounds(new Rect(0, 0, VolumeIndicator.ActualWidth, VolumeIndicator.ActualHeight));
+            .TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
 
         var left = (int)Math.Round(bounds.X * _scale);
         var top = (int)Math.Round(bounds.Y * _scale);
@@ -769,6 +786,69 @@ public sealed partial class TopBarWindow : Window
         var bottom = (int)Math.Round((bounds.Y + bounds.Height) * _scale);
 
         return x >= left && x < right && y >= top && y < bottom;
+    }
+
+    /// <summary>
+    /// Наведение на секцию заряда устройств показывает плашку. Пока устройств немного,
+    /// плашка своя у каждого значка; когда строка свернулась в один значок, плашка
+    /// показывает список всех устройств.
+    /// </summary>
+    private void UpdateDeviceHover()
+    {
+        if (_closed ||
+            _reveal <= 0.5 ||
+            !ViewModel.HasDevices ||
+            _monitorTarget.Target is not { } monitor ||
+            !OverlayWindow.TryGetCursorPosition(_hwnd, out var x, out var y))
+        {
+            return;
+        }
+
+        if (ViewModel.DevicesCollapsed)
+        {
+            if (IsCursorOverElement(CollapsedDevicesIcon, x, y))
+            {
+                _deviceToast ??= new DeviceToastWindow(_themes);
+                _deviceToast.ShowDevices(
+                    ViewModel.Devices,
+                    monitor,
+                    GetIconCenterX(CollapsedDevicesIcon),
+                    ToastTopDips());
+            }
+
+            return;
+        }
+
+        if (DeviceIconUnderCursor(x, y) is not { } hit)
+        {
+            return;
+        }
+
+        _deviceToast ??= new DeviceToastWindow(_themes);
+        _deviceToast.ShowDevice(hit.Device, monitor, hit.CenterX, ToastTopDips());
+    }
+
+    /// <summary>
+    /// Значок устройства под курсором и его центр по X в физических пикселях экрана.
+    /// Контейнеры строки запрашиваются у генератора: разметка значка задана шаблоном,
+    /// и его положение зависит от раскладки.
+    /// </summary>
+    private (DeviceRowViewModel Device, int CenterX)? DeviceIconUnderCursor(int x, int y)
+    {
+        var devices = ViewModel.VisibleDevices;
+
+        for (var index = 0; index < devices.Count; index++)
+        {
+            if (DeviceIcons.ItemContainerGenerator.ContainerFromIndex(index) is not FrameworkElement container ||
+                !IsCursorOverElement(container, x, y))
+            {
+                continue;
+            }
+
+            return (devices[index], GetIconCenterX(container));
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1309,6 +1389,8 @@ public sealed partial class TopBarWindow : Window
         // до первого показа, и появление начинается со стекла, а не с плотного кадра.
         _volumeToast ??= new VolumeToastWindow(_themes);
         _volumeToast.Prewarm(_scale);
+        _deviceToast ??= new DeviceToastWindow(_themes);
+        _deviceToast.Prewarm(_scale);
         _languageToast ??= new LanguageToastWindow(_themes);
         _languageToast.Prewarm(_scale);
     }
@@ -1642,6 +1724,7 @@ public sealed partial class TopBarWindow : Window
         _topBarHidesWithQuickSettings = changed.Settings.TopBarHidesWithQuickSettings;
         ViewModel.ShowVolumeCount = changed.Settings.TopBarVolumePercent;
         ViewModel.ShowAppIcons = changed.Settings.GlanceAppIcons;
+        ViewModel.DeviceRowLimit = changed.Settings.TopBarDeviceRowLimit;
         _lastAppliedReveal = -1;
         _ = DispatcherQueue.TryEnqueue(() => UpdateOverlayBounds());
     }

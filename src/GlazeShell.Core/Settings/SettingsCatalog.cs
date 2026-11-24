@@ -268,6 +268,22 @@ public static class SettingsCatalog
             []),
 
         new(
+            "topBarDeviceRowLimit",
+            TopBarPageId,
+            "Значков устройств в строке",
+            "Сколько подключённых устройств с зарядом показывать значками в верхней панели. Когда устройств больше, строка сворачивается в один значок со списком.",
+            ["устройства", "заряд", "батарея", "наушники", "bluetooth", "devices", "battery", "верхняя панель"],
+            SettingKind.Range,
+            settings => (double)settings.TopBarDeviceRowLimit,
+            (settings, value) => UserSettingsEditor.With(
+                settings,
+                topBarDeviceRowLimit: (int)Math.Round(AsDouble(value))),
+            [],
+            Minimum: UserSettings.MinTopBarDeviceRowLimit,
+            Maximum: UserSettings.MaxTopBarDeviceRowLimit,
+            Unit: "шт."),
+
+        new(
             "glanceAppIcons",
             TopBarPageId,
             "Настоящие значки приложений в поиске",

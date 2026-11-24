@@ -88,6 +88,26 @@ public sealed class UserSettingsTests
     }
 
     [TestMethod]
+    public void DefaultDeviceRowLimitFitsTheTopBar()
+    {
+        Assert.AreEqual(
+            UserSettings.DefaultTopBarDeviceRowLimit,
+            UserSettings.CreateDefault().TopBarDeviceRowLimit);
+    }
+
+    [TestMethod]
+    public void DeviceRowLimitIsClampedToASafeRange()
+    {
+        Assert.AreEqual(
+            UserSettings.MinTopBarDeviceRowLimit,
+            new UserSettings(topBarDeviceRowLimit: -5).TopBarDeviceRowLimit);
+        Assert.AreEqual(
+            UserSettings.MaxTopBarDeviceRowLimit,
+            new UserSettings(topBarDeviceRowLimit: 99).TopBarDeviceRowLimit);
+        Assert.AreEqual(4, new UserSettings(topBarDeviceRowLimit: 4).TopBarDeviceRowLimit);
+    }
+
+    [TestMethod]
     public void DefaultDockIsEnabledWithNoPins()
     {
         var settings = UserSettings.CreateDefault();

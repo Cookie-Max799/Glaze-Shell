@@ -138,6 +138,35 @@ public sealed class SettingsCatalogTests
     }
 
     [TestMethod]
+    public void DeviceRowLimitLivesOnTheTopBarPage()
+    {
+        var definition = SettingsCatalog.All.Single(item => item.Id == "topBarDeviceRowLimit");
+
+        Assert.AreEqual(SettingsCatalog.TopBarPageId, definition.PageId);
+        Assert.AreEqual(SettingKind.Range, definition.Kind);
+        Assert.AreEqual((double)UserSettings.MinTopBarDeviceRowLimit, definition.Minimum);
+        Assert.AreEqual((double)UserSettings.MaxTopBarDeviceRowLimit, definition.Maximum);
+        Assert.AreEqual(1.0, definition.Step);
+        Assert.AreEqual(
+            (double)UserSettings.DefaultTopBarDeviceRowLimit,
+            (double)definition.Read(UserSettings.CreateDefault())!);
+
+        var written = definition.Write(UserSettings.CreateDefault(), 5.0);
+
+        Assert.AreEqual(5, written.TopBarDeviceRowLimit);
+        Assert.AreEqual(5.0, (double)definition.Read(written)!);
+    }
+
+    [TestMethod]
+    public void DeviceRowLimitIsFoundBySearch()
+    {
+        Assert.IsTrue(
+            SettingsCatalog.Search("устройства").Any(definition => definition.Id == "topBarDeviceRowLimit"));
+        Assert.IsTrue(
+            SettingsCatalog.Search("батарея").Any(definition => definition.Id == "topBarDeviceRowLimit"));
+    }
+
+    [TestMethod]
     public void EmptyQueryReturnsEverySetting()
     {
         Assert.HasCount(SettingsCatalog.All.Count, SettingsCatalog.Search("   "));
