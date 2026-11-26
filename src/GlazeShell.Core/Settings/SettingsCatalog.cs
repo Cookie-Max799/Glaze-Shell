@@ -23,6 +23,9 @@ public static class SettingsCatalog
     /// <summary>Идентификатор страницы «Верхняя панель».</summary>
     public const string TopBarPageId = "topbar";
 
+    /// <summary>Идентификатор страницы «Переключение приложений».</summary>
+    public const string SwitcherPageId = "switcher";
+
     /// <summary>Идентификатор страницы «Проводник».</summary>
     public const string ExplorerPageId = "explorer";
 
@@ -44,6 +47,7 @@ public static class SettingsCatalog
         new(TransparencyPageId, "Прозрачность", "\uE8A7", "Основные"),
         new(DockPageId, "Dock", "\uE8FC", "Интерфейс"),
         new(TopBarPageId, "Верхняя панель", "\uE7C4", "Интерфейс"),
+        new(SwitcherPageId, "Переключение", "\uE8AB", "Интерфейс"),
         new(ExplorerPageId, "Проводник", "\uE8B7", "Интерфейс"),
         new(WindowsPageId, "Оформление Windows", "\uE771", "Система"),
         new(AccessibilityPageId, "Доступность", "\uE776", "Система"),
@@ -293,6 +297,48 @@ public static class SettingsCatalog
             settings => settings.GlanceAppIcons,
             (settings, value) => UserSettingsEditor.With(settings, glanceAppIcons: AsBool(value)),
             []),
+
+        // Переключение приложений (Alt+Tab в стиле macOS).
+        new(
+            "altTabSwitcherEnabled",
+            SwitcherPageId,
+            "Переключатель приложений Alt+Tab",
+            "Показывать панель со значками приложений вместо системного переключателя окон. Одна иконка на приложение, выбор Tab или стрелками, отпускание Alt активирует выбранное.",
+            ["alt", "tab", "переключатель", "switcher", "приложения", "apps", "macos", "окна"],
+            SettingKind.Toggle,
+            settings => settings.AltTabSwitcherEnabled,
+            (settings, value) => UserSettingsEditor.With(settings, altTabSwitcherEnabled: AsBool(value)),
+            []),
+
+        new(
+            "altTabPanelDelayMs",
+            SwitcherPageId,
+            "Задержка появления панели",
+            "Пауза перед показом панели переключателя. Быстрое нажатие и отпускание Alt+Tab успевает переключить приложение, не показывая панель.",
+            ["задержка", "delay", "панель", "мигание", "alt", "tab", "switcher"],
+            SettingKind.Range,
+            settings => (double)settings.AltTabPanelDelayMs,
+            (settings, value) => UserSettingsEditor.With(
+                settings,
+                altTabPanelDelayMs: (int)Math.Round(AsDouble(value))),
+            [],
+            Minimum: UserSettings.MinAltTabPanelDelayMs,
+            Maximum: UserSettings.MaxAltTabPanelDelayMs,
+            Step: 10,
+            Unit: "мс",
+            IsEnabledBy: "altTabSwitcherEnabled"),
+
+        new(
+            "altTabRestoreMinimized",
+            SwitcherPageId,
+            "Разворачивать свёрнутые окна",
+            "По умолчанию свёрнутое приложение активируется, но остаётся свёрнутым. Shift при отпускании Alt разворачивает окно и при выключенной настройке.",
+            ["свёрнутые", "развернуть", "restore", "minimized", "окна", "alt", "tab"],
+            SettingKind.Toggle,
+            settings => settings.AltTabRestoreMinimized,
+            (settings, value) => UserSettingsEditor.With(settings, altTabRestoreMinimized: AsBool(value)),
+            [],
+            IsEnabledBy: "altTabSwitcherEnabled"),
 
         // Проводник.
         new(

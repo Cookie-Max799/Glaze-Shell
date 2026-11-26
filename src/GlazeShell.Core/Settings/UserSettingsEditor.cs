@@ -45,6 +45,9 @@ public static class UserSettingsEditor
         bool? systemAppearanceEnabled = null,
         bool? glazeWallpaperEnabled = null,
         bool? glazeDesktopLayerEnabled = null,
+        bool? altTabSwitcherEnabled = null,
+        int? altTabPanelDelayMs = null,
+        bool? altTabRestoreMinimized = null,
         IReadOnlyDictionary<string, string>? monitorNames = null,
         IReadOnlyList<string>? dockPinnedApps = null,
         IReadOnlyList<string>? explorerFavorites = null)
@@ -84,6 +87,9 @@ public static class UserSettingsEditor
             glanceAppIcons: glanceAppIcons ?? source.GlanceAppIcons,
             systemAppearanceEnabled: systemAppearanceEnabled ?? source.SystemAppearanceEnabled,
             glazeWallpaperEnabled: glazeWallpaperEnabled ?? source.GlazeWallpaperEnabled,
-            glazeDesktopLayerEnabled: glazeDesktopLayerEnabled ?? source.GlazeDesktopLayerEnabled);
+            glazeDesktopLayerEnabled: glazeDesktopLayerEnabled ?? source.GlazeDesktopLayerEnabled,
+            altTabSwitcherEnabled: altTabSwitcherEnabled ?? source.AltTabSwitcherEnabled,
+            altTabPanelDelayMs: altTabPanelDelayMs ?? source.AltTabPanelDelayMs,
+            altTabRestoreMinimized: altTabRestoreMinimized ?? source.AltTabRestoreMinimized);
     }
 }

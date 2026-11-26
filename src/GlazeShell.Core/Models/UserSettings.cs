@@ -55,6 +55,21 @@ public sealed record UserSettings
     /// </summary>
     public const int MaxTransparency = 90;
 
+    /// <summary>
+    /// Задержка показа панели переключателя Alt+Tab по умолчанию: 130 мс. Быстрое нажатие
+    /// и отпускание Alt+Tab успевает переключить приложение, не показывая панель.
+    /// </summary>
+    public const int DefaultAltTabPanelDelayMs = 130;
+
+    /// <summary>Минимальная задержка панели: она появляется сразу.</summary>
+    public const int MinAltTabPanelDelayMs = 0;
+
+    /// <summary>
+    /// Максимальная задержка панели. Дольше 300 мс панель воспринимается как зависание,
+    /// а не как защита от мигания при быстром переключении.
+    /// </summary>
+    public const int MaxAltTabPanelDelayMs = 300;
+
     private static readonly IReadOnlyList<string> EmptyDockPinnedApps = Array.Empty<string>();
 
     private static readonly IReadOnlyList<string> EmptyExplorerFavorites = Array.Empty<string>();
@@ -92,7 +107,10 @@ public sealed record UserSettings
         bool glanceAppIcons = true,
         bool systemAppearanceEnabled = true,
         bool glazeWallpaperEnabled = false,
-        bool glazeDesktopLayerEnabled = false)
+        bool glazeDesktopLayerEnabled = false,
+        bool altTabSwitcherEnabled = true,
+        int altTabPanelDelayMs = DefaultAltTabPanelDelayMs,
+        bool altTabRestoreMinimized = false)
     {
         Language = ModelValidation.Required(language, nameof(language));
         ActiveThemeId = ModelValidation.Optional(activeThemeId, nameof(activeThemeId));
@@ -123,6 +141,9 @@ public sealed record UserSettings
         SystemAppearanceEnabled = systemAppearanceEnabled;
         GlazeWallpaperEnabled = glazeWallpaperEnabled;
         GlazeDesktopLayerEnabled = glazeDesktopLayerEnabled;
+        AltTabSwitcherEnabled = altTabSwitcherEnabled;
+        AltTabPanelDelayMs = NormalizeAltTabPanelDelay(altTabPanelDelayMs);
+        AltTabRestoreMinimized = altTabRestoreMinimized;
         StartWithWindows = startWithWindows;
         MinimizeToTray = minimizeToTray;
         ShowDesktopOnStartup = showDesktopOnStartup;
@@ -307,6 +328,26 @@ public sealed record UserSettings
     /// </summary>
     public bool GlazeDesktopLayerEnabled { get; }
 
+    /// <summary>
+    /// Заменять системный Alt+Tab переключателем приложений в стиле macOS: панель со
+    /// значками приложений, одна иконка на приложение, выбор Tab или стрелками, отпускание
+    /// Alt активирует выбранное. По умолчанию включено.
+    /// </summary>
+    public bool AltTabSwitcherEnabled { get; }
+
+    /// <summary>
+    /// Задержка показа панели переключателя в миллисекундах (0–300). Быстрое нажатие и
+    /// отпускание Alt+Tab переключает приложение без появления панели.
+    /// </summary>
+    public int AltTabPanelDelayMs { get; }
+
+    /// <summary>
+    /// Разворачивать свёрнутые окна при активации через переключатель. По умолчанию
+    /// выключено, как в macOS: свёрнутое приложение активируется, но остаётся свёрнутым.
+    /// Shift при отпускании Alt разворачивает окно и при выключенной настройке.
+    /// </summary>
+    public bool AltTabRestoreMinimized { get; }
+
     public static UserSettings CreateDefault() => new();
 
     private static ExplorerViewMode ValidateExplorerViewMode(ExplorerViewMode mode, string parameterName) =>
@@ -329,6 +370,14 @@ public sealed record UserSettings
     /// </summary>
     private static int NormalizeDeviceRowLimit(int limit) =>
         Math.Clamp(limit, MinTopBarDeviceRowLimit, MaxTopBarDeviceRowLimit);
+
+    /// <summary>
+    /// Приводит задержку панели переключателя к безопасному диапазону. Значение вне
+    /// диапазона не отклоняется, а приводится к ближайшей границе: документ настроек,
+    /// записанный другой версией приложения, не должен считаться повреждённым.
+    /// </summary>
+    private static int NormalizeAltTabPanelDelay(int delay) =>
+        Math.Clamp(delay, MinAltTabPanelDelayMs, MaxAltTabPanelDelayMs);
 
     /// <summary>
     /// Нормализует избранные папки Explorer: отбрасывает пустые и повторяющиеся пути,

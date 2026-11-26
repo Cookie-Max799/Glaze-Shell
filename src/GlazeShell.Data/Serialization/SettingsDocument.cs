@@ -115,6 +115,18 @@ public sealed class SettingsDocument
     public bool? GlazeDesktopLayerEnabled { get; set; }
 
     /// <summary>
+    /// Заменять системный Alt+Tab переключателем приложений в стиле macOS. Отсутствие
+    /// значения в старом документе означает включённое поведение.
+    /// </summary>
+    public bool? AltTabSwitcherEnabled { get; set; }
+
+    /// <summary>Задержка появления панели переключателя в миллисекундах (0–300).</summary>
+    public int? AltTabPanelDelayMs { get; set; }
+
+    /// <summary>Разворачивать свёрнутые окна при активации. По умолчанию выключено.</summary>
+    public bool? AltTabRestoreMinimized { get; set; }
+
+    /// <summary>
     /// Старое общее значение прозрачности стекла (0–90). Сохранено для чтения документов
     /// предыдущих версий: если новые поля отсутствуют, значение переносится в оба ползунка.
     /// </summary>
@@ -165,6 +177,9 @@ public sealed class SettingsDocument
             SystemAppearanceEnabled = settings.SystemAppearanceEnabled,
             GlazeWallpaperEnabled = settings.GlazeWallpaperEnabled,
             GlazeDesktopLayerEnabled = settings.GlazeDesktopLayerEnabled,
+            AltTabSwitcherEnabled = settings.AltTabSwitcherEnabled,
+            AltTabPanelDelayMs = settings.AltTabPanelDelayMs,
+            AltTabRestoreMinimized = settings.AltTabRestoreMinimized,
             MonitorNames = settings.MonitorNames.Count == 0
                 ? null
                 : new Dictionary<string, string>(settings.MonitorNames, StringComparer.OrdinalIgnoreCase)
@@ -290,7 +305,10 @@ public static class SettingsDocumentMapper
             document.GlanceAppIcons ?? true,
             document.SystemAppearanceEnabled ?? true,
             document.GlazeWallpaperEnabled ?? false,
-            document.GlazeDesktopLayerEnabled ?? false);
+            document.GlazeDesktopLayerEnabled ?? false,
+            document.AltTabSwitcherEnabled ?? true,
+            document.AltTabPanelDelayMs ?? UserSettings.DefaultAltTabPanelDelayMs,
+            document.AltTabRestoreMinimized ?? false);
         diagnostics = Array.Empty<string>();
         return true;
     }
