@@ -160,6 +160,7 @@ internal static class User32
     internal const long WsThickFrame = 0x0004_0000;
     internal const long WsCaption = 0x00C0_0000;
     internal const long WsExToolWindow = 0x0000_0080;
+    internal const long WsExAppWindow = 0x0004_0000;
     internal const long WsExTopmost = 0x0000_0008;
     internal const long WsExNoActivate = 0x0800_0000;
     internal const long WsExWindowEdge = 0x0000_0100;
@@ -457,6 +458,40 @@ internal static class User32
 
     /// <summary>Виртуальная клавиша W: с Windows открывает панель Widgets.</summary>
     internal const int VkW = 0x57;
+
+    /// <summary>Клавиша Shift: направление Tab и разворот свёрнутых окон при отпускании Alt.</summary>
+    internal const int VkShift = 0x10;
+
+    /// <summary>Модификатор Alt (общий код без указания стороны).</summary>
+    internal const int VkMenu = 0x12;
+
+    internal const int VkLeftMenu = 0xA4;
+    internal const int VkRightMenu = 0xA5;
+
+    /// <summary>Esc: отмена переключения приложений.</summary>
+    internal const int VkEscape = 0x1B;
+
+    internal const int VkLeft = 0x25;
+    internal const int VkRight = 0x27;
+
+    /// <summary>Стрелка вниз раскрывает окна выделенного приложения.</summary>
+    internal const int VkDown = 0x28;
+
+    /// <summary>Q: завершить выделенное приложение.</summary>
+    internal const int VkQ = 0x51;
+
+    /// <summary>H: свернуть (скрыть) выделенное приложение.</summary>
+    internal const int VkH = 0x48;
+
+    /// <summary>Цифра 1 дублирует стрелку вниз (раскрытие окон).</summary>
+    internal const int Vk1 = 0x31;
+
+    /// <summary>
+    /// Скан-код клавиши ` (тильда/ё). Привязка к скан-коду, а не символу, из-за русской
+    /// раскладки: на ней та же клавиша даёт «ё» и виртуальную клавишу OEM_3.
+    /// </summary>
+    internal const uint ScanCodeBacktick = 0x29;
+
     internal const int VkLeftButton = 0x01;
     internal const int VkVolumeMute = 0xAD;
     internal const int VkVolumeDown = 0xAE;

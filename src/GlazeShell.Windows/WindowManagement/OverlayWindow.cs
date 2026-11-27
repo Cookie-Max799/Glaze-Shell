@@ -376,6 +376,12 @@ public static class OverlayWindow
         (User32.GetAsyncKeyState(User32.VkRightWindows) & 0x8000) != 0;
 
     /// <summary>
+    /// Нажат ли Alt. Переключатель приложений проверяет это опросом как страховку: если
+    /// отпускание Alt почему-то не пришло хуком, режим всё равно завершится, а не залипнет.
+    /// </summary>
+    public static bool IsAltKeyDown() => (User32.GetAsyncKeyState(User32.VkMenu) & 0x8000) != 0;
+
+    /// <summary>
     /// Нажата ли левая кнопка мыши. Окно, показанное без активации, не получает нажатий
     /// в сами элементы, поэтому клик по строке поиска распознаётся по состоянию кнопки.
     /// </summary>

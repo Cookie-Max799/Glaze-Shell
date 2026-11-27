@@ -153,6 +153,12 @@ public partial class App : Application
     /// </summary>
     private VolumeKeyInterceptor? _volumeKeyInterceptor;
 
+    /// <summary>
+    /// Переключатель приложений Alt+Tab в стиле macOS: перехват клавиш, порядок MRU и
+    /// панель со значками. Создаётся по настройке и живёт до выключения или выхода.
+    /// </summary>
+    private AppSwitcherController? _appSwitcher;
+
     /// <summary>Заглушка меню «Пуск» (этап 5), открывающаяся клавишей Windows.</summary>
     private StartMenuWindow? _startMenu;
 
@@ -532,6 +538,41 @@ public partial class App : Application
             }
         }
 
+        // Переключатель приложений Alt+Tab живёт отдельно от панелей: ему нужен только
+        // хук, MRU и собственное окно панели. В безопасном режиме он не запускается.
+        void ApplyAppSwitcher(bool enabled)
+        {
+            if (!enabled)
+            {
+                _appSwitcher?.Dispose();
+                _appSwitcher = null;
+                return;
+            }
+
+            if (_appSwitcher is not null)
+            {
+                _appSwitcher.SetEnabled(true);
+                return;
+            }
+
+            var controller = new AppSwitcherController(
+                settingsManager,
+                monitorManager,
+                themeApplicator,
+                eventManager,
+                window.DispatcherQueue,
+                _logger);
+
+            if (controller.Start())
+            {
+                _appSwitcher = controller;
+            }
+            else
+            {
+                controller.Dispose();
+            }
+        }
+
         void ApplyStartMenu(bool enabled)
         {
             if (!enabled)
@@ -646,6 +687,7 @@ public partial class App : Application
                 current.DockEnabled &&
                 current.DockReplacesTaskbar);
             ApplyDesktopLayer(!_safeMode && current.GlazeDesktopLayerEnabled);
+            ApplyAppSwitcher(!_safeMode && current.AltTabSwitcherEnabled);
         }
 
         _applyUiMode = ApplyUiMode;
@@ -1541,6 +1583,14 @@ public partial class App : Application
             _foregroundSubscription = null;
             _searchDismissTimer?.Stop();
             _searchDismissTimer = null;
+        });
+
+        // Переключатель приложений снимает свой хук вместе с оболочкой: иначе Alt+Tab
+        // перестал бы работать в системе после выхода.
+        TryShutdownStep("alt tab switcher", () =>
+        {
+            _appSwitcher?.Dispose();
+            _appSwitcher = null;
         });
 
         TryShutdownStep("top bar", () =>
