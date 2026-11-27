@@ -164,7 +164,7 @@ public sealed class AppSwitcherController : IDisposable
         _window = null;
     }
 
-    private void OnSwitchStarted() => RunOnUi(BeginSwitch);
+    private void OnSwitchStarted(bool backwards) => RunOnUi(() => BeginSwitch(backwards));
 
     private void OnMoveRequested(int delta) => RunOnUi(() =>
     {
@@ -212,7 +212,7 @@ public sealed class AppSwitcherController : IDisposable
         }
     });
 
-    private void BeginSwitch()
+    private void BeginSwitch(bool backwards)
     {
         if (_disposed || _session is not null)
         {
@@ -252,6 +252,14 @@ public sealed class AppSwitcherController : IDisposable
                          string.Equals(applications[0].Id, foregroundId, StringComparison.Ordinal);
 
         _session = new ApplicationSwitchSession(applications, selectNext);
+
+        if (backwards && _session.Count > 1)
+        {
+            // Shift+Alt+Tab идёт назад, поэтому начинается с конца списка, а не со второго
+            // элемента: иначе первое нажатие ничем не отличалось бы от обычного Alt+Tab.
+            _ = _session.Select(_session.Count - 1);
+        }
+
         _hidden.Clear();
         _panelRevealed = false;
 

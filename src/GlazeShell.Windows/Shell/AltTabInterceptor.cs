@@ -51,7 +51,8 @@ public sealed class AltTabInterceptor : IDisposable
     }
 
     /// <summary>Alt+Tab в состоянии покоя: открыть переключатель.</summary>
-    public event Action? SwitchStarted;
+    /// <remarks>Аргумент — зажат ли Shift: назад выделяется последний элемент списка.</remarks>
+    public event Action<bool>? SwitchStarted;
 
     /// <summary>Сдвиг выделения: +1 — вправо, −1 — влево.</summary>
     public event Action<int>? MoveRequested;
@@ -247,7 +248,7 @@ public sealed class AltTabInterceptor : IDisposable
             if (!_switching)
             {
                 _switching = true;
-                Raise(SwitchStarted);
+                Raise(() => SwitchStarted?.Invoke(IsKeyDown(User32.VkShift)));
             }
             else
             {
