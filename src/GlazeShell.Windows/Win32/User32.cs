@@ -475,6 +475,7 @@ internal static class User32
     internal const int VkRight = 0x27;
 
     /// <summary>Стрелка вниз раскрывает окна выделенного приложения.</summary>
+    internal const int VkUp = 0x26;
     internal const int VkDown = 0x28;
 
     /// <summary>Q: завершить выделенное приложение.</summary>

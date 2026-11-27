@@ -57,8 +57,7 @@ public sealed class AltTabInterceptor : IDisposable
     /// <summary>Сдвиг выделения: +1 — вправо, −1 — влево.</summary>
     public event Action<int>? MoveRequested;
 
-    /// <summary>Раскрыть или свернуть окна выделенного приложения (стрелка вниз или 1).</summary>
-    public event Action? WindowsToggleRequested;
+    public event Action<int>? MoveRowRequested;
 
     /// <summary>Esc: отменить переключение.</summary>
     public event Action? CancelRequested;
@@ -274,9 +273,12 @@ public sealed class AltTabInterceptor : IDisposable
                 Raise(() => MoveRequested?.Invoke(1));
                 break;
 
+            case User32.VkUp:
+                Raise(() => MoveRowRequested?.Invoke(-1));
+                break;
+
             case User32.VkDown:
-            case User32.Vk1:
-                Raise(WindowsToggleRequested);
+                Raise(() => MoveRowRequested?.Invoke(1));
                 break;
 
             case User32.VkQ:

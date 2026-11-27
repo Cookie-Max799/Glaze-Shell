@@ -1,4 +1,4 @@
-﻿using System.Collections.Specialized;
+using System.Collections.Specialized;
 using System.Diagnostics;
 using GlazeShell.App.Presentation;
 using GlazeShell.App.Theming;
@@ -262,6 +262,17 @@ public sealed partial class DockWindow : Window
     /// хотя фокус формально ушёл в собственное окно.
     /// </summary>
     private bool _pinned;
+    private bool _overviewVisible;
+
+    public void SetOverviewVisible(bool visible)
+    {
+        _overviewVisible = visible;
+        UpdateReveal();
+        if (visible)
+        {
+            OverlayWindow.RaiseTopMost(_hwnd);
+        }
+    }
 
     public void SetSuppressed(bool suppressed)
     {
@@ -694,6 +705,12 @@ public sealed partial class DockWindow : Window
 
         // Пока открыто меню «Пуск» на рабочем столе, панель не зависит ни от активного
         // окна, ни от курсора: она остаётся частью оболочки под меню.
+        if (_overviewVisible)
+        {
+            SetRevealTarget(1);
+            return;
+        }
+
         if (_pinned)
         {
             SetRevealTarget(_suppressed ? 0 : 1);

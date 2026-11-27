@@ -7,17 +7,9 @@ using GlazeShell.Windows.Win32;
 namespace GlazeShell.Windows.Switching;
 
 /// <summary>
-/// Снимок приложений для переключателя Alt+Tab: перечисляет окна, группирует их по
-/// приложению и раскладывает по порядку недавней работы.
+/// Снимок окон для переключателя Alt+Tab.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Одна запись — одно приложение, а не одно окно: окна группируются по процессу, как
-/// Cmd+Tab на macOS. Окна UWP живут в общем процессе <c>ApplicationFrameHost</c>, поэтому
-/// для рамки <c>ApplicationFrameWindow</c> приложение определяется по дочернему
-/// <c>Windows.UI.Core.CoreWindow</c>: иначе «Параметры», «Калькулятор» и «Фотографии»
-/// слились бы в одну иконку.
-/// </para>
 /// <para>
 /// Перечисление идёт по Z-порядку окон: система отдаёт самое недавно активное окно первым,
 /// поэтому при пустом MRU порядок снимка уже осмысленный. Затем MRU переставляет записи.
@@ -51,71 +43,17 @@ public sealed class SwitchableApplicationProvider
     private readonly Dictionary<int, ProcessInfo> _processes = [];
     private readonly Lock _processLock = new();
 
-    /// <summary>
-    /// Собирает приложения для показа переключателя. Приложения без окон в снимок не
-    /// попадают: активировать их без окна средствами Win32 нельзя, а иконка без действия
-    /// только запутывала бы.
-    /// </summary>
-    /// <param name="order">Порядок недавней работы, применяемый к снимку.</param>
-    public IReadOnlyList<SwitchableApplication> Snapshot(RecentApplicationOrder order)
+    public IReadOnlyList<SwitchableWindow> Snapshot(RecentWindowOrder order)
     {
-        ArgumentNullException.ThrowIfNull(order);
-
         var candidates = CollectWindows();
-        var processes = candidates.Select(candidate => candidate.ProcessId).ToHashSet();
-        PruneProcessCache(processes);
+        PruneProcessCache(candidates.Select(candidate => candidate.ProcessId).ToHashSet());
+        var windows = candidates.Select(candidate => new SwitchableWindow(
+            candidate.Handle,
+            candidate.Title,
+            candidate.IsMinimized,
+            ResolveProcess(candidate.ProcessId).ExecutablePath)).ToArray();
 
-        var groupOrder = new List<string>(candidates.Count);
-        var windowsByGroup = new Dictionary<string, List<SwitchableWindow>>(StringComparer.Ordinal);
-        var processByGroup = new Dictionary<string, int>(StringComparer.Ordinal);
-        var titleByGroup = new Dictionary<string, string>(StringComparer.Ordinal);
-
-        foreach (var candidate in candidates)
-        {
-            var groupId = candidate.GroupId;
-
-            if (!windowsByGroup.TryGetValue(groupId, out var windows))
-            {
-                windows = [];
-                windowsByGroup[groupId] = windows;
-                processByGroup[groupId] = candidate.ProcessId;
-                titleByGroup[groupId] = candidate.Title;
-                groupOrder.Add(groupId);
-            }
-
-            windows.Add(new SwitchableWindow(candidate.Handle, candidate.Title, candidate.IsMinimized));
-        }
-
-        var applications = new List<SwitchableApplication>(groupOrder.Count);
-
-        foreach (var groupId in groupOrder)
-        {
-            var processId = processByGroup[groupId];
-            var process = ResolveProcess(processId);
-            var name = process.Name;
-
-            // Рамка UWP без дочернего CoreWindow отдаёт имя хоста, а не приложения:
-            // в этом случае понятнее заголовок окна.
-            if (groupId.StartsWith("uwp:", StringComparison.Ordinal) &&
-                (name.Length == 0 || name.Equals("ApplicationFrameHost", StringComparison.OrdinalIgnoreCase)))
-            {
-                name = titleByGroup[groupId];
-            }
-
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                name = titleByGroup[groupId];
-            }
-
-            applications.Add(new SwitchableApplication(
-                groupId,
-                string.IsNullOrWhiteSpace(name) ? "Приложение" : name,
-                processId,
-                process.ExecutablePath,
-                windowsByGroup[groupId]));
-        }
-
-        return order.Order(applications, application => application.Id);
+        return order.Order(windows);
     }
 
     /// <summary>

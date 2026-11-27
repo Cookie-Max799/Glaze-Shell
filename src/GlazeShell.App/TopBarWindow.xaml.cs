@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.Diagnostics;
 using GlazeShell.App.Presentation;
 using GlazeShell.App.Theming;
@@ -290,10 +290,11 @@ public sealed partial class TopBarWindow : Window
         _collapseAt = DateTimeOffset.UtcNow + RevealHold;
     }
 
-    public bool IsRevealed => !_suppressed &&
+    public bool IsRevealed => !_overviewVisible && !_suppressed &&
         (_reveal > 0.5 || DateTimeOffset.UtcNow < _collapseAt);
 
     private bool _suppressed;
+    private bool _overviewVisible;
 
     /// <summary>
     /// Полоса держится раскрытой, пока поверх рабочего стола открыто меню «Пуск».
@@ -318,6 +319,24 @@ public sealed partial class TopBarWindow : Window
         if (held)
         {
             _collapseAt = DateTimeOffset.UtcNow + CollapseDelay;
+        }
+    }
+
+    public void SetOverviewVisible(bool visible)
+    {
+        if (_closed || _overviewVisible == visible)
+        {
+            return;
+        }
+
+        _overviewVisible = visible;
+        if (visible)
+        {
+            AppWindow.Hide();
+        }
+        else
+        {
+            OverlayWindow.ShowWithoutActivation(_hwnd);
         }
     }
 
@@ -551,13 +570,16 @@ public sealed partial class TopBarWindow : Window
 
         // Окно в режиме без активации не получает нажатий в элементы, поэтому клик
         // по строке поиска распознаётся по глобальному состоянию кнопки мыши.
-        if (!_inputEnabled && _reveal > 0.5 && OverlayWindow.IsLeftButtonDown() && IsCursorOverSearchBox())
+        if (!_overviewVisible && !_inputEnabled && _reveal > 0.5 && OverlayWindow.IsLeftButtonDown() && IsCursorOverSearchBox())
         {
             FocusSearchCore(clearText: false);
         }
 
-        UpdateVolumeHover();
-        UpdateDeviceHover();
+        if (!_overviewVisible)
+        {
+            UpdateVolumeHover();
+            UpdateDeviceHover();
+        }
 
         var now = DateTimeOffset.UtcNow;
         var pinned = IsPinnedOpen();

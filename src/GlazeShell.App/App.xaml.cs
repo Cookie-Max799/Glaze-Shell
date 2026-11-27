@@ -158,6 +158,7 @@ public partial class App : Application
     /// панель со значками. Создаётся по настройке и живёт до выключения или выхода.
     /// </summary>
     private AppSwitcherController? _appSwitcher;
+    private bool _windowOverviewVisible;
 
     /// <summary>Заглушка меню «Пуск» (этап 5), открывающаяся клавишей Windows.</summary>
     private StartMenuWindow? _startMenu;
@@ -445,6 +446,8 @@ public partial class App : Application
                     themeApplicator,
                     window);
 
+                _topBar.SetOverviewVisible(_windowOverviewVisible);
+
                 // Аппаратные клавиши громкости забираются у системы: иначе Windows рисует
                 // свой индикатор поверх стеклянных панелей.
                 _volumeKeyInterceptor ??= new VolumeKeyInterceptor();
@@ -506,6 +509,7 @@ public partial class App : Application
                 {
                     _dock.StartRequested -= OnDockStartRequested;
                     _dock.StartRequested += OnDockStartRequested;
+                    _dock.SetOverviewVisible(_windowOverviewVisible);
                 }
             }
             else
@@ -562,6 +566,8 @@ public partial class App : Application
                 eventManager,
                 window.DispatcherQueue,
                 _logger);
+
+            controller.OverviewVisibilityChanged += SetWindowOverviewVisible;
 
             if (controller.Start())
             {
@@ -1350,6 +1356,13 @@ public partial class App : Application
         }
 
         _ = window.DispatcherQueue.TryEnqueue(() => action());
+    }
+
+    private void SetWindowOverviewVisible(bool visible)
+    {
+        _windowOverviewVisible = visible;
+        _topBar?.SetOverviewVisible(visible);
+        _dock?.SetOverviewVisible(visible);
     }
 
     private void RevealPanels()

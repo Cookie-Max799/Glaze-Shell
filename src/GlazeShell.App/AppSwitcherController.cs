@@ -12,24 +12,6 @@ using Microsoft.UI.Dispatching;
 
 namespace GlazeShell.App;
 
-/// <summary>
-/// Связывает клавиатурный перехват Alt+Tab с панелью переключателя: снимает снимок MRU,
-/// ведёт выделение, обновляет порядок при каждой смене фокуса и активирует выбранное
-/// приложение.
-/// </summary>
-/// <remarks>
-/// <para>
-/// События хука приходят с потока хука, поэтому все действия переносятся на поток
-/// интерфейса. Снимок берётся только при входе в режим: приложения, появившиеся во время
-/// переключения, не сдвигают выделение.
-/// </para>
-/// <para>
-/// Панель показывается с задержкой из настроек. Если Alt отпущен раньше, приложение
-/// переключается без панели — это и есть быстрое нажатие Alt+Tab. Отпускание Alt
-/// дополнительно проверяется опросом: даже если событие хука потерялось, режим завершится
-/// и не оставит панель на экране.
-/// </para>
-/// </remarks>
 public sealed class AppSwitcherController : IDisposable
 {
     private static readonly TimeSpan GuardInterval = TimeSpan.FromMilliseconds(100);
@@ -42,8 +24,8 @@ public sealed class AppSwitcherController : IDisposable
     private readonly FileLogger _logger;
 
     private readonly SwitchableApplicationProvider _provider = new();
-    private readonly RecentApplicationOrder _recent = new();
-    private readonly HashSet<string> _hidden = new(StringComparer.Ordinal);
+    private readonly RecentWindowOrder _recent = new();
+    private readonly HashSet<SwitchableWindow> _hidden = [];
 
     private readonly AltTabInterceptor _interceptor;
     private readonly DispatcherQueueTimer _showTimer;
@@ -51,9 +33,12 @@ public sealed class AppSwitcherController : IDisposable
     private readonly IDisposable _foregroundSubscription;
 
     private AppSwitcherWindow? _window;
-    private ApplicationSwitchSession? _session;
+    private MonitorInfo? _monitor;
+    private WindowSwitchSession? _session;
     private bool _panelRevealed;
     private bool _disposed;
+
+    public event Action<bool>? OverviewVisibilityChanged;
 
     public AppSwitcherController(
         ISettingsManager settings,
@@ -74,7 +59,7 @@ public sealed class AppSwitcherController : IDisposable
 
         _interceptor.SwitchStarted += OnSwitchStarted;
         _interceptor.MoveRequested += OnMoveRequested;
-        _interceptor.WindowsToggleRequested += OnWindowsToggleRequested;
+        _interceptor.MoveRowRequested += OnMoveRowRequested;
         _interceptor.CancelRequested += OnCancelRequested;
         _interceptor.CloseRequested += OnCloseRequested;
         _interceptor.HideRequested += OnHideRequested;
@@ -149,7 +134,7 @@ public sealed class AppSwitcherController : IDisposable
 
         _interceptor.SwitchStarted -= OnSwitchStarted;
         _interceptor.MoveRequested -= OnMoveRequested;
-        _interceptor.WindowsToggleRequested -= OnWindowsToggleRequested;
+        _interceptor.MoveRowRequested -= OnMoveRowRequested;
         _interceptor.CancelRequested -= OnCancelRequested;
         _interceptor.CloseRequested -= OnCloseRequested;
         _interceptor.HideRequested -= OnHideRequested;
@@ -159,14 +144,16 @@ public sealed class AppSwitcherController : IDisposable
 
         _foregroundSubscription.Dispose();
 
-        _session = null;
-        _window?.CloseWindow();
+        EndSession(null);
+        _window?.Close();
         _window = null;
     }
 
     private void OnSwitchStarted(bool backwards) => RunOnUi(() => BeginSwitch(backwards));
 
-    private void OnMoveRequested(int delta) => RunOnUi(() =>
+    private void OnMoveRequested(int delta) => RunOnUi(() => MoveSelection(delta));
+
+    private void MoveSelection(int delta)
     {
         if (_session is null || !_session.Move(delta) || !_panelRevealed)
         {
@@ -174,23 +161,10 @@ public sealed class AppSwitcherController : IDisposable
         }
 
         _window?.SetSelection(_session.SelectedIndex);
-        UpdateWindowList();
-    });
+    }
 
-    private void OnWindowsToggleRequested() => RunOnUi(() =>
-    {
-        if (_session is null)
-        {
-            return;
-        }
-
-        _session.ToggleWindows();
-
-        if (_panelRevealed)
-        {
-            UpdateWindowList();
-        }
-    });
+    private void OnMoveRowRequested(int delta) =>
+        RunOnUi(() => MoveSelection(delta * (_panelRevealed ? _window!.Columns : 1)));
 
     private void OnCancelRequested() => RunOnUi(() => Cancel());
 
@@ -219,24 +193,18 @@ public sealed class AppSwitcherController : IDisposable
             return;
         }
 
-        TouchForeground();
+        _ = OverlayWindow.TryGetForegroundWindow(out var foreground, out _);
+        _recent.Touch((long)foreground);
 
-        IReadOnlyList<SwitchableApplication> applications;
+        IReadOnlyList<SwitchableWindow> windows;
 
         try
         {
-            applications = _provider.Snapshot(_recent);
+            windows = _provider.Snapshot(_recent);
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {
-            _logger.Write(GlazeLogLevel.Warning, "AltTab", "The application snapshot failed.", exception);
-            return;
-        }
-
-        if (applications.Count < 2)
-        {
-            // Одно приложение переключать некуда: панель не показывается, режим не
-            // начинается. Отпускание Alt придёт хуком и будет проигнорировано.
+            _logger.Write(GlazeLogLevel.Warning, "AltTab", "The window snapshot failed.", exception);
             return;
         }
 
@@ -247,38 +215,25 @@ public sealed class AppSwitcherController : IDisposable
             return;
         }
 
-        var foregroundId = GetForegroundGroupId();
-        var selectNext = foregroundId is null ||
-                         string.Equals(applications[0].Id, foregroundId, StringComparison.Ordinal);
-
-        _session = new ApplicationSwitchSession(applications, selectNext);
-
-        if (backwards && _session.Count > 1)
-        {
-            // Shift+Alt+Tab идёт назад, поэтому начинается с конца списка, а не со второго
-            // элемента: иначе первое нажатие ничем не отличалось бы от обычного Alt+Tab.
-            _ = _session.Select(_session.Count - 1);
-        }
+        _session = new WindowSwitchSession(windows, (long)foreground, backwards);
 
         _hidden.Clear();
         _panelRevealed = false;
 
-        EnsureWindow();
-        _window!.Prepare(applications, _session.SelectedIndex, monitor);
+        _monitor = monitor;
 
+        _guardTimer.Start();
         var delay = _settings.GetSettings().AltTabPanelDelayMs;
 
         if (delay <= 0)
         {
-            RevealPanel();
+            Invoke(RevealPanel);
         }
         else
         {
             _showTimer.Interval = TimeSpan.FromMilliseconds(delay);
             _showTimer.Start();
         }
-
-        _guardTimer.Start();
     }
 
     private void RevealPanel()
@@ -288,160 +243,102 @@ public sealed class AppSwitcherController : IDisposable
             return;
         }
 
+        if (_monitor is not { } monitor)
+        {
+            return;
+        }
+
+        EnsureWindow();
         _panelRevealed = true;
-        _window?.Reveal();
-
-        // Пока панель ждала задержки, Tab и ↓ могли изменить выделение: переносим
-        // накопленное состояние на экран в момент показа.
-        _window?.SetSelection(session.SelectedIndex);
-        UpdateWindowList();
-    }
-
-    private void Commit(bool shift)
-    {
-        var session = _session;
-
-        if (session is null)
-        {
-            return;
-        }
-
-        _showTimer.Stop();
-        _guardTimer.Stop();
-        _session = null;
-        _panelRevealed = false;
-        _interceptor.ResetSwitching();
-
-        var selected = session.Selected;
-        var preferredWindow = session.SelectedWindow is { } window ? (nint)window.Handle : 0;
-        var hidden = selected is not null && _hidden.Contains(selected.Id);
-
-        // Остальные скрытые клавишей H приложения возвращаются: H — временное действие
-        // внутри переключения, а не команда «свернуть насовсем».
-        var restoreLater = _hidden.Count == 0
-            ? []
-            : session.Items
-                .Where(application => _hidden.Contains(application.Id) && !ReferenceEquals(application, selected))
-                .ToArray();
-
-        _hidden.Clear();
-        _window?.Hide(animate: true);
-
-        foreach (var application in restoreLater)
-        {
-            try
-            {
-                _ = ApplicationActivationService.Restore(application);
-            }
-            catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
-            {
-                _logger.Write(GlazeLogLevel.Warning, "AltTab", "Restoring a hidden application failed.", exception);
-            }
-        }
-
-        if (selected is null)
-        {
-            return;
-        }
-
-        var settings = _settings.GetSettings();
-        var restore = shift || settings.AltTabRestoreMinimized || hidden;
-
         try
         {
-            if (ApplicationActivationService.Activate(selected, restore, preferredWindow))
-            {
-                _recent.Touch(selected.Id);
-            }
-            else
-            {
-                // Окно могло закрыться между снимком и выбором, либо принадлежит
-                // приложению с повышенными правами — фокус система не отдала.
-                _logger.Write(
-                    GlazeLogLevel.Warning,
-                    "AltTab",
-                    $"The selected application '{selected.Name}' did not come to the foreground.");
-            }
+            _window!.ShowOverview(session.Items, session.SelectedIndex, monitor);
+            OverviewVisibilityChanged?.Invoke(true);
         }
-        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        catch
         {
-            _logger.Write(GlazeLogLevel.Warning, "AltTab", "Activating the selected application failed.", exception);
+            EndSession(null);
+            throw;
         }
     }
 
-    private void Cancel()
+    private void Commit(bool restoreMinimized)
+    {
+        var selected = _session?.Selected;
+        var restore = selected is not null && _hidden.Contains(selected);
+        EndSession(selected);
+
+        if (selected is not null &&
+            ApplicationActivationService.Activate(selected, restore || restoreMinimized || _settings.GetSettings().AltTabRestoreMinimized))
+        {
+            _recent.Touch(selected.Handle);
+        }
+    }
+
+    private void Cancel() => EndSession(null);
+
+    private void EndSession(SwitchableWindow? selected)
     {
         _showTimer.Stop();
         _guardTimer.Stop();
         _session = null;
-        _hidden.Clear();
-        _panelRevealed = false;
+        _monitor = null;
         _interceptor.ResetSwitching();
-        _window?.Hide(animate: true);
+
+        if (_panelRevealed)
+        {
+            _panelRevealed = false;
+            try
+            {
+                _window?.HideOverview();
+            }
+            finally
+            {
+                OverviewVisibilityChanged?.Invoke(false);
+            }
+        }
+
+        foreach (var window in _hidden)
+        {
+            if (window != selected)
+            {
+                ApplicationActivationService.Restore(window);
+            }
+        }
+
+        _hidden.Clear();
     }
 
     private void CloseSelected()
     {
-        if (_session is null)
+        if (_session is not { Selected: { } selected } session)
         {
             return;
         }
 
-        var removed = _session.RemoveSelected();
-
-        if (removed is null)
+        if (!ApplicationActivationService.Close(selected))
         {
             return;
         }
 
-        ApplicationActivationService.Close(removed);
-        _hidden.Remove(removed.Id);
+        if (_hidden.Remove(selected))
+        {
+            ApplicationActivationService.Restore(selected);
+        }
 
+        session.RemoveSelected();
         if (_panelRevealed)
         {
-            _window?.Remove(removed.Id);
-            _window?.SetWindowList(null, -1);
-            _window?.SetSelection(_session.SelectedIndex);
-        }
-
-        if (_session.IsEmpty)
-        {
-            Cancel();
+            _window?.Refresh(session.Items, session.SelectedIndex);
         }
     }
 
     private void HideSelected()
     {
-        if (_session?.Selected is not { } selected)
+        if (_session?.Selected is { } selected && ApplicationActivationService.Minimize(selected))
         {
-            return;
+            _hidden.Add(selected);
         }
-
-        ApplicationActivationService.Minimize(selected);
-        _ = _hidden.Add(selected.Id);
-
-        if (_panelRevealed)
-        {
-            _window?.SetHidden(selected.Id);
-        }
-    }
-
-    private void UpdateWindowList()
-    {
-        if (_window is null)
-        {
-            return;
-        }
-
-        if (_session is not { WindowsExpanded: true, Selected: { } application })
-        {
-            _window.SetWindowList(null, -1);
-            return;
-        }
-
-        _window.SetWindowList(
-            application.Windows.Select(window => window.Title).ToArray(),
-            _session.SelectedWindowIndex);
     }
 
     private void OnShowTimerTick(DispatcherQueueTimer sender, object args)
@@ -450,7 +347,7 @@ public sealed class AppSwitcherController : IDisposable
 
         if (_session is not null && !_panelRevealed)
         {
-            RevealPanel();
+            Invoke(RevealPanel);
         }
     }
 
@@ -465,57 +362,17 @@ public sealed class AppSwitcherController : IDisposable
         if (!OverlayWindow.IsAltKeyDown())
         {
             // Страховка от потерянного события: Alt уже отпущен, режим завершается.
-            Commit(shift: false);
+            Commit(restoreMinimized: false);
         }
     }
 
     private void OnForegroundChanged(ForegroundWindowChanged changed)
     {
-        if (_disposed || changed.Window is not { } window)
+        if (changed.Window is { } window &&
+            long.TryParse(window.Id, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var handle))
         {
-            return;
+            RunOnUi(() => _recent.Touch(handle));
         }
-
-        RunOnUi(() =>
-        {
-            if (TryGetGroupId(window, out var id))
-            {
-                _recent.Touch(id);
-            }
-        });
-    }
-
-    private void TouchForeground()
-    {
-        if (TryGetForegroundGroupId(out var id))
-        {
-            _recent.Touch(id);
-        }
-    }
-
-    private static string? GetForegroundGroupId()
-    {
-        return TryGetForegroundGroupId(out var id) ? id : null;
-    }
-
-    private static bool TryGetForegroundGroupId(out string id)
-    {
-        id = string.Empty;
-
-        return OverlayWindow.TryGetForegroundWindow(out var hwnd, out _) &&
-               SwitchableApplicationProvider.TryGetGroupId(hwnd, out id);
-    }
-
-    private static bool TryGetGroupId(WindowInfo window, out string id)
-    {
-        id = string.Empty;
-
-        if (!long.TryParse(window.Id, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
-        {
-            return false;
-        }
-
-        return SwitchableApplicationProvider.TryGetGroupId(unchecked((nint)value), out id);
     }
 
     private MonitorInfo? ResolveMonitor()
@@ -557,20 +414,9 @@ public sealed class AppSwitcherController : IDisposable
         }
 
         var window = new AppSwitcherWindow(_themes);
-        window.SelectionRequested += OnWindowSelectionRequested;
+
         window.ItemActivated += OnWindowItemActivated;
         _window = window;
-    }
-
-    private void OnWindowSelectionRequested(int index)
-    {
-        if (_session is null || !_session.Select(index) || !_panelRevealed)
-        {
-            return;
-        }
-
-        _window?.SetSelection(_session.SelectedIndex);
-        UpdateWindowList();
     }
 
     private void OnWindowItemActivated(int index)
@@ -582,7 +428,7 @@ public sealed class AppSwitcherController : IDisposable
 
         if (_session.Select(index) || index == _session.SelectedIndex)
         {
-            Commit(shift: false);
+            Commit(restoreMinimized: true);
         }
     }
 
@@ -606,11 +452,14 @@ public sealed class AppSwitcherController : IDisposable
     {
         try
         {
-            action();
+            if (!_disposed)
+            {
+                action();
+            }
         }
         catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
         {
-            _logger.Write(GlazeLogLevel.Error, "AltTab", "The application switcher failed.", exception);
+            _logger.Write(GlazeLogLevel.Error, "AltTab", "The window switcher failed.", exception);
         }
     }
 }
