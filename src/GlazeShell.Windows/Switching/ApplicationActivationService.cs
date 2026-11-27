@@ -29,6 +29,12 @@ public static class ApplicationActivationService
     /// <param name="preferredWindow">
     /// Конкретное окно (например, выбранное в раскрытом списке) или 0.
     /// </param>
+    /// <remarks>
+    /// Без явного окна поднимается последнее активное окно приложения
+    /// (<see cref="SwitchableApplication.MostRecentWindow"/>), а не любое несвёрнутое:
+    /// пользователь ждёт возврата к тому окну, в котором работал. Свёрнутое окно
+    /// разворачивается только по Shift или настройке.
+    /// </remarks>
     public static bool Activate(SwitchableApplication application, bool restoreMinimized, nint preferredWindow = 0)
     {
         ArgumentNullException.ThrowIfNull(application);
@@ -42,7 +48,12 @@ public static class ApplicationActivationService
             ? application.Windows.FirstOrDefault(window => (nint)window.Handle == preferredWindow)
             : null;
 
-        target ??= application.Windows.FirstOrDefault(window => !window.IsMinimized) ?? application.Windows[0];
+        target ??= application.MostRecentWindow;
+
+        if (target is null)
+        {
+            return false;
+        }
 
         var hwnd = (nint)target.Handle;
 
@@ -53,10 +64,8 @@ public static class ApplicationActivationService
         }
 
         var minimized = User32.IsIconic(hwnd);
-        var restore = restoreMinimized ||
-                      minimized && (preferredWindow != 0 || application.Windows.All(window => window.IsMinimized));
 
-        if (minimized && restore)
+        if (minimized && (restoreMinimized || preferredWindow != 0))
         {
             _ = User32.ShowWindow(hwnd, User32.SwRestore);
         }

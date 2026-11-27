@@ -119,6 +119,33 @@ public sealed class SwitchableApplicationProvider
     }
 
     /// <summary>
+    /// Прогревает кэш имён и путей процессов заранее, чтобы первый Alt+Tab не тратил
+    /// время на чтение версий файлов. Вызывается в фоне при старте; ошибки не критичны.
+    /// </summary>
+    public void Warm()
+    {
+        try
+        {
+            var processes = CollectWindows()
+                .Select(candidate => candidate.ProcessId)
+                .Where(processId => processId > 0)
+                .Distinct()
+                .ToArray();
+
+            PruneProcessCache(processes.ToHashSet());
+
+            foreach (var processId in processes)
+            {
+                _ = ResolveProcess(processId);
+            }
+        }
+        catch (Exception exception) when (exception is not OutOfMemoryException and not StackOverflowException)
+        {
+            System.Diagnostics.Trace.WriteLine($"GlazeShell.AltTab: warming the process cache failed. {exception}");
+        }
+    }
+
+    /// <summary>
     /// Идентификатор приложения для окна. Нужен обновлению MRU по событию фокуса: событие
     /// приносит только дескриптор окна.
     /// </summary>

@@ -376,4 +376,47 @@ public sealed class UserSettingsTests
         Assert.AreEqual(ThemeMode.Dark, updated.ThemeMode);
         Assert.IsFalse(updated.DockEnabled);
     }
+
+    [TestMethod]
+    public void SwitcherDefaultsAreEnabledWithShortDelay()
+    {
+        var settings = UserSettings.CreateDefault();
+
+        Assert.IsTrue(settings.AltTabSwitcherEnabled);
+        Assert.AreEqual(UserSettings.DefaultAltTabPanelDelayMs, settings.AltTabPanelDelayMs);
+        Assert.IsFalse(settings.AltTabRestoreMinimized);
+    }
+
+    [TestMethod]
+    public void SwitcherDelayIsClampedToTheAllowedRange()
+    {
+        var negative = new UserSettings(altTabPanelDelayMs: -40);
+        var tooLong = new UserSettings(altTabPanelDelayMs: 9999);
+        var inside = new UserSettings(altTabPanelDelayMs: 180);
+
+        Assert.AreEqual(UserSettings.MinAltTabPanelDelayMs, negative.AltTabPanelDelayMs);
+        Assert.AreEqual(UserSettings.MaxAltTabPanelDelayMs, tooLong.AltTabPanelDelayMs);
+        Assert.AreEqual(180, inside.AltTabPanelDelayMs);
+    }
+
+    [TestMethod]
+    public void EditorKeepsOtherSettingsWhenSwitcherChanges()
+    {
+        var source = new UserSettings(
+            altTabSwitcherEnabled: true,
+            altTabPanelDelayMs: 130,
+            altTabRestoreMinimized: false,
+            themeMode: ThemeMode.Dark);
+
+        var updated = UserSettingsEditor.With(
+            source,
+            altTabSwitcherEnabled: false,
+            altTabPanelDelayMs: 200,
+            altTabRestoreMinimized: true);
+
+        Assert.IsFalse(updated.AltTabSwitcherEnabled);
+        Assert.AreEqual(200, updated.AltTabPanelDelayMs);
+        Assert.IsTrue(updated.AltTabRestoreMinimized);
+        Assert.AreEqual(ThemeMode.Dark, updated.ThemeMode);
+    }
 }

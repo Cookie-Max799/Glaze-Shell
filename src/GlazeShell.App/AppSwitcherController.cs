@@ -106,6 +106,7 @@ public sealed class AppSwitcherController : IDisposable
         if (_interceptor.Start())
         {
             _interceptor.SetEnabled(true);
+            _ = Task.Run(_provider.Warm);
             return true;
         }
 
@@ -128,7 +129,7 @@ public sealed class AppSwitcherController : IDisposable
 
         if (!enabled)
         {
-            RunOnUi(() => Cancel(activateNothing: true));
+            RunOnUi(() => Cancel());
         }
     }
 
@@ -173,6 +174,7 @@ public sealed class AppSwitcherController : IDisposable
         }
 
         _window?.SetSelection(_session.SelectedIndex);
+        UpdateWindowList();
     });
 
     private void OnWindowsToggleRequested() => RunOnUi(() =>
@@ -190,7 +192,7 @@ public sealed class AppSwitcherController : IDisposable
         }
     });
 
-    private void OnCancelRequested() => RunOnUi(() => Cancel(activateNothing: true));
+    private void OnCancelRequested() => RunOnUi(() => Cancel());
 
     private void OnCloseRequested() => RunOnUi(CloseSelected);
 
@@ -273,13 +275,18 @@ public sealed class AppSwitcherController : IDisposable
 
     private void RevealPanel()
     {
-        if (_session is null || _panelRevealed)
+        if (_session is not { } session || _panelRevealed)
         {
             return;
         }
 
         _panelRevealed = true;
         _window?.Reveal();
+
+        // Пока панель ждала задержки, Tab и ↓ могли изменить выделение: переносим
+        // накопленное состояние на экран в момент показа.
+        _window?.SetSelection(session.SelectedIndex);
+        UpdateWindowList();
     }
 
     private void Commit(bool shift)
@@ -354,9 +361,8 @@ public sealed class AppSwitcherController : IDisposable
         }
     }
 
-    private void Cancel(bool activateNothing)
+    private void Cancel()
     {
-        _ = activateNothing;
         _showTimer.Stop();
         _guardTimer.Stop();
         _session = null;
@@ -392,7 +398,7 @@ public sealed class AppSwitcherController : IDisposable
 
         if (_session.IsEmpty)
         {
-            Cancel(activateNothing: true);
+            Cancel();
         }
     }
 
@@ -556,6 +562,7 @@ public sealed class AppSwitcherController : IDisposable
         }
 
         _window?.SetSelection(_session.SelectedIndex);
+        UpdateWindowList();
     }
 
     private void OnWindowItemActivated(int index)

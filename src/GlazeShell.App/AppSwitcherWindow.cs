@@ -46,6 +46,7 @@ internal sealed class AppSwitcherWindow : Window
     private const double LabelHeightDips = 24;
     private const double LabelGapDips = 4;
     private const double ListRowDips = 20;
+    private const int MaxWindowRows = 8;
     private const double ListGapDips = 6;
     private const double HighlightInsetDips = 3;
     private const double PanelScaleFrom = 0.96;
@@ -238,6 +239,8 @@ internal sealed class AppSwitcherWindow : Window
         _scale = monitor.ScaleFactor <= 0 ? 1.0 : monitor.ScaleFactor;
         _selectedIndex = Math.Clamp(selectedIndex, 0, Math.Max(0, applications.Count - 1));
         _listHeight = 0;
+        _hoverIndex = -1;
+        _leftWasDown = OverlayWindow.IsLeftButtonDown();
         _windowList.Visibility = Visibility.Collapsed;
         _windowList.Children.Clear();
 
@@ -326,7 +329,11 @@ internal sealed class AppSwitcherWindow : Window
         }
         else
         {
-            for (var i = 0; i < titles.Count; i++)
+            // Список окон информативный: очень длинный он вылез бы за пределы экрана,
+            // поэтому показываются последние активные окна и строка «ещё N».
+            var shown = Math.Min(titles.Count, MaxWindowRows);
+
+            for (var i = 0; i < shown; i++)
             {
                 var row = new TextBlock
                 {
@@ -344,9 +351,23 @@ internal sealed class AppSwitcherWindow : Window
                 _windowList.Children.Add(row);
             }
 
+            var overflow = titles.Count > shown ? 1 : 0;
+
+            if (overflow > 0)
+            {
+                _windowList.Children.Add(new TextBlock
+                {
+                    Text = $"ещё {titles.Count - shown}",
+                    FontSize = 12,
+                    Height = ListRowDips,
+                    TextAlignment = TextAlignment.Center,
+                    Foreground = ResourceBrush("GlazeGlassTextMutedBrush"),
+                });
+            }
+
             _windowList.Visibility = Visibility.Visible;
             _windowList.Margin = new Thickness(0, ListGapDips, 0, 0);
-            _listHeight = ListGapDips + (titles.Count * ListRowDips) + (Math.Max(0, titles.Count - 1) * 2);
+            _listHeight = ListGapDips + ((shown + overflow) * ListRowDips) + (Math.Max(0, shown + overflow - 1) * 2);
         }
 
         UpdateSize();
@@ -603,12 +624,12 @@ internal sealed class AppSwitcherWindow : Window
         }
 
         var height = (2 * PaddingDips) + _contentHeight + LabelGapDips + LabelHeightDips + _listHeight;
-        _root.Height = height + 2;
+        _root.Height = height;
 
         var area = _monitor.Bounds;
         var margin = (int)Math.Round(MarginDips * _scale);
         var widthPx = Math.Max(1, (int)Math.Round(_root.Width * _scale));
-        var heightPx = Math.Max(1, (int)Math.Round((height + 2) * _scale));
+        var heightPx = Math.Max(1, (int)Math.Round(height * _scale));
 
         var x = area.X + ((area.Width - widthPx) / 2);
         var y = area.Y + (int)Math.Round((area.Height * 0.40) - (heightPx / 2.0));
